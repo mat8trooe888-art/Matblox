@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>BlockVerse — финальная версия</title>
+    <title>BlockVerse — финальная стабильная версия</title>
     <style>
-        /* стили (без изменений, как в предыдущей версии) */
+        /* стили (те же, что в предыдущей версии, без изменений) */
         * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-tap-highlight-color:transparent; }
         body { font-family:'Segoe UI', 'Poppins', system-ui, sans-serif; background:linear-gradient(135deg,#0a0f1e,#0e1a2a); color:white; overflow:hidden; height:100vh; position:fixed; width:100%; }
         .screen { position:absolute; top:0; left:0; width:100%; height:100%; transition:opacity 0.3s ease; overflow-y:auto; padding:20px; -webkit-overflow-scrolling:touch; }
@@ -77,7 +77,7 @@
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 </head>
 <body>
-    <!-- АВТОРИЗАЦИЯ (как ранее) -->
+    <!-- АВТОРИЗАЦИЯ -->
     <div id="authScreen" class="screen">
         <div class="auth-container">
             <h2>🎮 BlockVerse</h2>
@@ -150,7 +150,7 @@
         </div>
     </div>
 
-    <!-- КОНСТРУКТОР (полный, без заглушек, с панелью света) -->
+    <!-- КОНСТРУКТОР (полный) -->
     <div id="editorScreen" class="screen hidden">
         <div class="editor-container">
             <div id="editorCanvasContainer" class="editor-canvas"></div>
@@ -466,44 +466,47 @@
             }, 100);
         }
 
-        // Улучшенная коллизия (AABB)
-        function checkCollisionAndAdjust(pos, size = { x: 0.4, y: 0.8, z: 0.4 }) {
+        // Улучшенная коллизия AABB с учётом масштаба блоков
+        function checkCollisionAndAdjust(pos, size) {
             let newPos = pos.clone();
+            const playerHalfSize = { x: 0.4, y: 0.8, z: 0.4 };
             // Проверка по X
             for (let block of collisionBlocks) {
                 const bPos = block.position;
-                const bSize = 0.9;
-                if (Math.abs(newPos.x - bPos.x) < size.x + bSize/2 &&
-                    Math.abs(newPos.y - bPos.y) < size.y + bSize/2 &&
-                    Math.abs(newPos.z - bPos.z) < size.z + bSize/2) {
+                const bScale = block.scale;
+                const bHalfSize = { x: 0.45 * bScale.x, y: 0.45 * bScale.y, z: 0.45 * bScale.z };
+                if (Math.abs(newPos.x - bPos.x) < playerHalfSize.x + bHalfSize.x &&
+                    Math.abs(newPos.y - bPos.y) < playerHalfSize.y + bHalfSize.y &&
+                    Math.abs(newPos.z - bPos.z) < playerHalfSize.z + bHalfSize.z) {
                     const dx = newPos.x - bPos.x;
-                    if (dx > 0) newPos.x = bPos.x + size.x + bSize/2;
-                    else newPos.x = bPos.x - size.x - bSize/2;
+                    if (dx > 0) newPos.x = bPos.x + playerHalfSize.x + bHalfSize.x;
+                    else newPos.x = bPos.x - playerHalfSize.x - bHalfSize.x;
                 }
             }
             // Проверка по Z
             for (let block of collisionBlocks) {
                 const bPos = block.position;
-                const bSize = 0.9;
-                if (Math.abs(newPos.x - bPos.x) < size.x + bSize/2 &&
-                    Math.abs(newPos.y - bPos.y) < size.y + bSize/2 &&
-                    Math.abs(newPos.z - bPos.z) < size.z + bSize/2) {
+                const bScale = block.scale;
+                const bHalfSize = { x: 0.45 * bScale.x, y: 0.45 * bScale.y, z: 0.45 * bScale.z };
+                if (Math.abs(newPos.x - bPos.x) < playerHalfSize.x + bHalfSize.x &&
+                    Math.abs(newPos.y - bPos.y) < playerHalfSize.y + bHalfSize.y &&
+                    Math.abs(newPos.z - bPos.z) < playerHalfSize.z + bHalfSize.z) {
                     const dz = newPos.z - bPos.z;
-                    if (dz > 0) newPos.z = bPos.z + size.z + bSize/2;
-                    else newPos.z = bPos.z - size.z - bSize/2;
+                    if (dz > 0) newPos.z = bPos.z + playerHalfSize.z + bHalfSize.z;
+                    else newPos.z = bPos.z - playerHalfSize.z - bHalfSize.z;
                 }
             }
             // Проверка по Y (гравитация)
             let onGround = false;
             for (let block of collisionBlocks) {
                 const bPos = block.position;
-                const bSize = 0.9;
-                if (Math.abs(newPos.x - bPos.x) < size.x + bSize/2 &&
-                    Math.abs(newPos.z - bPos.z) < size.z + bSize/2 &&
-                    Math.abs(newPos.y - 0 - (bPos.y + bSize/2 + size.y)) < 0.1) {
+                const bScale = block.scale;
+                const bHalfSize = { x: 0.45 * bScale.x, y: 0.45 * bScale.y, z: 0.45 * bScale.z };
+                if (Math.abs(newPos.x - bPos.x) < playerHalfSize.x + bHalfSize.x &&
+                    Math.abs(newPos.z - bPos.z) < playerHalfSize.z + bHalfSize.z &&
+                    Math.abs(newPos.y - playerHalfSize.y - (bPos.y + bHalfSize.y)) < 0.1) {
                     onGround = true;
-                    newPos.y = bPos.y + bSize/2 + size.y;
-                    break;
+                    newPos.y = bPos.y + bHalfSize.y + playerHalfSize.y;
                 }
             }
             return { pos: newPos, onGround };
@@ -864,7 +867,7 @@
             document.querySelectorAll('.play-btn').forEach(btn => btn.addEventListener('click', () => { const id = btn.dataset.id; const game = customGames.find(g=>g.id==id); if(game) startCustomGame(game); }));
         }
 
-        // ========== КОНСТРУКТОР (полный, с панелью света) ==========
+        // ========== КОНСТРУКТОР (полный, без заглушек) ==========
         let editorScene, editorCamera, editorRenderer, editorBlocks = [];
         let editorActive = false;
         let selectedBlock = null;
@@ -1002,7 +1005,6 @@
         function duplicateSelected() { if(!selectedBlock) return; const pos=selectedBlock.position; const bd=editorBlocks.find(b=>b.mesh===selectedBlock); if(!bd) return; let nx=pos.x+1,ny=pos.y,nz=pos.z; if(editorBlocks.some(b=>b.x===nx && b.y===ny && b.z===nz)) { nx=pos.x-1; if(editorBlocks.some(b=>b.x===nx && b.y===ny && b.z===nz)) { nx=pos.x; nz=pos.z+1; if(editorBlocks.some(b=>b.x===nx && b.y===ny && b.z===nz)) nz=pos.z-1; } } addBlockAt(nx,ny,nz,bd.type,bd.script,bd.scale,bd.props); }
         function addNewCube() { for(let y=0;y<=3;y++) for(let x=-2;x<=2;x++) for(let z=-2;z<=2;z++) if(!editorBlocks.some(b=>b.x===x && b.y===y && b.z===z)) { addBlockAt(x,y,z,currentBlockType,""); return; } alert("Нет свободного места поблизости"); }
 
-        // Управление светом в конструкторе
         let editorDirLight;
         function updateEditorLight() {
             if (!editorDirLight) return;
@@ -1053,7 +1055,6 @@
             platform.receiveShadow = true; platform.castShadow = true;
             editorScene.add(platform);
 
-            // Инициализация элементов управления светом
             const lightIntensitySlider = document.getElementById('lightIntensity');
             const lightColorPicker = document.getElementById('lightColor');
             const lightHeightSlider = document.getElementById('lightHeight');
@@ -1061,7 +1062,6 @@
             const lightAngleYSlider = document.getElementById('lightAngleY');
             const applyLightBtn = document.getElementById('applyLightBtn');
             if (applyLightBtn) applyLightBtn.onclick = updateEditorLight;
-            // Установка начальных значений
             if (lightIntensitySlider) lightIntensitySlider.value = 1;
             if (lightColorPicker) lightColorPicker.value = '#ffaa66';
             if (lightHeightSlider) lightHeightSlider.value = 3;

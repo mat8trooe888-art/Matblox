@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>BlockVerse — исправленная версия</title>
+    <title>BlockVerse — финальная версия</title>
     <style>
-        /* Стили остаются те же, что в последней рабочей версии */
+        /* стили как в предыдущей версии, без изменений */
         * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-tap-highlight-color:transparent; }
         body { font-family:'Segoe UI', 'Poppins', system-ui, sans-serif; background:linear-gradient(135deg,#0a0f1e,#0e1a2a); color:white; overflow:hidden; height:100vh; position:fixed; width:100%; }
         .screen { position:absolute; top:0; left:0; width:100%; height:100%; transition:opacity 0.3s ease; overflow-y:auto; padding:20px; -webkit-overflow-scrolling:touch; }
@@ -148,7 +148,7 @@
         </div>
     </div>
 
-    <!-- КОНСТРУКТОР -->
+    <!-- КОНСТРУКТОР (полный, без заглушек) -->
     <div id="editorScreen" class="screen hidden">
         <div class="editor-container">
             <div id="editorCanvasContainer" class="editor-canvas"></div>
@@ -248,7 +248,7 @@
             document.querySelectorAll('.buy-btn').forEach(btn => btn.addEventListener('click', () => { const price = parseInt(btn.dataset.price); if (spendCoins(price)) { alert(`Вы купили ${btn.dataset.id}`); renderShop(); } else alert("Недостаточно монет!"); }));
         }
 
-        // Друзья и чат
+        // Друзья и чат (кратко)
         function renderFriendsList() {
             const container = document.getElementById('friendsList');
             if (!container) return;
@@ -307,10 +307,10 @@
         let remotePlayers = new Map();
         let multiplayerInterval = null;
 
-        // Управление (клавиатура + джойстик)
+        // Управление
         const keyState = { w: false, s: false, a: false, d: false, space: false };
-        let joystickActive = false;
         let joystickVector = { x: 0, z: 0 };
+        let joystickActive = false;
 
         function createScriptContext(blockMesh, gameState, world) {
             return {
@@ -764,7 +764,6 @@
                 gamePlayer.position.x += moveX * speed;
                 gamePlayer.position.z += moveZ * speed;
 
-                // Гравитация и прыжок
                 playerVelocityY -= GRAVITY * delta;
                 gamePlayer.position.y += playerVelocityY * delta;
                 if (gamePlayer.position.y <= 0) {
@@ -837,14 +836,411 @@
             document.querySelectorAll('.play-btn').forEach(btn => btn.addEventListener('click', () => { const id = btn.dataset.id; const game = customGames.find(g=>g.id==id); if(game) startCustomGame(game); }));
         }
 
-        // ========== КОНСТРУКТОР (оставляем полным) ==========
-        // (полный код конструктора из предыдущей версии, здесь не привожу для экономии, но он полностью рабочий)
-        // В этом файле он будет, но в ответе я его оставлю кратко, чтобы уложиться в лимит.
-        // Пользователь получит полный код в скачанном файле.
-        function openEditor() {
-            // В полной версии здесь будет весь конструктор.
-            alert("Конструктор открыт. В финальной версии он полностью работает.");
+        // ========== КОНСТРУКТОР ==========
+        let editorScene, editorCamera, editorRenderer, editorBlocks = [];
+        let editorActive = false;
+        let selectedBlock = null;
+        let currentBlockType = 'wood';
+        let currentMode = 'move';
+        let cameraRadius = 12, cameraAngleX = 0, cameraAngleY = 0.5;
+        let raycaster = new THREE.Raycaster();
+        let gizmoGroup = null;
+        let dragAxis = null, dragStartPos = null, dragStartBlockPos = null, dragStartRot = null, dragStartScale = null;
+        let isDraggingGizmo = false;
+
+        const blockColors = { wood:0x8B5A2B, stone:0x808080, concrete:0xB0B0B0, dirt:0x6B4C3B };
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        const gizmoSize = isMobile ? 1.5 : 0.9;
+
+        function updateCameraPosition() { const x=cameraRadius*Math.sin(cameraAngleX)*Math.cos(cameraAngleY); const y=cameraRadius*Math.sin(cameraAngleY); const z=cameraRadius*Math.cos(cameraAngleX)*Math.cos(cameraAngleY); editorCamera.position.set(x, y+2, z); editorCamera.lookAt(0,1,0); }
+        function getMaterial(type) { return new THREE.MeshStandardMaterial({ color: blockColors[type]||0x8B5A2B }); }
+
+        function addBlockAt(x,y,z,blockType,script="",scale={x:1,y:1,z:1},props={}) {
+            if(editorBlocks.some(b=>b.x===x && b.y===y && b.z===z)) return false;
+            const geometry = new THREE.BoxGeometry(0.9,0.9,0.9);
+            const material = getMaterial(blockType);
+            const cube = new THREE.Mesh(geometry, material);
+            cube.position.set(x,y,z);
+            cube.scale.set(scale.x,scale.y,scale.z);
+            cube.userData = { type:blockType, script, scale, props };
+            cube.castShadow = true; cube.receiveShadow = true;
+            editorScene.add(cube);
+            editorBlocks.push({ x,y,z, type:blockType, mesh:cube, script, scale, props });
+            return true;
         }
+
+        function removeBlockAt(x,y,z) {
+            const idx = editorBlocks.findIndex(b=>b.x===x && b.y===y && b.z===z);
+            if(idx!==-1) {
+                const block = editorBlocks[idx];
+                editorScene.remove(block.mesh);
+                if(selectedBlock===block.mesh) { selectedBlock=null; if(gizmoGroup) editorScene.remove(gizmoGroup); }
+                editorBlocks.splice(idx,1);
+                return true;
+            }
+            return false;
+        }
+
+        function highlightBlock(mesh) { editorBlocks.forEach(b=>{if(b.mesh.material.emissiveIntensity) b.mesh.material.emissiveIntensity=0;}); if(mesh && mesh.material) mesh.material.emissiveIntensity=0.3; }
+
+        function createGizmo() {
+            if(gizmoGroup) editorScene.remove(gizmoGroup);
+            if(!selectedBlock) return;
+            gizmoGroup = new THREE.Group();
+            const size = gizmoSize;
+            if(currentMode==='move') {
+                gizmoGroup.add(new THREE.ArrowHelper(new THREE.Vector3(1,0,0), new THREE.Vector3(size,0,0), size*1.5, 0xff3333));
+                gizmoGroup.add(new THREE.ArrowHelper(new THREE.Vector3(0,1,0), new THREE.Vector3(0,size,0), size*1.5, 0x33ff33));
+                gizmoGroup.add(new THREE.ArrowHelper(new THREE.Vector3(0,0,1), new THREE.Vector3(0,0,size), size*1.5, 0x3333ff));
+            } else if(currentMode==='rotate') {
+                const radius = size*1.3;
+                const ptsX=[],ptsY=[],ptsZ=[];
+                for(let i=0;i<=64;i++){ const a=(i/64)*Math.PI*2; ptsX.push(new THREE.Vector3(0,Math.cos(a)*radius,Math.sin(a)*radius)); ptsY.push(new THREE.Vector3(Math.cos(a)*radius,0,Math.sin(a)*radius)); ptsZ.push(new THREE.Vector3(Math.cos(a)*radius,Math.sin(a)*radius,0)); }
+                gizmoGroup.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(ptsX), new THREE.LineBasicMaterial({color:0xff3333})));
+                gizmoGroup.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(ptsY), new THREE.LineBasicMaterial({color:0x33ff33})));
+                gizmoGroup.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(ptsZ), new THREE.LineBasicMaterial({color:0x3333ff})));
+            } else if(currentMode==='scale') {
+                const boxMat = new THREE.MeshStandardMaterial({ color:0xffaa44 });
+                const boxX = new THREE.Mesh(new THREE.BoxGeometry(0.35,0.35,0.35), boxMat); boxX.position.set(size,0,0);
+                const boxY = new THREE.Mesh(new THREE.BoxGeometry(0.35,0.35,0.35), boxMat); boxY.position.set(0,size,0);
+                const boxZ = new THREE.Mesh(new THREE.BoxGeometry(0.35,0.35,0.35), boxMat); boxZ.position.set(0,0,size);
+                gizmoGroup.add(boxX,boxY,boxZ);
+            }
+            gizmoGroup.position.copy(selectedBlock.position);
+            editorScene.add(gizmoGroup);
+        }
+        function updateGizmo() { if(gizmoGroup && selectedBlock) gizmoGroup.position.copy(selectedBlock.position); }
+        function startDrag(axis,cx,cy) { if(!selectedBlock) return; dragAxis=axis; dragStartPos={x:cx,y:cy}; if(currentMode==='move') dragStartBlockPos=selectedBlock.position.clone(); else if(currentMode==='rotate') dragStartRot={x:selectedBlock.rotation.x,y:selectedBlock.rotation.y,z:selectedBlock.rotation.z}; else if(currentMode==='scale') dragStartScale={x:selectedBlock.scale.x,y:selectedBlock.scale.y,z:selectedBlock.scale.z}; isDraggingGizmo=true; }
+        function onDragMove(cx,cy) { if(!isDraggingGizmo||!selectedBlock) return; const dx=cx-dragStartPos.x, dy=cy-dragStartPos.y; const sens=0.012; if(currentMode==='move') { let mv=new THREE.Vector3(); if(dragAxis==='X') mv.x=dx*sens; if(dragAxis==='Y') mv.y=-dy*sens; if(dragAxis==='Z') mv.z=dx*sens; selectedBlock.position.copy(dragStartBlockPos.clone().add(mv)); const bd=editorBlocks.find(b=>b.mesh===selectedBlock); if(bd){bd.x=selectedBlock.position.x; bd.y=selectedBlock.position.y; bd.z=selectedBlock.position.z;} updateGizmo(); } else if(currentMode==='rotate') { const ang=(dx+dy)*0.012; if(dragAxis==='X') selectedBlock.rotation.x=dragStartRot.x+ang; if(dragAxis==='Y') selectedBlock.rotation.y=dragStartRot.y+ang; if(dragAxis==='Z') selectedBlock.rotation.z=dragStartRot.z+ang; } else if(currentMode==='scale') { let delta=(dx+dy)*0.012; let ns=dragStartScale; if(dragAxis==='X') ns.x+=delta; if(dragAxis==='Y') ns.y+=delta; if(dragAxis==='Z') ns.z+=delta; ns.x=Math.min(Math.max(ns.x,0.2),5); ns.y=Math.min(Math.max(ns.y,0.2),5); ns.z=Math.min(Math.max(ns.z,0.2),5); selectedBlock.scale.set(ns.x,ns.y,ns.z); const bd=editorBlocks.find(b=>b.mesh===selectedBlock); if(bd) bd.scale=ns; updateTransformUI(); } }
+        function endDrag() { isDraggingGizmo=false; dragAxis=null; dragStartPos=null; dragStartBlockPos=null; dragStartRot=null; dragStartScale=null; }
+        function applyMove(dx,dy,dz) { if(!selectedBlock) return; selectedBlock.position.x+=dx; selectedBlock.position.y+=dy; selectedBlock.position.z+=dz; const bd=editorBlocks.find(b=>b.mesh===selectedBlock); if(bd){bd.x=selectedBlock.position.x;bd.y=selectedBlock.position.y;bd.z=selectedBlock.position.z;} updateGizmo(); updateTransformUI(); }
+        function applyRotate(dx,dy,dz) { if(!selectedBlock) return; selectedBlock.rotation.x+=dx*Math.PI/180; selectedBlock.rotation.y+=dy*Math.PI/180; selectedBlock.rotation.z+=dz*Math.PI/180; updateTransformUI(); }
+        function applyScale(axis,delta) { if(!selectedBlock) return; let ns=selectedBlock.scale.clone(); if(axis==='X') ns.x+=delta; else if(axis==='Y') ns.y+=delta; else if(axis==='Z') ns.z+=delta; ns.x=Math.min(Math.max(ns.x,0.2),5); ns.y=Math.min(Math.max(ns.y,0.2),5); ns.z=Math.min(Math.max(ns.z,0.2),5); selectedBlock.scale.set(ns.x,ns.y,ns.z); const bd=editorBlocks.find(b=>b.mesh===selectedBlock); if(bd) bd.scale=ns; updateTransformUI(); }
+        function setScale(axis,val) { if(!selectedBlock) return; let ns=selectedBlock.scale.clone(); if(axis==='X') ns.x=val; else if(axis==='Y') ns.y=val; else if(axis==='Z') ns.z=val; ns.x=Math.min(Math.max(ns.x,0.2),5); ns.y=Math.min(Math.max(ns.y,0.2),5); ns.z=Math.min(Math.max(ns.z,0.2),5); selectedBlock.scale.set(ns.x,ns.y,ns.z); const bd=editorBlocks.find(b=>b.mesh===selectedBlock); if(bd) bd.scale=ns; updateTransformUI(); }
+        function resetScale() { if(!selectedBlock) return; selectedBlock.scale.set(1,1,1); const bd=editorBlocks.find(b=>b.mesh===selectedBlock); if(bd) bd.scale={x:1,y:1,z:1}; updateTransformUI(); }
+        function updateTransformUI() {
+            const moveX=document.getElementById('moveX'), moveY=document.getElementById('moveY'), moveZ=document.getElementById('moveZ');
+            const rotX=document.getElementById('rotX'), rotY=document.getElementById('rotY'), rotZ=document.getElementById('rotZ');
+            const scaleX=document.getElementById('scaleX'), scaleY=document.getElementById('scaleY'), scaleZ=document.getElementById('scaleZ');
+            const blockScript=document.getElementById('blockScript');
+            const colorPicker=document.getElementById('blockColor');
+            const opacitySlider=document.getElementById('blockOpacity');
+            const opacitySpan=document.getElementById('opacityVal');
+            const physType=document.getElementById('blockPhysType');
+            const textureSelect=document.getElementById('blockTexture');
+            if(!selectedBlock) {
+                if(moveX) moveX.value=0; if(moveY) moveY.value=0; if(moveZ) moveZ.value=0;
+                if(rotX) rotX.value=0; if(rotY) rotY.value=0; if(rotZ) rotZ.value=0;
+                if(scaleX) scaleX.value=1; if(scaleY) scaleY.value=1; if(scaleZ) scaleZ.value=1;
+                if(blockScript) blockScript.value="";
+                if(colorPicker) colorPicker.value="#8B5A2B";
+                if(opacitySlider) { opacitySlider.value=1; if(opacitySpan) opacitySpan.innerText="1.00"; }
+                if(physType) physType.value="solid";
+                if(textureSelect) textureSelect.value="wood";
+                return;
+            }
+            const pos=selectedBlock.position; if(moveX) moveX.value=pos.x.toFixed(2); if(moveY) moveY.value=pos.y.toFixed(2); if(moveZ) moveZ.value=pos.z.toFixed(2);
+            const rotDeg={ x:selectedBlock.rotation.x*180/Math.PI, y:selectedBlock.rotation.y*180/Math.PI, z:selectedBlock.rotation.z*180/Math.PI };
+            if(rotX) rotX.value=Math.round(rotDeg.x); if(rotY) rotY.value=Math.round(rotDeg.y); if(rotZ) rotZ.value=Math.round(rotDeg.z);
+            const scale=selectedBlock.scale; if(scaleX) scaleX.value=scale.x.toFixed(2); if(scaleY) scaleY.value=scale.y.toFixed(2); if(scaleZ) scaleZ.value=scale.z.toFixed(2);
+            const blockData=editorBlocks.find(b=>b.mesh===selectedBlock);
+            if(blockData && blockScript) blockScript.value=blockData.script||"";
+            else if(blockScript) blockScript.value="";
+            const colorHex = selectedBlock.material.color.getHexString();
+            if(colorPicker) colorPicker.value = `#${colorHex}`;
+            if(opacitySlider) { const op = selectedBlock.material.opacity; opacitySlider.value = op; if(opacitySpan) opacitySpan.innerText = op.toFixed(2); }
+            if(physType && blockData && blockData.props) physType.value = blockData.props.physType || "solid";
+            if(textureSelect && blockData && blockData.props) textureSelect.value = blockData.props.texture || "wood";
+        }
+        function applyProperties() {
+            if(!selectedBlock) return;
+            const color = document.getElementById('blockColor').value;
+            const opacity = parseFloat(document.getElementById('blockOpacity').value);
+            const physType = document.getElementById('blockPhysType').value;
+            const texture = document.getElementById('blockTexture').value;
+            selectedBlock.material.color.setHex(parseInt(color.slice(1),16));
+            selectedBlock.material.transparent = opacity < 1;
+            selectedBlock.material.opacity = opacity;
+            const blockData = editorBlocks.find(b=>b.mesh===selectedBlock);
+            if(blockData) {
+                if(!blockData.props) blockData.props = {};
+                blockData.props.physType = physType;
+                blockData.props.texture = texture;
+            }
+            alert("Свойства применены");
+        }
+
+        function applyScriptToSelected() { if(!selectedBlock) return; const script=document.getElementById('blockScript').value; const blockData=editorBlocks.find(b=>b.mesh===selectedBlock); if(blockData){ blockData.script=script; selectedBlock.userData.script=script; alert("Скрипт применён к блоку!"); } }
+        function duplicateSelected() { if(!selectedBlock) return; const pos=selectedBlock.position; const bd=editorBlocks.find(b=>b.mesh===selectedBlock); if(!bd) return; let nx=pos.x+1,ny=pos.y,nz=pos.z; if(editorBlocks.some(b=>b.x===nx && b.y===ny && b.z===nz)) { nx=pos.x-1; if(editorBlocks.some(b=>b.x===nx && b.y===ny && b.z===nz)) { nx=pos.x; nz=pos.z+1; if(editorBlocks.some(b=>b.x===nx && b.y===ny && b.z===nz)) nz=pos.z-1; } } addBlockAt(nx,ny,nz,bd.type,bd.script,bd.scale,bd.props); }
+        function addNewCube() { for(let y=0;y<=3;y++) for(let x=-2;x<=2;x++) for(let z=-2;z<=2;z++) if(!editorBlocks.some(b=>b.x===x && b.y===y && b.z===z)) { addBlockAt(x,y,z,currentBlockType,""); return; } alert("Нет свободного места поблизости"); }
+
+        function openEditor() {
+            document.getElementById('mainMenuScreen').classList.add('hidden');
+            document.getElementById('editorScreen').classList.remove('hidden');
+            const container = document.getElementById('editorCanvasContainer');
+            container.innerHTML = '';
+            editorScene = new THREE.Scene();
+            editorScene.background = new THREE.Color(0x87CEEB);
+            editorScene.fog = new THREE.Fog(0x87CEEB,30,60);
+            editorCamera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+            cameraRadius=12; cameraAngleX=0; cameraAngleY=0.5; updateCameraPosition();
+            editorRenderer = new THREE.WebGLRenderer({ antialias: true });
+            editorRenderer.setSize(window.innerWidth, window.innerHeight);
+            editorRenderer.setPixelRatio(window.devicePixelRatio);
+            container.appendChild(editorRenderer.domElement);
+            const ambient = new THREE.AmbientLight(0x404060);
+            editorScene.add(ambient);
+            const dirLight = new THREE.DirectionalLight(0xfff5d1,1);
+            dirLight.position.set(5,10,7);
+            editorScene.add(dirLight);
+            const grid = new THREE.GridHelper(20,20,0x88aaff,0x335588);
+            grid.position.y = -0.5;
+            editorScene.add(grid);
+            editorBlocks = [];
+            const platform = new THREE.Mesh(new THREE.BoxGeometry(10,1,10), new THREE.MeshStandardMaterial({ color:0x6B8E23, roughness:0.8 }));
+            platform.position.set(0,-0.5,0);
+            platform.receiveShadow = true; platform.castShadow = true;
+            editorScene.add(platform);
+
+            function tryPlaceBlock(cx,cy) {
+                const rect = editorRenderer.domElement.getBoundingClientRect();
+                const mouse = new THREE.Vector2();
+                mouse.x = ((cx - rect.left)/rect.width)*2-1;
+                mouse.y = -((cy - rect.top)/rect.height)*2+1;
+                raycaster.setFromCamera(mouse, editorCamera);
+                const meshes = editorScene.children.filter(c=>c.isMesh && c!==grid);
+                const intersects = raycaster.intersectObjects(meshes);
+                let px,py,pz;
+                if(intersects.length>0) {
+                    const hit = intersects[0];
+                    const n = hit.face.normal;
+                    const pos = hit.object.position;
+                    px = pos.x + n.x; py = pos.y + n.y; pz = pos.z + n.z;
+                } else {
+                    const plane = new THREE.Plane(new THREE.Vector3(0,1,0), 0.5);
+                    const point = new THREE.Vector3();
+                    if(raycaster.ray.intersectPlane(plane, point)) {
+                        const x = Math.round(point.x), z = Math.round(point.z);
+                        let my = -0.5;
+                        for(let y=-0.5; y<=5; y++) if(editorBlocks.some(b=>b.x===x && b.y===y && b.z===z)) my = y+1;
+                        px = x; py = my; pz = z;
+                    } else return;
+                }
+                if(!editorBlocks.some(b=>b.x===px && b.y===py && b.z===pz)) addBlockAt(px, py, pz, currentBlockType, "");
+            }
+
+            function trySelectBlock(cx,cy) {
+                const rect = editorRenderer.domElement.getBoundingClientRect();
+                const mouse = new THREE.Vector2();
+                mouse.x = ((cx - rect.left)/rect.width)*2-1;
+                mouse.y = -((cy - rect.top)/rect.height)*2+1;
+                raycaster.setFromCamera(mouse, editorCamera);
+                const intersects = raycaster.intersectObjects(editorBlocks.map(b=>b.mesh));
+                if(intersects.length>0) {
+                    selectedBlock = intersects[0].object;
+                    highlightBlock(selectedBlock);
+                    createGizmo();
+                    updateTransformUI();
+                    const status = document.getElementById('editorStatus');
+                    if(status) status.innerText = `Выбран блок (${selectedBlock.position.x.toFixed(1)}, ${selectedBlock.position.y.toFixed(1)}, ${selectedBlock.position.z.toFixed(1)})`;
+                } else {
+                    if(selectedBlock) selectedBlock.material.emissiveIntensity = 0;
+                    selectedBlock = null;
+                    if(gizmoGroup) editorScene.remove(gizmoGroup);
+                    const status = document.getElementById('editorStatus');
+                    if(status) status.innerText = `Ничего не выбрано. Кликните правой кнопкой / долгим тапом по блоку.`;
+                    updateTransformUI();
+                }
+            }
+
+            editorRenderer.domElement.addEventListener('click', e=>{ if(e.button===0) tryPlaceBlock(e.clientX,e.clientY); if(e.cancelable) e.preventDefault(); });
+            editorRenderer.domElement.addEventListener('contextmenu', e=>{ if(e.cancelable) e.preventDefault(); });
+            editorRenderer.domElement.addEventListener('mousedown', e=>{ if(e.button===2) { trySelectBlock(e.clientX,e.clientY); if(e.cancelable) e.preventDefault(); } });
+
+            editorRenderer.domElement.addEventListener('mousedown', e=>{
+                if(e.button!==0 || !selectedBlock || !gizmoGroup) return;
+                const rect = editorRenderer.domElement.getBoundingClientRect();
+                const mouse = new THREE.Vector2();
+                mouse.x = ((e.clientX - rect.left)/rect.width)*2-1;
+                mouse.y = -((e.clientY - rect.top)/rect.height)*2+1;
+                raycaster.setFromCamera(mouse, editorCamera);
+                const parts = gizmoGroup.children.filter(c=>c.isLineLoop||c.isMesh||c.isArrowHelper);
+                const hits = raycaster.intersectObjects(parts, true);
+                if(hits.length>0) {
+                    let axis = null;
+                    const hit = hits[0];
+                    if(hit.object.parent===gizmoGroup) {
+                        const mat = hit.object.material;
+                        if(mat && mat.color) {
+                            const hex = mat.color.getHex();
+                            if(hex===0xff3333) axis='X';
+                            else if(hex===0x33ff33) axis='Y';
+                            else if(hex===0x3333ff) axis='Z';
+                            else if(hex===0xffaa44) axis='X';
+                        }
+                        if(!axis && hit.object.isLineLoop) {
+                            const col = hit.object.material.color.getHex();
+                            if(col===0xff3333) axis='X';
+                            else if(col===0x33ff33) axis='Y';
+                            else if(col===0x3333ff) axis='Z';
+                        }
+                    }
+                    if(axis) { startDrag(axis, e.clientX, e.clientY); e.preventDefault(); }
+                }
+            });
+            window.addEventListener('mousemove', e=>{ if(isDraggingGizmo) { onDragMove(e.clientX,e.clientY); e.preventDefault(); } });
+            window.addEventListener('mouseup', ()=>{ if(isDraggingGizmo) endDrag(); });
+
+            let touchTimer=null, pendingTap=false, touchStartPos=null, currentTouchId=null;
+            editorRenderer.domElement.addEventListener('touchstart', e=>{
+                if(e.touches.length===1) {
+                    const touch = e.touches[0];
+                    currentTouchId = touch.identifier;
+                    touchStartPos = { x:touch.clientX, y:touch.clientY };
+                    if(selectedBlock && gizmoGroup) {
+                        const rect = editorRenderer.domElement.getBoundingClientRect();
+                        const mouse = new THREE.Vector2();
+                        mouse.x = ((touch.clientX - rect.left)/rect.width)*2-1;
+                        mouse.y = -((touch.clientY - rect.top)/rect.height)*2+1;
+                        raycaster.setFromCamera(mouse, editorCamera);
+                        const parts = gizmoGroup.children.filter(c=>c.isLineLoop||c.isMesh||c.isArrowHelper);
+                        const hits = raycaster.intersectObjects(parts, true);
+                        if(hits.length>0) {
+                            let axis = null;
+                            const hit = hits[0];
+                            if(hit.object.parent===gizmoGroup) {
+                                const mat = hit.object.material;
+                                if(mat && mat.color) {
+                                    const hex = mat.color.getHex();
+                                    if(hex===0xff3333) axis='X';
+                                    else if(hex===0x33ff33) axis='Y';
+                                    else if(hex===0x3333ff) axis='Z';
+                                    else if(hex===0xffaa44) axis='X';
+                                }
+                                if(!axis && hit.object.isLineLoop) {
+                                    const col = hit.object.material.color.getHex();
+                                    if(col===0xff3333) axis='X';
+                                    else if(col===0x33ff33) axis='Y';
+                                    else if(col===0x3333ff) axis='Z';
+                                }
+                            }
+                            if(axis) { startDrag(axis, touch.clientX, touch.clientY); if(e.cancelable) e.preventDefault(); return; }
+                        }
+                    }
+                    touchTimer = setTimeout(() => {
+                        const rect = editorRenderer.domElement.getBoundingClientRect();
+                        const mouse = new THREE.Vector2();
+                        mouse.x = ((touchStartPos.x - rect.left)/rect.width)*2-1;
+                        mouse.y = -((touchStartPos.y - rect.top)/rect.height)*2+1;
+                        raycaster.setFromCamera(mouse, editorCamera);
+                        const hits = raycaster.intersectObjects(editorBlocks.map(b=>b.mesh));
+                        if(hits.length>0) {
+                            const pos = hits[0].object.position;
+                            removeBlockAt(Math.round(pos.x), Math.round(pos.y), Math.round(pos.z));
+                            if(selectedBlock === hits[0].object) { selectedBlock=null; if(gizmoGroup) editorScene.remove(gizmoGroup); }
+                            updateTransformUI();
+                        }
+                        touchTimer = null; pendingTap = false;
+                    }, 500);
+                    pendingTap = true;
+                    if(e.cancelable) e.preventDefault();
+                }
+            });
+            editorRenderer.domElement.addEventListener('touchmove', e=>{
+                if(e.touches.length===1 && e.touches[0].identifier===currentTouchId) {
+                    const touch = e.touches[0];
+                    if(isDraggingGizmo) { onDragMove(touch.clientX, touch.clientY); if(e.cancelable) e.preventDefault(); }
+                    else if(touchTimer) { clearTimeout(touchTimer); pendingTap=false; touchTimer=null; }
+                    else if(touchStartPos) {
+                        const dx = touch.clientX - touchStartPos.x, dy = touch.clientY - touchStartPos.y;
+                        cameraAngleX += dx*0.005; cameraAngleY += dy*0.005;
+                        cameraAngleY = Math.min(Math.max(cameraAngleY, -1.2), 1.2);
+                        updateCameraPosition();
+                        touchStartPos = { x:touch.clientX, y:touch.clientY };
+                        if(e.cancelable) e.preventDefault();
+                    }
+                }
+            });
+            editorRenderer.domElement.addEventListener('touchend', e=>{
+                if(isDraggingGizmo) endDrag();
+                if(touchTimer) { clearTimeout(touchTimer); if(pendingTap) { const touch = e.changedTouches[0]; trySelectBlock(touch.clientX, touch.clientY); } touchTimer=null; pendingTap=false; }
+                touchStartPos=null; currentTouchId=null;
+                if(e.cancelable) e.preventDefault();
+            });
+
+            let isRotating=false, lastX=0, lastY=0;
+            editorRenderer.domElement.addEventListener('mousedown', e=>{ if(e.button===2) { isRotating=true; lastX=e.clientX; lastY=e.clientY; if(e.cancelable) e.preventDefault(); } });
+            window.addEventListener('mousemove', e=>{ if(isRotating && editorActive) { const dx=e.clientX-lastX, dy=e.clientY-lastY; cameraAngleX+=dx*0.005; cameraAngleY+=dy*0.005; cameraAngleY=Math.min(Math.max(cameraAngleY,-1.2),1.2); updateCameraPosition(); lastX=e.clientX; lastY=e.clientY; } });
+            window.addEventListener('mouseup', e=>{ if(e.button===2) isRotating=false; });
+            editorRenderer.domElement.addEventListener('wheel', e=>{ cameraRadius -= e.deltaY*0.01; cameraRadius = Math.min(Math.max(cameraRadius,3),20); updateCameraPosition(); if(e.cancelable) e.preventDefault(); });
+
+            const moveGrp = document.getElementById('moveControls');
+            const rotGrp = document.getElementById('rotateControls');
+            const scaleGrp = document.getElementById('scaleControls');
+            document.getElementById('modeMove').onclick = ()=>{ currentMode='move'; if(moveGrp) moveGrp.style.display='block'; if(rotGrp) rotGrp.style.display='none'; if(scaleGrp) scaleGrp.style.display='none'; document.getElementById('modeMove').classList.add('active'); document.getElementById('modeRotate').classList.remove('active'); document.getElementById('modeScale').classList.remove('active'); if(selectedBlock) createGizmo(); };
+            document.getElementById('modeRotate').onclick = ()=>{ currentMode='rotate'; if(moveGrp) moveGrp.style.display='none'; if(rotGrp) rotGrp.style.display='block'; if(scaleGrp) scaleGrp.style.display='none'; document.getElementById('modeRotate').classList.add('active'); document.getElementById('modeMove').classList.remove('active'); document.getElementById('modeScale').classList.remove('active'); if(selectedBlock) createGizmo(); };
+            document.getElementById('modeScale').onclick = ()=>{ currentMode='scale'; if(moveGrp) moveGrp.style.display='none'; if(rotGrp) rotGrp.style.display='none'; if(scaleGrp) scaleGrp.style.display='block'; document.getElementById('modeScale').classList.add('active'); document.getElementById('modeMove').classList.remove('active'); document.getElementById('modeRotate').classList.remove('active'); if(selectedBlock) createGizmo(); };
+            document.getElementById('moveXm').onclick = ()=>applyMove(-0.5,0,0);
+            document.getElementById('moveXp').onclick = ()=>applyMove(0.5,0,0);
+            document.getElementById('moveYm').onclick = ()=>applyMove(0,-0.5,0);
+            document.getElementById('moveYp').onclick = ()=>applyMove(0,0.5,0);
+            document.getElementById('moveZm').onclick = ()=>applyMove(0,0,-0.5);
+            document.getElementById('moveZp').onclick = ()=>applyMove(0,0,0.5);
+            document.getElementById('rotXm').onclick = ()=>applyRotate(-15,0,0);
+            document.getElementById('rotXp').onclick = ()=>applyRotate(15,0,0);
+            document.getElementById('rotYm').onclick = ()=>applyRotate(0,-15,0);
+            document.getElementById('rotYp').onclick = ()=>applyRotate(0,15,0);
+            document.getElementById('rotZm').onclick = ()=>applyRotate(0,0,-15);
+            document.getElementById('rotZp').onclick = ()=>applyRotate(0,0,15);
+            document.getElementById('scaleXm').onclick = ()=>applyScale('X',-0.1);
+            document.getElementById('scaleXp').onclick = ()=>applyScale('X',0.1);
+            document.getElementById('scaleYm').onclick = ()=>applyScale('Y',-0.1);
+            document.getElementById('scaleYp').onclick = ()=>applyScale('Y',0.1);
+            document.getElementById('scaleZm').onclick = ()=>applyScale('Z',-0.1);
+            document.getElementById('scaleZp').onclick = ()=>applyScale('Z',0.1);
+            document.getElementById('resetScale').onclick = resetScale;
+            document.getElementById('duplicateBtn').onclick = duplicateSelected;
+            document.getElementById('addCubeBtn').onclick = addNewCube;
+            document.getElementById('applyScriptBtn').onclick = applyScriptToSelected;
+            document.getElementById('applyPropsBtn').onclick = applyProperties;
+
+            const blockOpts = document.querySelectorAll('.block-option');
+            blockOpts.forEach(opt=>opt.addEventListener('click',()=>{ currentBlockType=opt.dataset.type; blockOpts.forEach(o=>o.classList.remove('selected')); opt.classList.add('selected'); }));
+            if(blockOpts[0]) blockOpts[0].classList.add('selected');
+
+            document.getElementById('publishGameBtn').onclick = () => {
+                if(currentUser.isGuest) { alert("Гости не могут публиковать игры. Зарегистрируйтесь!"); return; }
+                const name = prompt("Название игры", "Моя игра");
+                if(!name) return;
+                const desc = prompt("Описание игры", "Классная игра!");
+                const gameData = editorBlocks.map(b => ({ x:b.x, y:b.y, z:b.z, type:b.type, script:b.script, scale:{x:b.mesh.scale.x,y:b.mesh.scale.y,z:b.mesh.scale.z}, rotation:{x:b.mesh.rotation.x,y:b.mesh.rotation.y,z:b.mesh.rotation.z}, color:b.mesh.material.color.getHex(), opacity:b.mesh.material.opacity, props:b.props || {} }));
+                const newGame = { id: Date.now(), name, desc, author: currentUser.username, type:'custom', data:{ blocks:gameData, coins:[] } };
+                customGames.push(newGame);
+                saveGames();
+                alert("Игра опубликована!");
+                exitEditor();
+            };
+
+            const lastSection = document.querySelector('.tools-panel .tool-section:last-child');
+            if(lastSection) {
+                const exitBtn = document.createElement('button');
+                exitBtn.className = 'tool-btn special';
+                exitBtn.textContent = '✖ Выйти';
+                exitBtn.onclick = exitEditor;
+                let btnContainer = lastSection.querySelector('.tool-buttons');
+                if(!btnContainer) { btnContainer = document.createElement('div'); btnContainer.className = 'tool-buttons'; lastSection.appendChild(btnContainer); }
+                btnContainer.appendChild(exitBtn);
+            } else {
+                const panel = document.querySelector('.tools-panel');
+                if(panel) { const exitBtn = document.createElement('button'); exitBtn.className='tool-btn special'; exitBtn.textContent='✖ Выйти'; exitBtn.onclick=exitEditor; panel.appendChild(exitBtn); }
+            }
+
+            function animateEditor() { if(!editorActive) return; requestAnimationFrame(animateEditor); editorRenderer.render(editorScene, editorCamera); }
+            editorActive = true;
+            animateEditor();
+        }
+
+        function exitEditor() { editorActive = false; if(editorRenderer) editorRenderer.domElement.remove(); document.getElementById('editorScreen').classList.add('hidden'); document.getElementById('mainMenuScreen').classList.remove('hidden'); renderGamesList(); }
 
         // ========== АВТОРИЗАЦИЯ ==========
         function showLogin() { document.getElementById('loginForm').style.display='block'; document.getElementById('registerForm').style.display='none'; document.getElementById('authMessage').innerText=''; }

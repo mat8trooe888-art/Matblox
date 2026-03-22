@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>BlockVerse — финальная версия</title>
+    <title>BlockVerse — исправленная версия</title>
     <style>
-        /* стили (без изменений) */
+        /* стили (без изменений, как в предыдущей версии) */
         * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-tap-highlight-color:transparent; }
         body { font-family:'Segoe UI', 'Poppins', system-ui, sans-serif; background:linear-gradient(135deg,#0a0f1e,#0e1a2a); color:white; overflow:hidden; height:100vh; position:fixed; width:100%; }
         .screen { position:absolute; top:0; left:0; width:100%; height:100%; transition:opacity 0.3s ease; overflow-y:auto; padding:20px; -webkit-overflow-scrolling:touch; }
@@ -150,7 +150,7 @@
         </div>
     </div>
 
-    <!-- КОНСТРУКТОР (полный, с платформой) -->
+    <!-- КОНСТРУКТОР (полный) -->
     <div id="editorScreen" class="screen hidden">
         <div class="editor-container">
             <div id="editorCanvasContainer" class="editor-canvas"></div>
@@ -194,7 +194,7 @@
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
         import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 
-        // ========== ПОЛЬЗОВАТЕЛИ ==========
+        // ========== ПОЛЬЗОВАТЕЛИ (без изменений) ==========
         let currentUser = null;
         let users = JSON.parse(localStorage.getItem('blockverse_users')) || [];
         let customGames = JSON.parse(localStorage.getItem('blockverse_games')) || [];
@@ -294,7 +294,7 @@
         }
         function startChatPolling() { setInterval(() => { const stored = JSON.parse(localStorage.getItem('blockverse_chat')) || []; if (JSON.stringify(stored) !== JSON.stringify(chatMessages)) { chatMessages = stored; renderChat(); } }, 2000); }
 
-        // ========== ИГРОВОЙ РЕЖИМ ==========
+        // ========== ИГРОВОЙ РЕЖИМ (с исправленной коллизией и скриптами) ==========
         let gameActive = false;
         let gameAnimationId = null;
         let gamePlayer = null;
@@ -558,12 +558,14 @@
                 });
             }
 
-            // Если нет блоков (новая игра), создаём платформу вручную (для совместимости со старыми версиями)
+            // Если нет блоков (новая игра), создаём платформу как масштабированный куб (как в конструкторе)
             if (blocks.length === 0) {
-                const platformGeo = new THREE.BoxGeometry(10, 1, 10);
-                const platformMat = new THREE.MeshStandardMaterial({ color: 0x6B8E23, roughness: 0.8 });
-                const platform = new THREE.Mesh(platformGeo, platformMat);
+                const platformScale = { x: 10 / 0.9, y: 1 / 0.9, z: 10 / 0.9 };
+                const geometry = new THREE.BoxGeometry(0.9,0.9,0.9);
+                const material = new THREE.MeshStandardMaterial({ color: 0x6B8E23, roughness: 0.8 });
+                const platform = new THREE.Mesh(geometry, material);
                 platform.position.set(0, -0.5, 0);
+                platform.scale.set(platformScale.x, platformScale.y, platformScale.z);
                 platform.castShadow = true;
                 platform.receiveShadow = true;
                 scene.add(platform);
@@ -593,6 +595,7 @@
             if (currentUser && currentUser.customModel) {
                 try { const model = await loadCustomModel(currentUser.customModel); if (model) { scene.remove(defaultChar); model.position.copy(defaultChar.position); model.rotation.copy(defaultChar.rotation); model.scale.set(0.5,0.5,0.5); model.traverse(c=>{if(c.isMesh)c.castShadow=true;}); scene.add(model); gamePlayer = model; } } catch(e) { console.warn(e); } }
 
+            // Скрипты
             scriptedBlocks = [];
             blocks.forEach(blockData => {
                 if (blockData.script && blockData.script.trim()) {
@@ -614,6 +617,7 @@
             });
             console.log('Загружено скриптов:', scriptedBlocks.length);
 
+            // Управление
             const handleKey = (e, val) => {
                 if(!gameActive) return;
                 if(e.key==='w') keyState.w=val;
@@ -881,7 +885,7 @@
             document.querySelectorAll('.play-btn').forEach(btn => btn.addEventListener('click', () => { const id = btn.dataset.id; const game = customGames.find(g=>g.id==id); if(game) startCustomGame(game); }));
         }
 
-        // ========== КОНСТРУКТОР ==========
+        // ========== КОНСТРУКТОР (полный, с платформой как масштабированный куб) ==========
         let editorScene, editorCamera, editorRenderer, editorBlocks = [];
         let editorActive = false;
         let selectedBlock = null;
@@ -1065,8 +1069,8 @@
             editorScene.add(grid);
             editorBlocks = [];
 
-            // Создаём стартовую платформу (сохраняемую)
-            const platformScale = { x: 10/0.9, y: 1/0.9, z: 10/0.9 };
+            // Создаём стартовую платформу как масштабированный куб
+            const platformScale = { x: 10 / 0.9, y: 1 / 0.9, z: 10 / 0.9 };
             addBlockAt(0, -0.5, 0, 'wood', "", platformScale, { isPlatform: true });
             const platformBlock = editorBlocks.find(b => b.x === 0 && b.y === -0.5 && b.z === 0);
             if (platformBlock) {
@@ -1368,4 +1372,4 @@
         showLogin();
     </script>
 </body>
-                    </html>
+</html>

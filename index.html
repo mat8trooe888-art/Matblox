@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>BlockVerse — мультиплеер + конструктор</title>
     <style>
+        /* ========== СТИЛИ (оставлены без изменений) ========== */
         * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-tap-highlight-color:transparent; }
         body { font-family:'Segoe UI', 'Poppins', system-ui, sans-serif; background:linear-gradient(135deg,#0a0f1e,#0e1a2a); color:white; overflow:hidden; height:100vh; position:fixed; width:100%; touch-action:manipulation; }
         .screen { position:absolute; top:0; left:0; width:100%; height:100%; transition:opacity 0.3s ease; overflow-y:auto; padding:20px; -webkit-overflow-scrolling:touch; }
@@ -80,10 +81,13 @@
         }
         .exit-game { z-index:100; cursor:pointer; }
         .mobile-joystick, .jump-button, .camera-zoom { display:none; }
+        .server-join { margin:20px 0; display:flex; gap:12px; align-items:center; background:rgba(0,0,0,0.5); padding:8px 16px; border-radius:40px; }
+        .server-join input { flex:1; background:#1a1f2e; border:1px solid #ffaa44; border-radius:40px; padding:8px 16px; color:white; }
     </style>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 </head>
 <body>
+    <!-- ========== ЭКРАН АВТОРИЗАЦИИ ========== -->
     <div id="authScreen" class="screen">
         <div class="auth-container">
             <h2>🎮 BlockVerse</h2>
@@ -107,6 +111,7 @@
         </div>
     </div>
 
+    <!-- ========== ГЛАВНОЕ МЕНЮ ========== -->
     <div id="mainMenuScreen" class="screen hidden">
         <div class="header">
             <div style="font-size: 28px; font-weight: bold;">🌟 BlockVerse</div>
@@ -125,13 +130,10 @@
             </div>
         </div>
         <div id="gamesPanel">
-            <h2 style="margin: 20px 0 10px;">🔥 Игровые серверы</h2>
-            <div class="game-list-header">
-                <div class="create-game-form">
-                    <input type="text" id="newGameName" placeholder="Название новой игры">
-                    <button id="createNewGameBtn" class="btn" style="width:auto; padding:8px 20px;">➕ Создать сервер</button>
-                </div>
-                <button id="refreshGamesBtn" class="btn" style="width:auto; padding:8px 20px;">🔄 Обновить список</button>
+            <h2 style="margin: 20px 0 10px;">🔥 Мультиплеерные серверы</h2>
+            <div class="server-join">
+                <input type="text" id="serverIdInput" placeholder="ID сервера (Peer ID)">
+                <button id="connectToServerBtn" class="btn" style="width:auto; padding:8px 20px;">🔗 Подключиться</button>
             </div>
             <div class="games-grid" id="gamesList"></div>
         </div>
@@ -189,6 +191,7 @@
         </div>
     </div>
 
+    <!-- ========== РЕДАКТОР ========== -->
     <div id="editorScreen" class="screen hidden">
         <div class="editor-container">
             <div id="editorCanvasContainer" class="editor-canvas"></div>
@@ -208,6 +211,7 @@
         </div>
     </div>
 
+    <!-- ========== ИГРОВОЙ ЭКРАН (мультиплеер/одиночный) ========== -->
     <div id="customGameScreen" class="screen hidden">
         <div id="customGameContainer" style="width:100%; height:100%;"></div>
         <div class="exit-game" style="position: absolute; top:20px; right:20px; background:#ff3333; padding:10px 20px; border-radius:40px; cursor:pointer; z-index:20;">✖ Выйти</div>
@@ -267,14 +271,13 @@
             if (!currentUser) return;
             document.getElementById('usernameDisplay').innerText = currentUser.username + (currentUser.isGuest ? ' (гость)' : '');
             document.getElementById('userCoins').innerText = currentUser.coins;
-            renderGamesList();
+            renderGamesList();   // список сохранённых игр (не мультиплеерных)
             renderMyProjects();
             renderShop();
             renderFriendsList();
             renderChat();
             renderReports();
             startChatPolling();
-            connectToServer();
         }
 
         function addCoins(amount) { if (!currentUser) return; currentUser.coins += amount; if (!currentUser.isGuest) saveUsers(); document.getElementById('userCoins').innerText = currentUser.coins; }
@@ -339,62 +342,74 @@
         }
         function startChatPolling() { setInterval(() => { const stored = JSON.parse(localStorage.getItem('blockverse_chat')) || []; if (JSON.stringify(stored) !== JSON.stringify(chatMessages)) { chatMessages = stored; renderChat(); } }, 2000); }
 
-        // ========== МУЛЬТИПЛЕЕР (WebSocket) ==========
-        let ws = null;
-        let currentGameId = null;
-        let myPlayerId = null;
-        let remotePlayers = new Map();
+        // ========== MULITPLAYER (PeerJS) ==========
+        let peer = null;
+        let connections = [];          // DataConnection для других игроков
+        let myPeerId = null;
+        let isHost = false;            // true, если этот игрок создал сервер
         let gameScene = null, gameCamera = null, gameRenderer = null, gamePlayer = null;
         let gameActive = false;
         let gameAnimationId = null;
-        let gameCoins = [], gameScore = 0;
         let collisionBlocks = [];
         let keyState = { w: false, s: false, a: false, d: false, space: false };
         let joystickVector = { x: 0, z: 0 }, joystickActive = false;
         let cameraDistance = 8;
         let moveSpeed = 4;
-        let mouseSensitivity = 0.005;
+        let remotePlayers = new Map(); // peerId -> mesh
 
-        function connectToServer() {
-            const serverUrl = 'wss://blockverse-server.onrender.com'; // замените на ваш сервер
-            ws = new WebSocket(serverUrl);
-            ws.onopen = () => { console.log('Connected'); requestGamesList(); };
-            ws.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                switch (data.type) {
-                    case 'games_list': renderGamesList(data.games); break;
-                    case 'game_created': alert(`Игра "${data.gameName}" создана!`); requestGamesList(); break;
-                    case 'joined': myPlayerId = data.playerId; startGameSession(data.gameData, data.gameName); break;
-                    case 'player_joined': const newPlayer = createRemotePlayer(); newPlayer.position.set(data.position.x, data.position.y, data.position.z); gameScene.add(newPlayer); remotePlayers.set(data.playerId, newPlayer); break;
-                    case 'player_moved': const movedPlayer = remotePlayers.get(data.playerId); if (movedPlayer) movedPlayer.position.set(data.position.x, data.position.y, data.position.z); break;
-                    case 'player_left': const leftPlayer = remotePlayers.get(data.playerId); if (leftPlayer) gameScene.remove(leftPlayer); remotePlayers.delete(data.playerId); break;
-                    case 'error': alert(data.message); break;
-                }
-            };
-            ws.onerror = (err) => console.error(err);
-        }
-        function requestGamesList() { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'get_games_list' })); }
-        function createGameOnServer(gameName, gameData) { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'create_game', gameName, author: currentUser.username, gameData })); }
-        function joinGame(gameId) { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'join_game', gameId })); }
-        function sendPosition(pos) { if (ws && ws.readyState === WebSocket.OPEN && currentGameId) ws.send(JSON.stringify({ type: 'update_position', position: pos })); }
-        function leaveGame() { if (ws && ws.readyState === WebSocket.OPEN && currentGameId) ws.send(JSON.stringify({ type: 'leave_game' })); currentGameId = null; }
-
-        function renderGamesList(games) {
-            const container = document.getElementById('gamesList');
-            if (!container) return;
-            container.innerHTML = '';
-            if (!games || games.length === 0) { container.innerHTML = '<p>Нет активных серверов. Создайте новый!</p>'; attachMobileEvents(); return; }
-            games.forEach(game => {
-                const card = document.createElement('div');
-                card.className = 'game-card';
-                card.innerHTML = `<div class="game-image">🎲</div><div class="game-info"><div class="game-title">${game.name}</div><div class="game-author">👤 ${game.author} | 🟢 ${game.players} игроков</div><button class="play-btn" data-id="${game.id}">Играть</button></div>`;
-                container.appendChild(card);
+        // Инициализация Peer (используем ваш сигнальный сервер)
+        function initPeer(onReady) {
+            if (peer) return onReady();
+            peer = new Peer(undefined, {
+                host: 'matrix-5uvi.onrender.com',
+                port: 443,
+                path: '/',
+                secure: true,
+                debug: 2
             });
-            document.querySelectorAll('.play-btn').forEach(btn => btn.addEventListener('click', () => joinGame(btn.dataset.id)));
-            attachMobileEvents();
+            peer.on('open', (id) => {
+                myPeerId = id;
+                console.log('Peer открыт, ID:', id);
+                onReady();
+            });
+            peer.on('error', (err) => console.error('Peer error:', err));
         }
 
-        async function startGameSession(gameData, gameName) {
+        // Создание сервера (хост)
+        function createMultiplayerServer(gameData, gameName, onStarted) {
+            initPeer(() => {
+                isHost = true;
+                startGameSession(gameData, gameName, true);
+                if (onStarted) onStarted(myPeerId);
+            });
+        }
+
+        // Подключение к серверу по ID
+        function connectToServer(serverId, gameData, gameName) {
+            initPeer(() => {
+                isHost = false;
+                const conn = peer.connect(serverId);
+                conn.on('open', () => {
+                    console.log('Подключено к серверу', serverId);
+                    connections.push(conn);
+                    // Начинаем игровую сессию как клиент
+                    startGameSession(gameData, gameName, false);
+                    // Настройка приёма данных
+                    conn.on('data', (data) => {
+                        if (data.type === 'player_position') {
+                            const playerMesh = remotePlayers.get(data.peerId);
+                            if (playerMesh) {
+                                playerMesh.position.set(data.x, data.y, data.z);
+                            }
+                        }
+                    });
+                });
+                conn.on('error', (err) => console.error('Connection error:', err));
+            });
+        }
+
+        // Игровая сессия (общая для хоста и клиента)
+        async function startGameSession(gameData, gameName, isHostSession) {
             document.getElementById('mainMenuScreen').classList.add('hidden');
             document.getElementById('customGameScreen').classList.remove('hidden');
             const container = document.getElementById('customGameContainer');
@@ -436,6 +451,7 @@
                 collisionBlocks.push(platform);
             }
 
+            // Создаём персонажа
             let globalPlayerModel = null;
             if (currentUser && currentUser.customModel) {
                 try {
@@ -455,6 +471,7 @@
                 gamePlayer = defaultChar;
             }
 
+            // Управление
             const handleKey = (e, val) => {
                 if(!gameActive) return;
                 if(e.key==='w') keyState.w=val;
@@ -529,15 +546,17 @@
 
             const scoreDiv = document.querySelector('#customGameScreen .custom-game-ui:first-of-type');
             if(scoreDiv) scoreDiv.innerText = 'Счёт: 0';
-            gameScore = 0;
 
             let playerVelocityY = 0;
             const GRAVITY = 15;
             const JUMP_FORCE = 7;
             let isOnGround = false;
 
+            // Исправленная коллизия
             function checkCollisionAndAdjust(pos, playerSize = { x: 0.4, y: 0.8, z: 0.4 }) {
                 let newPos = pos.clone();
+                // Сначала корректируем по X и Z, затем по Y
+                // Проверка по X
                 for (let block of collisionBlocks) {
                     const bPos = block.position;
                     const bScale = block.scale;
@@ -550,6 +569,7 @@
                         else newPos.x = bPos.x - playerSize.x - bHalfSize.x;
                     }
                 }
+                // Проверка по Z
                 for (let block of collisionBlocks) {
                     const bPos = block.position;
                     const bScale = block.scale;
@@ -562,19 +582,29 @@
                         else newPos.z = bPos.z - playerSize.z - bHalfSize.z;
                     }
                 }
-                let onGround = false;
+                // Проверка на землю (по Y)
+                let onGroundFlag = false;
                 for (let block of collisionBlocks) {
                     const bPos = block.position;
                     const bScale = block.scale;
                     const bHalfSize = { x: 0.45 * bScale.x, y: 0.45 * bScale.y, z: 0.45 * bScale.z };
+                    // Проверяем, стоит ли игрок на блоке
                     if (Math.abs(newPos.x - bPos.x) < playerSize.x + bHalfSize.x &&
                         Math.abs(newPos.z - bPos.z) < playerSize.z + bHalfSize.z &&
                         Math.abs(newPos.y - playerSize.y - (bPos.y + bHalfSize.y)) < 0.3) {
-                        onGround = true;
+                        onGroundFlag = true;
                         newPos.y = bPos.y + bHalfSize.y + playerSize.y;
                     }
+                    // Если игрок внутри блока – выталкиваем вверх/вниз
+                    if (Math.abs(newPos.x - bPos.x) < playerSize.x + bHalfSize.x &&
+                        Math.abs(newPos.z - bPos.z) < playerSize.z + bHalfSize.z &&
+                        Math.abs(newPos.y - bPos.y) < playerSize.y + bHalfSize.y) {
+                        const dy = newPos.y - bPos.y;
+                        if (dy > 0) newPos.y = bPos.y + bHalfSize.y + playerSize.y;
+                        else newPos.y = bPos.y - bHalfSize.y - playerSize.y;
+                    }
                 }
-                return { pos: newPos, onGround };
+                return { pos: newPos, onGround: onGroundFlag };
             }
 
             let lastTime = performance.now()/1000;
@@ -611,17 +641,12 @@
                 }
                 gamePlayer.position.copy(newPos);
 
-                sendPosition({ x: gamePlayer.position.x, y: gamePlayer.position.y, z: gamePlayer.position.z });
-
-                for(let i=0;i<gameCoins.length;i++) {
-                    const coin = gameCoins[i];
-                    if(coin && gamePlayer.position.distanceTo(coin.position) < 0.8) {
-                        gameScene.remove(coin);
-                        gameCoins.splice(i,1);
-                        gameScore++;
-                        if(scoreDiv) scoreDiv.innerText = `Счёт: ${gameScore}`;
-                        i--;
-                    }
+                // Отправляем позицию другим игрокам (если мы хост)
+                if (isHostSession && peer) {
+                    const posData = { type: 'player_position', peerId: myPeerId, x: gamePlayer.position.x, y: gamePlayer.position.y, z: gamePlayer.position.z };
+                    connections.forEach(conn => {
+                        if (conn.open) conn.send(posData);
+                    });
                 }
 
                 gameCamera.position.x = gamePlayer.position.x;
@@ -638,14 +663,19 @@
             exitBtn.onclick = () => {
                 gameActive = false;
                 if(gameAnimationId) cancelAnimationFrame(gameAnimationId);
-                leaveGame();
+                if (peer && isHostSession) {
+                    // Закрываем все соединения и уничтожаем Peer
+                    connections.forEach(conn => conn.close());
+                    peer.destroy();
+                    peer = null;
+                }
                 document.getElementById('customGameScreen').classList.add('hidden');
                 document.getElementById('mainMenuScreen').classList.remove('hidden');
-                requestGamesList();
             };
             attachMobileEvents();
         }
 
+        // Вспомогательные функции для игрового режима
         function createDefaultCharacter(color = 0x3a86ff) {
             const group = new THREE.Group();
             const body = new THREE.Mesh(new THREE.BoxGeometry(0.6,0.8,0.4), new THREE.MeshStandardMaterial({ color }));
@@ -674,8 +704,6 @@
             group.add(leftLeg,rightLeg);
             return group;
         }
-
-        function createRemotePlayer() { return createDefaultCharacter(0xffaa44); }
 
         function createMesh(shape, size = { x: 0.9, y: 0.9, z: 0.9 }, color = 0x8B5A2B, opacity = 1) {
             let geometry;
@@ -719,7 +747,8 @@
                     <div class="game-title">${game.name}</div>
                     <div class="game-desc" style="font-size:12px; color:#aaa;">${game.desc || 'Без описания'}</div>
                     <div style="margin-top:12px; display:flex; gap:8px;">
-                        <button class="play-btn-small" data-id="${game.id}" style="background:#ff5722; border:none; padding:4px 12px; border-radius:20px; cursor:pointer;">Играть</button>
+                        <button class="play-btn-small" data-id="${game.id}" style="background:#ff5722; border:none; padding:4px 12px; border-radius:20px; cursor:pointer;">Одиночная игра</button>
+                        <button class="host-btn-small" data-id="${game.id}" style="background:#4a6e8a; border:none; padding:4px 12px; border-radius:20px; cursor:pointer;">🌐 Мультиплеер (создать сервер)</button>
                         <button class="edit-btn-small" data-id="${game.id}" style="background:#ffaa44; border:none; padding:4px 12px; border-radius:20px; cursor:pointer;">Редактировать</button>
                         <button class="delete-btn-small" data-id="${game.id}" style="background:#ff3333; border:none; padding:4px 12px; border-radius:20px; cursor:pointer;">Удалить</button>
                     </div>
@@ -730,6 +759,15 @@
                 const id = parseInt(btn.dataset.id);
                 const game = customGames.find(g => g.id === id);
                 if (game) startLocalGameSession(game.data, game.name);
+            }));
+            document.querySelectorAll('.host-btn-small').forEach(btn => btn.addEventListener('click', async () => {
+                const id = parseInt(btn.dataset.id);
+                const game = customGames.find(g => g.id === id);
+                if (game) {
+                    createMultiplayerServer(game.data, game.name, (serverId) => {
+                        alert(`Сервер создан! ID: ${serverId}\nСкопируйте его и поделитесь с друзьями.`);
+                    });
+                }
             }));
             document.querySelectorAll('.edit-btn-small').forEach(btn => btn.addEventListener('click', async () => {
                 const id = parseInt(btn.dataset.id);
@@ -749,6 +787,7 @@
         }
 
         async function startLocalGameSession(gameData, gameName) {
+            // Одиночная игра – просто запускаем сессию без мультиплеера
             document.getElementById('mainMenuScreen').classList.add('hidden');
             document.getElementById('customGameScreen').classList.remove('hidden');
             const container = document.getElementById('customGameContainer');
@@ -886,8 +925,6 @@
 
             const scoreDiv = document.querySelector('#customGameScreen .custom-game-ui:first-of-type');
             if(scoreDiv) scoreDiv.innerText = 'Счёт: 0';
-            let localScore = 0;
-            let localCoins = [];
 
             let playerVelocityY = 0;
             const GRAVITY = 15;
@@ -920,7 +957,7 @@
                         else newPos.z = bPos.z - playerSize.z - bHalfSize.z;
                     }
                 }
-                let onGround = false;
+                let onGroundFlag = false;
                 for (let block of blocks) {
                     const bPos = block.position;
                     const bScale = block.scale;
@@ -928,11 +965,18 @@
                     if (Math.abs(newPos.x - bPos.x) < playerSize.x + bHalfSize.x &&
                         Math.abs(newPos.z - bPos.z) < playerSize.z + bHalfSize.z &&
                         Math.abs(newPos.y - playerSize.y - (bPos.y + bHalfSize.y)) < 0.3) {
-                        onGround = true;
+                        onGroundFlag = true;
                         newPos.y = bPos.y + bHalfSize.y + playerSize.y;
                     }
+                    if (Math.abs(newPos.x - bPos.x) < playerSize.x + bHalfSize.x &&
+                        Math.abs(newPos.z - bPos.z) < playerSize.z + bHalfSize.z &&
+                        Math.abs(newPos.y - bPos.y) < playerSize.y + bHalfSize.y) {
+                        const dy = newPos.y - bPos.y;
+                        if (dy > 0) newPos.y = bPos.y + bHalfSize.y + playerSize.y;
+                        else newPos.y = bPos.y - bHalfSize.y - playerSize.y;
+                    }
                 }
-                return { pos: newPos, onGround };
+                return { pos: newPos, onGround: onGroundFlag };
             }
 
             let lastTime = performance.now()/1000;
@@ -1039,16 +1083,17 @@
         document.getElementById('mouseSensitivity')?.addEventListener('input', applySettings);
         document.getElementById('moveSpeed')?.addEventListener('input', applySettings);
         document.getElementById('reportBugBtn')?.addEventListener('click', showReportDialog);
-        document.getElementById('createNewGameBtn')?.addEventListener('click', () => {
-            const name = document.getElementById('newGameName').value.trim();
-            if (name) {
-                createGameOnServer(name, { blocks: [] });
-                setTimeout(() => requestGamesList(), 1000);
-            } else alert('Введите название');
+        document.getElementById('connectToServerBtn')?.addEventListener('click', () => {
+            const serverId = document.getElementById('serverIdInput').value.trim();
+            if (!serverId) { alert('Введите ID сервера'); return; }
+            // Находим игру, которую будем загружать – нужно передать данные мира.
+            // В реальности данные мира должны быть известны клиенту заранее (например, через отдельный канал).
+            // Для демонстрации используем пустой мир.
+            const emptyWorld = { blocks: [] };
+            connectToServer(serverId, emptyWorld, 'Мультиплеерная игра');
         });
-        document.getElementById('refreshGamesBtn')?.addEventListener('click', () => requestGamesList());
 
-        // ========== КОНСТРУКТОР ==========
+        // ========== КОНСТРУКТОР (тот же, что и ранее, но с сохранением в customGames) ==========
         let editorScene, editorCamera, editorRenderer, editorControls, transformControls;
         let editorBlocks = [];
         let selectedObjects = [];
@@ -1369,16 +1414,17 @@
             if (!gameName) return;
             const blocksData = editorBlocks.map(block => serializeBlockForServer(block));
             const gameData = { blocks: blocksData };
-            if (window.createGameOnServer) {
-                createGameOnServer(gameName, gameData);
-                setTimeout(() => requestGamesList(), 1000);
-            }
             const gameId = Date.now();
             const newGame = { id: gameId, name: gameName, author: currentUser.username, desc: 'Опубликовано', data: gameData };
             customGames.push(newGame);
             saveGames();
             if (window.renderMyProjects) renderMyProjects();
-            alert('Игра опубликована и сохранена локально.');
+            // После публикации сразу предлагаем создать мультиплеерный сервер
+            if (confirm('Игра сохранена. Создать мультиплеерный сервер для неё?')) {
+                createMultiplayerServer(gameData, gameName, (serverId) => {
+                    alert(`Сервер создан! ID: ${serverId}\nСкопируйте его и поделитесь с друзьями.`);
+                });
+            }
         }
 
         function serializeBlockForServer(obj) {
@@ -1416,9 +1462,50 @@
 
         function openEditor(gameToEdit = null) { gameBeingEdited = gameToEdit; document.getElementById('mainMenuScreen').classList.add('hidden'); document.getElementById('editorScreen').classList.remove('hidden'); initEditor(); }
 
+        function renderGamesList() {
+            // Список локальных игр (для "Игры" можно показывать сохранённые миры)
+            const container = document.getElementById('gamesList');
+            if (!container) return;
+            container.innerHTML = '';
+            if (customGames.length === 0) {
+                container.innerHTML = '<p>Нет сохранённых игр. Создайте свою в конструкторе!</p>';
+                attachMobileEvents();
+                return;
+            }
+            customGames.forEach(game => {
+                const card = document.createElement('div');
+                card.className = 'game-card';
+                card.innerHTML = `
+                    <div class="game-image">🎲</div>
+                    <div class="game-info">
+                        <div class="game-title">${game.name}</div>
+                        <div class="game-author">👤 ${game.author}</div>
+                        <button class="play-btn" data-id="${game.id}">Одиночная игра</button>
+                        <button class="host-btn" data-id="${game.id}" style="background:#4a6e8a; margin-top:5px;">🌐 Создать сервер</button>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+            document.querySelectorAll('.play-btn').forEach(btn => btn.addEventListener('click', async () => {
+                const id = parseInt(btn.dataset.id);
+                const game = customGames.find(g => g.id === id);
+                if (game) startLocalGameSession(game.data, game.name);
+            }));
+            document.querySelectorAll('.host-btn').forEach(btn => btn.addEventListener('click', async () => {
+                const id = parseInt(btn.dataset.id);
+                const game = customGames.find(g => g.id === id);
+                if (game) {
+                    createMultiplayerServer(game.data, game.name, (serverId) => {
+                        alert(`Сервер создан! ID: ${serverId}\nСкопируйте его и поделитесь с друзьями.`);
+                    });
+                }
+            }));
+            attachMobileEvents();
+        }
+
         // ========== МОБИЛЬНЫЕ СОБЫТИЯ ==========
         function attachMobileEvents() {
-            const selectors = '.btn, .nav-btn, .play-btn, .buy-btn, .tool-btn, .block-option, .close-dialog, .exit-game, .publish-btn, .exit-editor-btn, .play-btn-small, .edit-btn-small, .delete-btn-small, #createNewGameBtn, #refreshGamesBtn, #earnCoinsBtn, #addFriendBtn, #sendChatBtn, #reportBugBtn, #toggleToolsPanelBtn, #togglePropsPanelBtn, #toggleToolsBtn, #togglePropsBtn';
+            const selectors = '.btn, .nav-btn, .play-btn, .buy-btn, .tool-btn, .block-option, .close-dialog, .exit-game, .publish-btn, .exit-editor-btn, .play-btn-small, .edit-btn-small, .delete-btn-small, #createNewGameBtn, #refreshGamesBtn, #earnCoinsBtn, #addFriendBtn, #sendChatBtn, #reportBugBtn, #toggleToolsPanelBtn, #togglePropsPanelBtn, #toggleToolsBtn, #togglePropsBtn, #connectToServerBtn, .host-btn, .host-btn-small';
             document.querySelectorAll(selectors).forEach(el => {
                 if (el.hasAttribute('data-touch-fixed')) return;
                 el.setAttribute('data-touch-fixed', 'true');
@@ -1434,7 +1521,7 @@
         function registerUser() { const u = document.getElementById('regUsername').value.trim(), p = document.getElementById('regPassword').value.trim(); if (!u||!p) { alert("Введите имя и пароль"); return; } if (users.find(us=>us.username===u)) { alert("Пользователь уже существует"); return; } users.push({ username:u, password:p, coins:500, inventory:[], isGuest:false, friends:[], friendRequests:[], customModel:null }); saveUsers(); alert("Аккаунт создан! Войдите."); showLogin(); }
         function loginUser() { const u = document.getElementById('loginUsername').value.trim(), p = document.getElementById('loginPassword').value.trim(); const user = users.find(us=>us.username===u && us.password===p); if (!user) { document.getElementById('authMessage').innerText = "Неверные данные"; return; } currentUser = user; initUserData(currentUser.username); document.getElementById('authScreen').classList.add('hidden'); document.getElementById('mainMenuScreen').classList.remove('hidden'); updateUIafterAuth(); }
         function guestLogin() { const guestName = "Guest_" + Math.floor(Math.random()*10000); currentUser = { username:guestName, coins:300, inventory:[], isGuest:true, friends:[], friendRequests:[], customModel:null }; document.getElementById('authScreen').classList.add('hidden'); document.getElementById('mainMenuScreen').classList.remove('hidden'); updateUIafterAuth(); alert("Вы вошли как гость. Монеты и игры не сохранятся."); }
-        function logout() { if (gameActive) { gameActive = false; if (gameAnimationId) cancelAnimationFrame(gameAnimationId); leaveGame(); } if (editorActive) { editorActive = false; if (editorAnimationId) cancelAnimationFrame(editorAnimationId); } currentUser = null; document.getElementById('mainMenuScreen').classList.add('hidden'); document.getElementById('editorScreen').classList.add('hidden'); document.getElementById('customGameScreen').classList.add('hidden'); document.getElementById('authScreen').classList.remove('hidden'); showLogin(); }
+        function logout() { if (gameActive) { gameActive = false; if (gameAnimationId) cancelAnimationFrame(gameAnimationId); } if (editorActive) { editorActive = false; if (editorAnimationId) cancelAnimationFrame(editorAnimationId); } currentUser = null; document.getElementById('mainMenuScreen').classList.add('hidden'); document.getElementById('editorScreen').classList.add('hidden'); document.getElementById('customGameScreen').classList.add('hidden'); document.getElementById('authScreen').classList.remove('hidden'); showLogin(); }
 
         document.getElementById('showLoginBtn').onclick = showLogin;
         document.getElementById('showRegisterBtn').onclick = showRegister;
@@ -1443,7 +1530,7 @@
         document.getElementById('guestLoginBtn').onclick = guestLogin;
         document.getElementById('guestRegisterBtn').onclick = guestLogin;
         document.getElementById('logoutBtn').onclick = logout;
-        document.getElementById('showGamesBtn').onclick = () => { document.getElementById('gamesPanel').style.display='block'; document.getElementById('myProjectsPanel').style.display='none'; document.getElementById('shopPanel').style.display='none'; document.getElementById('socialPanel').style.display='none'; document.getElementById('settingsPanel').style.display='none'; requestGamesList(); };
+        document.getElementById('showGamesBtn').onclick = () => { document.getElementById('gamesPanel').style.display='block'; document.getElementById('myProjectsPanel').style.display='none'; document.getElementById('shopPanel').style.display='none'; document.getElementById('socialPanel').style.display='none'; document.getElementById('settingsPanel').style.display='none'; };
         document.getElementById('showMyProjectsBtn').onclick = () => { document.getElementById('gamesPanel').style.display='none'; document.getElementById('myProjectsPanel').style.display='block'; document.getElementById('shopPanel').style.display='none'; document.getElementById('socialPanel').style.display='none'; document.getElementById('settingsPanel').style.display='none'; renderMyProjects(); };
         document.getElementById('showShopBtn').onclick = () => { document.getElementById('gamesPanel').style.display='none'; document.getElementById('myProjectsPanel').style.display='none'; document.getElementById('shopPanel').style.display='block'; document.getElementById('socialPanel').style.display='none'; document.getElementById('settingsPanel').style.display='none'; renderShop(); };
         document.getElementById('showSocialBtn').onclick = () => { document.getElementById('gamesPanel').style.display='none'; document.getElementById('myProjectsPanel').style.display='none'; document.getElementById('shopPanel').style.display='none'; document.getElementById('socialPanel').style.display='block'; document.getElementById('settingsPanel').style.display='none'; renderFriendsList(); renderChat(); };
@@ -1453,6 +1540,7 @@
         document.getElementById('addFriendBtn').onclick = addFriend;
         document.getElementById('sendChatBtn').onclick = sendChatMessage;
         document.getElementById('chatInput').addEventListener('keypress', e=>{ if(e.key==='Enter') sendChatMessage(); });
+
         if(users.length===0) { users.push({ username:"demo", password:"123", coins:800, inventory:[], isGuest:false, friends:[], friendRequests:[], customModel:null }); saveUsers(); }
         showLogin();
     </script>

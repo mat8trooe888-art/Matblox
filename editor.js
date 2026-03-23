@@ -1,4 +1,4 @@
-// editor.js — конструктор с полной функциональностью
+// editor.js — конструктор с полной функциональностью (без заглушек)
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
@@ -426,4 +426,4 @@ export function openEditor(gameToEdit = null) {
     document.getElementById('mainMenuScreen').classList.add('hidden');
     document.getElementById('editorScreen').classList.remove('hidden');
     initEditor();
-                                                        }
+        }

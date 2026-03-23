@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>BlockVerse — мультиплеер + конструктор</title>
     <style>
-        /* ========== СТИЛИ (без изменений, но добавлен .spawn-label) ========== */
+        /* (все стили из предыдущего ответа, без изменений) */
         * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-tap-highlight-color:transparent; }
         body { font-family:'Segoe UI', 'Poppins', system-ui, sans-serif; background:linear-gradient(135deg,#0a0f1e,#0e1a2a); color:white; overflow:hidden; height:100vh; position:fixed; width:100%; touch-action:manipulation; }
         .screen { position:absolute; top:0; left:0; width:100%; height:100%; transition:opacity 0.3s ease; overflow-y:auto; padding:20px; -webkit-overflow-scrolling:touch; }
@@ -89,903 +89,1643 @@
         .server-join input { flex:1; background:#1a1f2e; border:1px solid #ffaa44; border-radius:40px; padding:8px 16px; color:white; }
         .spawn-label { position:absolute; font-size:10px; background:rgba(0,0,0,0.7); color:white; padding:2px 4px; border-radius:4px; pointer-events:none; font-weight:bold; }
     </style>
-    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 </head>
 <body>
-    <!-- экраны авторизации, меню – оставляем как в предыдущей версии, для краткости они здесь опущены, но в финальном файле они будут -->
-    <!-- ... -->
-    <div id="authScreen" class="screen">...</div>
-    <div id="mainMenuScreen" class="screen hidden">...</div>
-    <div id="editorScreen" class="screen hidden">
-        <div class="editor-container">
-            <div id="editorCanvasContainer" class="editor-canvas"></div>
-            <button class="publish-btn" id="publishGameBtn">🚀 Опубликовать</button>
-            <button class="exit-editor-btn" id="exitEditorBtn">✖ Выйти</button>
-            <div class="status-bar" id="editorStatus">Выберите блок (Ctrl+клик / рамка)</div>
-            <div class="tools-panel" id="toolsPanel">
-                <div class="tool-section"><h4>🎨 Блоки</h4><div class="block-palette" id="blockPalette"><div class="block-option" data-type="wood" style="background:#8B5A2B;"></div><div class="block-option" data-type="stone" style="background:#808080;"></div><div class="block-option" data-type="concrete" style="background:#B0B0B0;"></div><div class="block-option" data-type="dirt" style="background:#6B4C3B;"></div></div></div>
-                <div class="tool-section"><h4>🔧 Режим трансформации</h4><div class="tool-buttons"><button id="modeMove" class="tool-btn active">📦 Переместить</button><button id="modeRotate" class="tool-btn">🔄 Вращать</button><button id="modeScale" class="tool-btn">📏 Масштаб</button></div></div>
-                <div class="tool-section"><h4>🔄 Форма блока</h4><div class="tool-buttons"><button id="shapeCube" class="tool-btn active">Куб</button><button id="shapeSphere" class="tool-btn">Сфера</button><button id="shapeCylinder" class="tool-btn">Цилиндр</button><button id="shapeCone" class="tool-btn">Конус</button><button id="shapeWedge" class="tool-btn">Клин</button></div></div>
-                <div class="tool-section"><h4>💡 Свет</h4>
-                    <div class="coord-group"><label>Интенсивность:</label><input type="range" id="lightIntensity" min="0" max="2" step="0.01" value="1"><span id="lightIntensityVal">1.00</span></div>
-                    <div class="coord-group"><label>Цвет:</label><input type="color" id="lightColor" value="#ffaa66"></div>
-                    <div class="coord-group"><label>Высота:</label><input type="range" id="lightHeight" min="1" max="10" step="0.5" value="5"><span id="lightHeightVal">5.0</span></div>
-                    <div class="coord-group"><label>Угол X:</label><input type="range" id="lightAngleX" min="-90" max="90" step="5" value="45"><span id="lightAngleXVal">45</span></div>
-                    <div class="coord-group"><label>Угол Y:</label><input type="range" id="lightAngleY" min="-180" max="180" step="5" value="135"><span id="lightAngleYVal">135</span></div>
-                    <button id="applyLightBtn" class="tool-btn" style="margin-top:8px;">💡 Применить свет</button>
-                </div>
-                <div class="tool-section"><h4>✨ Действия</h4><div class="tool-buttons"><button class="tool-btn special" id="duplicateBtn">📋 Дублировать</button><button class="tool-btn special" id="addCubeBtn">➕ Добавить куб</button><button class="tool-btn special" id="groupBtn">📦 Группировать</button></div></div>
-                <div class="tool-section"><h4>⚙️ Панели</h4><div class="tool-buttons"><button class="tool-btn" id="toggleToolsBtn">🔧 Скрыть инструменты</button><button class="tool-btn" id="togglePropsBtn">📄 Скрыть свойства</button></div></div>
+<div id="authScreen" class="screen">
+    <div class="auth-container">
+        <h2>🎮 BlockVerse</h2>
+        <div id="authTabs" style="display: flex; gap: 12px; margin-bottom: 20px;">
+            <button id="showLoginBtn" class="btn" style="background:#ff5722;">Вход</button>
+            <button id="showRegisterBtn" class="btn btn-secondary">Регистрация</button>
+        </div>
+        <div id="loginForm">
+            <input type="text" id="loginUsername" class="auth-input" placeholder="Имя пользователя">
+            <input type="password" id="loginPassword" class="auth-input" placeholder="Пароль">
+            <button id="doLoginBtn" class="btn">Войти</button>
+            <button id="guestLoginBtn" class="btn btn-guest">Продолжить как гость</button>
+            <div id="authMessage" style="margin-top: 12px; text-align:center; color:#ffaa44;"></div>
+        </div>
+        <div id="registerForm" style="display: none;">
+            <input type="text" id="regUsername" class="auth-input" placeholder="Имя пользователя">
+            <input type="password" id="regPassword" class="auth-input" placeholder="Пароль">
+            <button id="doRegisterBtn" class="btn">Создать аккаунт</button>
+            <button id="guestRegisterBtn" class="btn btn-guest">Продолжить как гость</button>
+        </div>
+    </div>
+</div>
+
+<div id="mainMenuScreen" class="screen hidden">
+    <div class="header">
+        <div style="font-size: 28px; font-weight: bold;">🌟 BlockVerse</div>
+        <div class="user-info">
+            <div class="coin-badge">🪙 <span id="userCoins">0</span> монет</div>
+            <div id="usernameDisplay" style="font-weight:500;"></div>
+            <div class="nav-buttons">
+                <div class="nav-btn" id="showGamesBtn">🎮 Игры</div>
+                <div class="nav-btn" id="showMyProjectsBtn">📁 Мои проекты</div>
+                <div class="nav-btn" id="showShopBtn">🛒 Магазин</div>
+                <div class="nav-btn" id="showSocialBtn">👥 Социальное</div>
+                <div class="nav-btn" id="showSettingsBtn">⚙️ Настройки</div>
+                <div class="nav-btn" id="createGameBtn">🛠️ Конструктор</div>
+                <div class="nav-btn" id="logoutBtn">🚪 Выйти</div>
             </div>
-            <div id="propertiesPanel" class="properties-panel"></div>
-            <button class="panel-toggle" id="toggleToolsPanelBtn">🔧</button>
-            <button class="panel-toggle right" id="togglePropsPanelBtn">📄</button>
         </div>
     </div>
-    <div id="customGameScreen" class="screen hidden">
-        <div id="customGameContainer" style="width:100%; height:100%;"></div>
-        <div class="exit-game" style="position: absolute; top:20px; right:20px; background:#ff3333; padding:10px 20px; border-radius:40px; cursor:pointer; z-index:20;">✖ Выйти</div>
-        <div class="custom-game-ui" style="position: absolute; bottom:20px; left:20px; background:rgba(0,0,0,0.6); padding:8px 16px; border-radius:20px; z-index:20;">Счёт: 0</div>
-        <div id="joystick" class="mobile-joystick">
-            <div class="joystick-thumb"></div>
+    <div id="gamesPanel">
+        <h2 style="margin: 20px 0 10px;">🔥 Игровые серверы</h2>
+        <div class="server-join">
+            <input type="text" id="serverIdInput" placeholder="ID сервера">
+            <button id="connectToServerBtn" class="btn" style="width:auto; padding:8px 20px;">🔗 Подключиться</button>
         </div>
-        <div id="jumpBtn" class="jump-button">Прыжок</div>
-        <div class="camera-zoom" id="cameraZoom">
-            <button id="zoomIn">+</button>
-            <button id="zoomOut">-</button>
+        <div class="games-grid" id="gamesList"></div>
+    </div>
+    <div id="myProjectsPanel" style="display: none;">
+        <h2 style="margin: 20px 0 10px;">📁 Мои проекты</h2>
+        <div id="myProjectsList" class="my-projects-grid"></div>
+    </div>
+    <div id="shopPanel" style="display: none;">
+        <h2 style="margin: 20px 0 10px;">✨ Магазин предметов</h2>
+        <div class="shop-grid" id="shopItemsList"></div>
+        <div style="margin-top: 30px; text-align: center;">
+            <button id="earnCoinsBtn" class="btn" style="width: auto; padding: 10px 30px;">➕ Получить 100 монет</button>
         </div>
     </div>
+    <div id="socialPanel" style="display: none;">
+        <h2 style="margin: 20px 0 10px;">👥 Социальная сеть</h2>
+        <div class="social-panels">
+            <div class="panel">
+                <h3>Мои друзья</h3>
+                <div id="friendsList" class="friend-list"></div>
+                <div class="chat-input">
+                    <input type="text" id="friendSearch" placeholder="Имя пользователя">
+                    <button id="addFriendBtn">➕ Добавить друга</button>
+                </div>
+            </div>
+            <div class="panel">
+                <h3>Глобальный чат</h3>
+                <div id="chatMessages" class="chat-messages"></div>
+                <div class="chat-input">
+                    <input type="text" id="chatInput" placeholder="Написать сообщение...">
+                    <button id="sendChatBtn">📨 Отправить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="settingsPanel" style="display: none;">
+        <h2 style="margin: 20px 0 10px;">⚙️ Настройки</h2>
+        <div class="settings-panel">
+            <h3>Камера</h3>
+            <label>Чувствительность мыши:</label>
+            <input type="range" id="mouseSensitivity" min="0.001" max="0.01" step="0.0005" value="0.005">
+            <label>Скорость движения:</label>
+            <input type="range" id="moveSpeed" min="2" max="6" step="0.5" value="4">
+            <h3>Графика</h3>
+            <label>Качество теней:</label>
+            <select id="shadowQuality">
+                <option value="low">Низкое</option>
+                <option value="medium">Среднее</option>
+                <option value="high" selected>Высокое</option>
+            </select>
+            <h3>Система репортов</h3>
+            <button id="reportBugBtn" class="btn" style="width: auto; padding: 8px 20px;">📝 Сообщить о проблеме</button>
+            <div id="reportsList" style="margin-top: 20px; max-height: 200px; overflow-y: auto;"></div>
+        </div>
+    </div>
+</div>
 
-    <script type="importmap">
-        { "imports": { "three": "https://unpkg.com/three@0.128.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.128.0/examples/jsm/" } }
-    </script>
-    <script type="module">
-        import * as THREE from 'three';
-        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-        import { TransformControls } from 'three/addons/controls/TransformControls.js';
-        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-        import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+<div id="editorScreen" class="screen hidden">
+    <div class="editor-container">
+        <div id="editorCanvasContainer" class="editor-canvas"></div>
+        <button class="publish-btn" id="publishGameBtn">🚀 Опубликовать</button>
+        <button class="exit-editor-btn" id="exitEditorBtn">✖ Выйти</button>
+        <div class="status-bar" id="editorStatus">Выберите блок (Ctrl+клик / рамка)</div>
+        <div class="tools-panel" id="toolsPanel">
+            <div class="tool-section"><h4>🎨 Блоки</h4><div class="block-palette" id="blockPalette"><div class="block-option" data-type="wood" style="background:#8B5A2B;"></div><div class="block-option" data-type="stone" style="background:#808080;"></div><div class="block-option" data-type="concrete" style="background:#B0B0B0;"></div><div class="block-option" data-type="dirt" style="background:#6B4C3B;"></div></div></div>
+            <div class="tool-section"><h4>🔧 Режим трансформации</h4><div class="tool-buttons"><button id="modeMove" class="tool-btn active">📦 Переместить</button><button id="modeRotate" class="tool-btn">🔄 Вращать</button><button id="modeScale" class="tool-btn">📏 Масштаб</button></div></div>
+            <div class="tool-section"><h4>🔄 Форма блока</h4><div class="tool-buttons"><button id="shapeCube" class="tool-btn active">Куб</button><button id="shapeSphere" class="tool-btn">Сфера</button><button id="shapeCylinder" class="tool-btn">Цилиндр</button><button id="shapeCone" class="tool-btn">Конус</button><button id="shapeWedge" class="tool-btn">Клин</button></div></div>
+            <div class="tool-section"><h4>💡 Свет</h4>
+                <div class="coord-group"><label>Интенсивность:</label><input type="range" id="lightIntensity" min="0" max="2" step="0.01" value="1"><span id="lightIntensityVal">1.00</span></div>
+                <div class="coord-group"><label>Цвет:</label><input type="color" id="lightColor" value="#ffaa66"></div>
+                <div class="coord-group"><label>Высота:</label><input type="range" id="lightHeight" min="1" max="10" step="0.5" value="5"><span id="lightHeightVal">5.0</span></div>
+                <div class="coord-group"><label>Угол X:</label><input type="range" id="lightAngleX" min="-90" max="90" step="5" value="45"><span id="lightAngleXVal">45</span></div>
+                <div class="coord-group"><label>Угол Y:</label><input type="range" id="lightAngleY" min="-180" max="180" step="5" value="135"><span id="lightAngleYVal">135</span></div>
+                <button id="applyLightBtn" class="tool-btn" style="margin-top:8px;">💡 Применить свет</button>
+            </div>
+            <div class="tool-section"><h4>✨ Действия</h4><div class="tool-buttons"><button class="tool-btn special" id="duplicateBtn">📋 Дублировать</button><button class="tool-btn special" id="addCubeBtn">➕ Добавить куб</button><button class="tool-btn special" id="groupBtn">📦 Группировать</button></div></div>
+            <div class="tool-section"><h4>⚙️ Панели</h4><div class="tool-buttons"><button class="tool-btn" id="toggleToolsBtn">🔧 Скрыть инструменты</button><button class="tool-btn" id="togglePropsBtn">📄 Скрыть свойства</button></div></div>
+        </div>
+        <div id="propertiesPanel" class="properties-panel"></div>
+        <button class="panel-toggle" id="toggleToolsPanelBtn">🔧</button>
+        <button class="panel-toggle right" id="togglePropsPanelBtn">📄</button>
+    </div>
+</div>
 
-        // ========== ГЛОБАЛЬНЫЕ ДАННЫЕ ==========
-        let currentUser = null;
-        let users = JSON.parse(localStorage.getItem('blockverse_users')) || [];
-        let customGames = JSON.parse(localStorage.getItem('blockverse_games')) || [];
-        let chatMessages = JSON.parse(localStorage.getItem('blockverse_chat')) || [];
-        let reports = JSON.parse(localStorage.getItem('blockverse_reports')) || [];
+<div id="customGameScreen" class="screen hidden">
+    <div id="customGameContainer" style="width:100%; height:100%;"></div>
+    <div class="exit-game" style="position: absolute; top:20px; right:20px; background:#ff3333; padding:10px 20px; border-radius:40px; cursor:pointer; z-index:20;">✖ Выйти</div>
+    <div class="custom-game-ui" style="position: absolute; bottom:20px; left:20px; background:rgba(0,0,0,0.6); padding:8px 16px; border-radius:20px; z-index:20;">Счёт: 0</div>
+    <div id="joystick" class="mobile-joystick">
+        <div class="joystick-thumb"></div>
+    </div>
+    <div id="jumpBtn" class="jump-button">Прыжок</div>
+    <div class="camera-zoom" id="cameraZoom">
+        <button id="zoomIn">+</button>
+        <button id="zoomOut">-</button>
+    </div>
+</div>
 
-        const shopItems = [
-            { id: 'skin_gold', name: 'Золотой скин', price: 250 },
-            { id: 'pickaxe', name: 'Алмазная кирка', price: 500 },
-            { id: 'trail', name: 'Искрящийся след', price: 150 }
-        ];
+<script type="importmap">
+    { "imports": { "three": "https://unpkg.com/three@0.128.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.128.0/examples/jsm/" } }
+</script>
+<script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { TransformControls } from 'three/addons/controls/TransformControls.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 
-        function saveUsers() { localStorage.setItem('blockverse_users', JSON.stringify(users)); }
-        function saveGames() { localStorage.setItem('blockverse_games', JSON.stringify(customGames)); }
-        function saveChat() { localStorage.setItem('blockverse_chat', JSON.stringify(chatMessages.slice(-100))); }
-        function saveReports() { localStorage.setItem('blockverse_reports', JSON.stringify(reports.slice(-50))); }
+    // ========== ГЛОБАЛЬНЫЕ ДАННЫЕ ==========
+    let currentUser = null;
+    let users = JSON.parse(localStorage.getItem('blockverse_users')) || [];
+    let customGames = JSON.parse(localStorage.getItem('blockverse_games')) || [];
+    let chatMessages = JSON.parse(localStorage.getItem('blockverse_chat')) || [];
+    let reports = JSON.parse(localStorage.getItem('blockverse_reports')) || [];
 
-        // ========== АВТОРИЗАЦИЯ С СОХРАНЕНИЕМ СЕССИИ ==========
-        function initUserData(username) {
-            let user = users.find(u => u.username === username);
-            if (!user) return null;
-            if (user.coins === undefined) user.coins = 500;
-            if (user.inventory === undefined) user.inventory = [];
-            if (user.friends === undefined) user.friends = [];
-            if (user.friendRequests === undefined) user.friendRequests = [];
-            if (user.customModel === undefined) user.customModel = null;
-            saveUsers();
-            return user;
-        }
+    const shopItems = [
+        { id: 'skin_gold', name: 'Золотой скин', price: 250 },
+        { id: 'pickaxe', name: 'Алмазная кирка', price: 500 },
+        { id: 'trail', name: 'Искрящийся след', price: 150 }
+    ];
 
-        function updateUIafterAuth() {
-            if (!currentUser) return;
-            document.getElementById('usernameDisplay').innerText = currentUser.username + (currentUser.isGuest ? ' (гость)' : '');
-            document.getElementById('userCoins').innerText = currentUser.coins;
-            renderGamesList();
-            renderMyProjects();
-            renderShop();
-            renderFriendsList();
-            renderChat();
-            renderReports();
-            startChatPolling();
-        }
+    function saveUsers() { localStorage.setItem('blockverse_users', JSON.stringify(users)); }
+    function saveGames() { localStorage.setItem('blockverse_games', JSON.stringify(customGames)); }
+    function saveChat() { localStorage.setItem('blockverse_chat', JSON.stringify(chatMessages.slice(-100))); }
+    function saveReports() { localStorage.setItem('blockverse_reports', JSON.stringify(reports.slice(-50))); }
 
-        function addCoins(amount) { if (!currentUser) return; currentUser.coins += amount; if (!currentUser.isGuest) saveUsers(); document.getElementById('userCoins').innerText = currentUser.coins; }
-        function spendCoins(amount) { if (!currentUser) return false; if (currentUser.coins >= amount) { currentUser.coins -= amount; if (!currentUser.isGuest) saveUsers(); document.getElementById('userCoins').innerText = currentUser.coins; return true; } return false; }
+    // ========== АВТОРИЗАЦИЯ ==========
+    function initUserData(username) {
+        let user = users.find(u => u.username === username);
+        if (!user) return null;
+        if (user.coins === undefined) user.coins = 500;
+        if (user.inventory === undefined) user.inventory = [];
+        if (user.friends === undefined) user.friends = [];
+        if (user.friendRequests === undefined) user.friendRequests = [];
+        if (user.customModel === undefined) user.customModel = null;
+        saveUsers();
+        return user;
+    }
 
-        // функции магазина, друзей, чата (аналогично предыдущим версиям, для краткости опущены, но в финале будут)
-        function renderShop() { /* ... */ }
-        function renderFriendsList() { /* ... */ }
-        function addFriend() { /* ... */ }
-        function renderChat() { /* ... */ */
-        function sendChatMessage() { /* ... */ }
-        function startChatPolling() { setInterval(() => { const stored = JSON.parse(localStorage.getItem('blockverse_chat')) || []; if (JSON.stringify(stored) !== JSON.stringify(chatMessages)) { chatMessages = stored; renderChat(); } }, 2000); }
+    function updateUIafterAuth() {
+        if (!currentUser) return;
+        document.getElementById('usernameDisplay').innerText = currentUser.username + (currentUser.isGuest ? ' (гость)' : '');
+        document.getElementById('userCoins').innerText = currentUser.coins;
+        renderGamesList();
+        renderMyProjects();
+        renderShop();
+        renderFriendsList();
+        renderChat();
+        renderReports();
+        startChatPolling();
+        connectToWebSocket();
+    }
 
-        // ========== МУЛЬТИПЛЕЕР (PeerJS) ==========
-        let peer = null;
-        let connections = new Map();
-        let remotePlayers = new Map();
-        let isHost = false;
-        let currentGameData = null;
-        let gameScene = null, gameCamera = null, gameRenderer = null, gamePlayer = null;
-        let gameActive = false;
-        let gameAnimationId = null;
-        let collisionBlocks = [];
-        let keyState = { w: false, s: false, a: false, d: false, space: false };
-        let joystickVector = { x: 0, z: 0 }, joystickActive = false;
-        let moveSpeed = 4;
-        let controls = null;
+    function addCoins(amount) { if (!currentUser) return; currentUser.coins += amount; if (!currentUser.isGuest) saveUsers(); document.getElementById('userCoins').innerText = currentUser.coins; }
+    function spendCoins(amount) { if (!currentUser) return false; if (currentUser.coins >= amount) { currentUser.coins -= amount; if (!currentUser.isGuest) saveUsers(); document.getElementById('userCoins').innerText = currentUser.coins; return true; } return false; }
 
-        function initPeer(onReady) {
-            if (peer) return onReady();
-            peer = new Peer(undefined, {
-                host: 'matrix-5uvi.onrender.com',
-                port: 443,
-                path: '/',
-                secure: true,
-                debug: 2
-            });
-            peer.on('open', (id) => { console.log('Peer открыт, ID:', id); onReady(); });
-            peer.on('error', (err) => console.error('Peer error:', err));
-        }
-
-        function createMultiplayerServer(gameData, gameName, onStarted) {
-            initPeer(() => {
-                isHost = true;
-                currentGameData = gameData;
-                startGameSession(gameData, gameName);
-                peer.on('connection', (conn) => {
-                    connections.set(conn.peer, conn);
-                    conn.on('open', () => {
-                        conn.send({ type: 'world_data', gameData: gameData, players: Array.from(remotePlayers.entries()).map(([id, mesh]) => ({ id: id, position: mesh.position })) });
-                    });
-                    conn.on('data', (data) => {
-                        if (data.type === 'position') {
-                            const playerMesh = remotePlayers.get(data.peerId);
-                            if (playerMesh) playerMesh.position.set(data.x, data.y, data.z);
-                            broadcastToAll({ type: 'player_position', peerId: data.peerId, x: data.x, y: data.y, z: data.z }, data.peerId);
-                        }
-                    });
-                    conn.on('close', () => {
-                        connections.delete(conn.peer);
-                        const playerMesh = remotePlayers.get(conn.peer);
-                        if (playerMesh) gameScene.remove(playerMesh);
-                        remotePlayers.delete(conn.peer);
-                        broadcastToAll({ type: 'player_left', peerId: conn.peer });
-                    });
-                    const newPlayer = createDefaultCharacter(0xffaa44);
-                    newPlayer.userData = { peerId: conn.peer };
-                    gameScene.add(newPlayer);
-                    remotePlayers.set(conn.peer, newPlayer);
-                    broadcastToAll({ type: 'player_joined', peerId: conn.peer, position: { x: 0, y: 1, z: 0 } });
-                });
-                if (onStarted) {
-                    onStarted(peer.id);
-                    navigator.clipboard.writeText(peer.id).then(() => alert(`Сервер создан! ID: ${peer.id} (скопирован)`)).catch(() => alert(`Сервер создан! ID: ${peer.id}`));
-                }
-            });
-        }
-
-        function connectToServer(serverId, onConnected) {
-            initPeer(() => {
-                isHost = false;
-                const conn = peer.connect(serverId);
-                conn.on('open', () => {
-                    connections.set(serverId, conn);
-                    conn.on('data', (data) => {
-                        if (data.type === 'world_data') {
-                            currentGameData = data.gameData;
-                            startGameSession(currentGameData, 'Мультиплеер');
-                            data.players.forEach(p => {
-                                const playerMesh = createDefaultCharacter(0xffaa44);
-                                playerMesh.userData = { peerId: p.id };
-                                playerMesh.position.set(p.position.x, p.position.y, p.position.z);
-                                gameScene.add(playerMesh);
-                                remotePlayers.set(p.id, playerMesh);
-                            });
-                            if (onConnected) onConnected();
-                        } else if (data.type === 'player_joined') {
-                            const newPlayer = createDefaultCharacter(0xffaa44);
-                            newPlayer.userData = { peerId: data.peerId };
-                            newPlayer.position.set(data.position.x, data.position.y, data.position.z);
-                            gameScene.add(newPlayer);
-                            remotePlayers.set(data.peerId, newPlayer);
-                        } else if (data.type === 'player_position') {
-                            const playerMesh = remotePlayers.get(data.peerId);
-                            if (playerMesh) playerMesh.position.set(data.x, data.y, data.z);
-                        } else if (data.type === 'player_left') {
-                            const leftMesh = remotePlayers.get(data.peerId);
-                            if (leftMesh) gameScene.remove(leftMesh);
-                            remotePlayers.delete(data.peerId);
-                        }
-                    });
-                    conn.on('close', () => {
-                        connections.delete(serverId);
-                        const leftMesh = remotePlayers.get(serverId);
-                        if (leftMesh) gameScene.remove(leftMesh);
-                        remotePlayers.delete(serverId);
-                    });
-                });
-            });
-        }
-
-        function broadcastToAll(data, excludePeerId = null) {
-            for (let [id, conn] of connections) if (id !== excludePeerId && conn.open) conn.send(data);
-        }
-
-        // Поиск спавн-блока в сцене (объект с userData.type === 'spawn')
-        function findSpawnBlock(blocks) {
-            for (let block of blocks) {
-                if (block.userData && block.userData.type === 'spawn') return block;
-            }
-            return null;
-        }
-
-        async function startGameSession(gameData, gameName) {
-            document.getElementById('mainMenuScreen').classList.add('hidden');
-            document.getElementById('customGameScreen').classList.remove('hidden');
-            const container = document.getElementById('customGameContainer');
-            container.innerHTML = '';
-
-            gameScene = new THREE.Scene();
-            gameScene.background = new THREE.Color(0x87CEEB);
-            gameScene.fog = new THREE.Fog(0x87CEEB, 30, 60);
-            gameCamera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-            gameRenderer = new THREE.WebGLRenderer({ antialias: true });
-            gameRenderer.setSize(window.innerWidth, window.innerHeight);
-            gameRenderer.shadowMap.enabled = true;
-            container.appendChild(gameRenderer.domElement);
-
-            const ambient = new THREE.AmbientLight(0x404060);
-            gameScene.add(ambient);
-            const dirLight = new THREE.DirectionalLight(0xfff5d1, 1);
-            dirLight.position.set(5,10,7);
-            dirLight.castShadow = true;
-            gameScene.add(dirLight);
-            const pointLight = new THREE.PointLight(0xffaa66, 1, 20);
-            pointLight.position.set(0, 3, 0);
-            pointLight.castShadow = true;
-            gameScene.add(pointLight);
-
-            collisionBlocks = [];
-            if (gameData && gameData.blocks) {
-                gameData.blocks.forEach(block => {
-                    const mesh = createMesh(block.shape || 'cube', block.scale, block.color, block.opacity);
-                    mesh.position.set(block.x, block.y, block.z);
-                    mesh.rotation.set(block.rotation.x, block.rotation.y, block.rotation.z);
-                    mesh.userData = { ...mesh.userData, ...block.userData };
-                    gameScene.add(mesh);
-                    collisionBlocks.push(mesh);
-                });
-            } else {
-                const platform = createMesh('cube', { x: 20/0.9, y: 1/0.9, z: 20/0.9 }, 0x6B8E23);
-                platform.position.set(0, -0.5, 0);
-                gameScene.add(platform);
-                collisionBlocks.push(platform);
-            }
-
-            // Поиск спавн-блока
-            let spawnBlock = findSpawnBlock(collisionBlocks);
-            let spawnPos = { x: 0, y: 1, z: 0 };
-            if (spawnBlock) {
-                const blockHalfSize = { x: 0.45 * spawnBlock.scale.x, y: 0.45 * spawnBlock.scale.y, z: 0.45 * spawnBlock.scale.z };
-                spawnPos = {
-                    x: spawnBlock.position.x,
-                    y: spawnBlock.position.y + blockHalfSize.y + 0.8,
-                    z: spawnBlock.position.z
-                };
-            }
-
-            // Загрузка модели персонажа
-            let globalPlayerModel = null;
-            if (currentUser && currentUser.customModel) {
-                try {
-                    globalPlayerModel = await loadCustomModel(currentUser.customModel);
-                    globalPlayerModel.scale.set(0.5,0.5,0.5);
-                } catch(e) { console.warn(e); }
-            }
-            if (globalPlayerModel) {
-                const playerModel = globalPlayerModel.clone();
-                playerModel.position.set(spawnPos.x, spawnPos.y, spawnPos.z);
-                gameScene.add(playerModel);
-                gamePlayer = playerModel;
-            } else {
-                const defaultChar = createDefaultCharacter(0x3a86ff);
-                defaultChar.position.set(spawnPos.x, spawnPos.y, spawnPos.z);
-                gameScene.add(defaultChar);
-                gamePlayer = defaultChar;
-            }
-
-            // Управление (как ранее)
-            const handleKey = (e, val) => {
-                if(!gameActive) return;
-                if(e.key==='w') keyState.w=val;
-                if(e.key==='s') keyState.s=val;
-                if(e.key==='a') keyState.a=val;
-                if(e.key==='d') keyState.d=val;
-                if(e.key===' ' || e.key==='Space') { keyState.space=val; e.preventDefault(); }
-            };
-            window.addEventListener('keydown', e=>handleKey(e,true));
-            window.addEventListener('keyup', e=>handleKey(e,false));
-
-            const joystickDiv = document.getElementById('joystick');
-            const jumpBtnDiv = document.getElementById('jumpBtn');
-            const zoomDiv = document.getElementById('cameraZoom');
-            let joystickThumb = joystickDiv?.querySelector('.joystick-thumb');
-            if (joystickDiv) {
-                joystickDiv.style.display = 'block';
-                jumpBtnDiv.style.display = 'flex';
-                zoomDiv.style.display = 'flex';
-                let joystickCenter = { x: 0, y: 0 };
-                let activeTouch = false;
-                const updateJoystick = (touch) => {
-                    if (!activeTouch) return;
-                    const dx = touch.clientX - joystickCenter.x;
-                    const dy = touch.clientY - joystickCenter.y;
-                    const maxDist = 40;
-                    let dist = Math.hypot(dx, dy);
-                    if (dist > maxDist) {
-                        const angle = Math.atan2(dy, dx);
-                        const nx = Math.cos(angle) * maxDist;
-                        const ny = Math.sin(angle) * maxDist;
-                        joystickVector = { x: nx / maxDist, z: ny / maxDist };
-                        if (joystickThumb) joystickThumb.style.transform = `translate(${nx}px, ${ny}px)`;
-                    } else {
-                        joystickVector = { x: dx / maxDist, z: dy / maxDist };
-                        if (joystickThumb) joystickThumb.style.transform = `translate(${dx}px, ${dy}px)`;
-                    }
-                };
-                joystickDiv.addEventListener('touchstart', (e) => {
-                    e.preventDefault();
-                    const rect = joystickDiv.getBoundingClientRect();
-                    joystickCenter = { x: rect.left + rect.width/2, y: rect.top + rect.height/2 };
-                    activeTouch = true;
-                    joystickActive = true;
-                    updateJoystick(e.touches[0]);
-                });
-                joystickDiv.addEventListener('touchmove', (e) => {
-                    e.preventDefault();
-                    if (activeTouch) updateJoystick(e.touches[0]);
-                });
-                joystickDiv.addEventListener('touchend', () => {
-                    activeTouch = false;
-                    joystickActive = false;
-                    joystickVector = { x: 0, z: 0 };
-                    if (joystickThumb) joystickThumb.style.transform = `translate(0px, 0px)`;
-                });
-                jumpBtnDiv.addEventListener('touchstart', (e) => { e.preventDefault(); keyState.space = true; });
-                jumpBtnDiv.addEventListener('touchend', () => { keyState.space = false; });
-                jumpBtnDiv.addEventListener('mousedown', () => { keyState.space = true; });
-                jumpBtnDiv.addEventListener('mouseup', () => { keyState.space = false; });
-            }
-
-            controls = new OrbitControls(gameCamera, gameRenderer.domElement);
-            controls.enableDamping = true;
-            controls.dampingFactor = 0.05;
-            controls.rotateSpeed = 1.0;
-            controls.zoomSpeed = 1.2;
-            controls.enableZoom = true;
-            controls.enablePan = false;
-            controls.target.copy(gamePlayer.position);
-
-            const zoomInBtn = document.getElementById('zoomIn');
-            const zoomOutBtn = document.getElementById('zoomOut');
-            if (zoomInBtn) zoomInBtn.onclick = () => { controls.object.zoom = Math.min(3, controls.object.zoom - 0.2); controls.update(); };
-            if (zoomOutBtn) zoomOutBtn.onclick = () => { controls.object.zoom = Math.max(0.5, controls.object.zoom + 0.2); controls.update(); };
-
-            const scoreDiv = document.querySelector('#customGameScreen .custom-game-ui:first-of-type');
-            if(scoreDiv) scoreDiv.innerText = 'Счёт: 0';
-
-            let playerVelocityY = 0;
-            const GRAVITY = 15;
-            const JUMP_FORCE = 7;
-            let isOnGround = false;
-
-            function checkCollisionAndAdjust(pos, playerSize = { x: 0.4, y: 0.8, z: 0.4 }) {
-                let newPos = pos.clone();
-                for (let block of collisionBlocks) {
-                    const bPos = block.position;
-                    const bScale = block.scale;
-                    const bHalfSize = { x: 0.45 * bScale.x, y: 0.45 * bScale.y, z: 0.45 * bScale.z };
-                    if (Math.abs(newPos.x - bPos.x) < playerSize.x + bHalfSize.x &&
-                        Math.abs(newPos.y - bPos.y) < playerSize.y + bHalfSize.y &&
-                        Math.abs(newPos.z - bPos.z) < playerSize.z + bHalfSize.z) {
-                        const dx = newPos.x - bPos.x;
-                        if (dx > 0) newPos.x = bPos.x + playerSize.x + bHalfSize.x;
-                        else newPos.x = bPos.x - playerSize.x - bHalfSize.x;
-                    }
-                }
-                for (let block of collisionBlocks) {
-                    const bPos = block.position;
-                    const bScale = block.scale;
-                    const bHalfSize = { x: 0.45 * bScale.x, y: 0.45 * bScale.y, z: 0.45 * bScale.z };
-                    if (Math.abs(newPos.x - bPos.x) < playerSize.x + bHalfSize.x &&
-                        Math.abs(newPos.y - bPos.y) < playerSize.y + bHalfSize.y &&
-                        Math.abs(newPos.z - bPos.z) < playerSize.z + bHalfSize.z) {
-                        const dz = newPos.z - bPos.z;
-                        if (dz > 0) newPos.z = bPos.z + playerSize.z + bHalfSize.z;
-                        else newPos.z = bPos.z - playerSize.z - bHalfSize.z;
-                    }
-                }
-                let onGroundFlag = false;
-                for (let block of collisionBlocks) {
-                    const bPos = block.position;
-                    const bScale = block.scale;
-                    const bHalfSize = { x: 0.45 * bScale.x, y: 0.45 * bScale.y, z: 0.45 * bScale.z };
-                    if (Math.abs(newPos.x - bPos.x) < playerSize.x + bHalfSize.x &&
-                        Math.abs(newPos.z - bPos.z) < playerSize.z + bHalfSize.z &&
-                        Math.abs(newPos.y - playerSize.y - (bPos.y + bHalfSize.y)) < 0.3) {
-                        onGroundFlag = true;
-                        newPos.y = bPos.y + bHalfSize.y + playerSize.y;
-                    }
-                    if (Math.abs(newPos.x - bPos.x) < playerSize.x + bHalfSize.x &&
-                        Math.abs(newPos.z - bPos.z) < playerSize.z + bHalfSize.z &&
-                        Math.abs(newPos.y - bPos.y) < playerSize.y + bHalfSize.y) {
-                        const dy = newPos.y - bPos.y;
-                        if (dy > 0) newPos.y = bPos.y + bHalfSize.y + playerSize.y;
-                        else newPos.y = bPos.y - bHalfSize.y - playerSize.y;
-                    }
-                }
-                return { pos: newPos, onGround: onGroundFlag };
-            }
-
-            let lastTime = performance.now()/1000;
-            function update() {
-                if(!gameActive) return;
-                const now = performance.now()/1000;
-                const delta = Math.min(0.033, now - lastTime);
-                lastTime = now;
-
-                let moveX = 0, moveZ = 0;
-                if (joystickActive && (joystickVector.x !== 0 || joystickVector.z !== 0)) {
-                    moveX = joystickVector.x;
-                    moveZ = joystickVector.z;
-                } else {
-                    if(keyState.w) moveZ -= 1;
-                    if(keyState.s) moveZ += 1;
-                    if(keyState.a) moveX -= 1;
-                    if(keyState.d) moveX += 1;
-                    if(moveX !==0 || moveZ !==0) { const len = Math.hypot(moveX, moveZ); moveX/=len; moveZ/=len; }
-                }
-                let speed = moveSpeed * delta;
-                let newPos = gamePlayer.position.clone();
-                newPos.x += moveX * speed;
-                newPos.z += moveZ * speed;
-                playerVelocityY -= GRAVITY * delta;
-                newPos.y += playerVelocityY * delta;
-                const collisionResult = checkCollisionAndAdjust(newPos);
-                newPos = collisionResult.pos;
-                isOnGround = collisionResult.onGround;
-                if (isOnGround && keyState.space) {
-                    playerVelocityY = JUMP_FORCE;
-                    isOnGround = false;
-                    keyState.space = false;
-                }
-                gamePlayer.position.copy(newPos);
-
-                if (!isHost && connections.size > 0) {
-                    const hostConn = connections.values().next().value;
-                    if (hostConn && hostConn.open) hostConn.send({ type: 'position', peerId: peer.id, x: gamePlayer.position.x, y: gamePlayer.position.y, z: gamePlayer.position.z });
-                } else if (isHost) {
-                    broadcastToAll({ type: 'player_position', peerId: peer.id, x: gamePlayer.position.x, y: gamePlayer.position.y, z: gamePlayer.position.z });
-                }
-
-                controls.target.copy(gamePlayer.position);
-                controls.update();
-                pointLight.position.set(gamePlayer.position.x, gamePlayer.position.y + 2, gamePlayer.position.z);
-            }
-            function animate() { if(!gameActive) return; gameAnimationId = requestAnimationFrame(animate); update(); gameRenderer.render(gameScene, gameCamera); }
-            gameActive = true;
-            animate();
-
-            const exitBtn = document.querySelector('#customGameScreen .exit-game');
-            exitBtn.onclick = () => {
-                gameActive = false;
-                if(gameAnimationId) cancelAnimationFrame(gameAnimationId);
-                if (peer && isHost) { for (let conn of connections.values()) conn.close(); peer.destroy(); peer = null; }
-                document.getElementById('customGameScreen').classList.add('hidden');
-                document.getElementById('mainMenuScreen').classList.remove('hidden');
-                connections.clear();
-                remotePlayers.clear();
-                isHost = false;
-                currentGameData = null;
-                controls = null;
-            };
-        }
-
-        function createDefaultCharacter(color = 0x3a86ff) {
-            const group = new THREE.Group();
-            const body = new THREE.Mesh(new THREE.BoxGeometry(0.6,0.8,0.4), new THREE.MeshStandardMaterial({ color }));
-            body.position.y=0; body.castShadow=true; group.add(body);
-            const head = new THREE.Mesh(new THREE.SphereGeometry(0.4,32,32), new THREE.MeshStandardMaterial({ color:0xffccaa }));
-            head.position.y=0.6; head.castShadow=true; group.add(head);
-            const leftEye = new THREE.Mesh(new THREE.SphereGeometry(0.12,16,16), new THREE.MeshStandardMaterial({ color:0xffffff }));
-            leftEye.position.set(-0.15,0.75,0.4);
-            const rightEye = new THREE.Mesh(new THREE.SphereGeometry(0.12,16,16), new THREE.MeshStandardMaterial({ color:0xffffff }));
-            rightEye.position.set(0.15,0.75,0.4);
-            group.add(leftEye,rightEye);
-            const leftPupil = new THREE.Mesh(new THREE.SphereGeometry(0.07,16,16), new THREE.MeshStandardMaterial({ color:0x000000 }));
-            leftPupil.position.set(-0.15,0.73,0.52);
-            const rightPupil = new THREE.Mesh(new THREE.SphereGeometry(0.07,16,16), new THREE.MeshStandardMaterial({ color:0x000000 }));
-            rightPupil.position.set(0.15,0.73,0.52);
-            group.add(leftPupil,rightPupil);
-            const leftArm = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.6,0.3), new THREE.MeshStandardMaterial({ color }));
-            leftArm.position.set(-0.55,0.3,0);
-            const rightArm = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.6,0.3), new THREE.MeshStandardMaterial({ color }));
-            rightArm.position.set(0.55,0.3,0);
-            group.add(leftArm,rightArm);
-            const leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.6,0.3), new THREE.MeshStandardMaterial({ color:0x2c5f8a }));
-            leftLeg.position.set(-0.25,-0.5,0);
-            const rightLeg = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.6,0.3), new THREE.MeshStandardMaterial({ color:0x2c5f8a }));
-            rightLeg.position.set(0.25,-0.5,0);
-            group.add(leftLeg,rightLeg);
-            return group;
-        }
-
-        function createMesh(shape, size = { x: 0.9, y: 0.9, z: 0.9 }, color = 0x8B5A2B, opacity = 1) {
-            let geometry;
-            switch(shape) {
-                case 'sphere': geometry = new THREE.SphereGeometry(0.45, 32, 32); break;
-                case 'cylinder': geometry = new THREE.CylinderGeometry(0.45, 0.45, 0.9, 32); break;
-                case 'cone': geometry = new THREE.ConeGeometry(0.45, 0.9, 32); break;
-                default: geometry = new THREE.BoxGeometry(0.9, 0.9, 0.9);
-            }
-            const material = new THREE.MeshStandardMaterial({ color });
-            material.transparent = opacity < 1;
-            material.opacity = opacity;
-            const mesh = new THREE.Mesh(geometry, material);
-            mesh.scale.set(size.x, size.y, size.z);
-            return mesh;
-        }
-
-        async function loadCustomModel(url) {
-            return new Promise((resolve, reject) => {
-                new GLTFLoader().load(url, gltf => { gltf.scene.traverse(c=>{if(c.isMesh){c.castShadow=true;c.receiveShadow=true;}}); resolve(gltf.scene); }, undefined, error => {
-                    new OBJLoader().load(url, obj => { obj.traverse(c=>{if(c.isMesh){c.castShadow=true;c.receiveShadow=true;}}); resolve(obj); }, undefined, err2 => reject(new Error(`Не удалось загрузить: ${error.message||err2.message}`)));
-                });
-            });
-        }
-
-        // ========== МОИ ПРОЕКТЫ ==========
-        function renderMyProjects() { /* аналогично предыдущему */ }
-        async function startLocalGameSession(gameData, gameName) { /* аналогично мультиплееру, но без сети, использует ту же логику поиска спавн-блока */ }
-        function renderGamesList() { /* список игр с кнопками */ }
-        function renderReports() { /* ... */ }
-        function showReportDialog() { /* ... */ }
-        function applySettings() { moveSpeed = parseFloat(document.getElementById('moveSpeed').value); }
-        document.getElementById('mouseSensitivity')?.addEventListener('input', applySettings);
-        document.getElementById('moveSpeed')?.addEventListener('input', applySettings);
-        document.getElementById('reportBugBtn')?.addEventListener('click', showReportDialog);
-        document.getElementById('connectToServerBtn')?.addEventListener('click', () => {
-            const serverId = document.getElementById('serverIdInput').value.trim();
-            if (!serverId) { alert('Введите ID сервера'); return; }
-            connectToServer(serverId);
+    // ========== МАГАЗИН ==========
+    function renderShop() {
+        const container = document.getElementById('shopItemsList');
+        if (!container) return;
+        container.innerHTML = '';
+        shopItems.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'shop-item';
+            div.innerHTML = `<div style="font-size:48px;">${item.id==='skin_gold'?'👑':item.id==='pickaxe'?'⛏️':'✨'}</div><h3>${item.name}</h3><div class="price">${item.price} 🪙</div><button class="btn buy-btn" data-id="${item.id}" data-price="${item.price}">Купить</button>`;
+            container.appendChild(div);
         });
+        document.querySelectorAll('.buy-btn').forEach(btn => btn.addEventListener('click', () => { const price = parseInt(btn.dataset.price); if (spendCoins(price)) { alert(`Вы купили ${btn.dataset.id}`); renderShop(); } else alert("Недостаточно монет!"); }));
+        attachMobileEvents();
+    }
 
-        // ========== КОНСТРУКТОР ==========
-        let editorScene, editorCamera, editorRenderer, editorControls, transformControls;
-        let editorBlocks = [];
-        let selectedObjects = [];
-        let isDraggingSelection = false;
-        let dragSelectionStart = null;
-        let dragSelectionEnd = null;
-        let currentTransformMode = 'move';
-        let currentShape = 'cube';
-        let currentBlockType = 'wood';
-        let currentPhysType = 'solid';
-        let currentTexture = 'wood';
-        let currentColor = '#8B5A2B';
-        let currentOpacity = 1;
-        let editorActive = false;
-        let editorAnimationId = null;
-        let gameBeingEdited = null;
-        let directionalLight = null; // для управления светом
+    // ========== ДРУЗЬЯ ==========
+    function renderFriendsList() {
+        const container = document.getElementById('friendsList');
+        if (!container) return;
+        container.innerHTML = '';
+        (currentUser.friends || []).forEach(friend => {
+            const div = document.createElement('div');
+            div.className = 'friend-item';
+            div.innerHTML = `<span>${friend}</span><div class="friend-actions"><button class="removeFriendBtn" data-friend="${friend}">❌</button></div>`;
+            container.appendChild(div);
+        });
+        document.querySelectorAll('.removeFriendBtn').forEach(btn => btn.addEventListener('click', () => { const friend = btn.dataset.friend; currentUser.friends = currentUser.friends.filter(f => f !== friend); saveUsers(); renderFriendsList(); }));
+        attachMobileEvents();
+    }
+    function addFriend() {
+        const friendName = document.getElementById('friendSearch').value.trim();
+        if (!friendName || friendName === currentUser.username) return;
+        const targetUser = users.find(u => u.username === friendName);
+        if (!targetUser) { alert("Пользователь не найден"); return; }
+        if (currentUser.friends.includes(friendName)) { alert("Уже в друзьях"); return; }
+        if (!targetUser.friendRequests) targetUser.friendRequests = [];
+        targetUser.friendRequests.push(currentUser.username);
+        saveUsers();
+        alert(`Заявка отправлена ${friendName}`);
+        document.getElementById('friendSearch').value = '';
+    }
 
-        function createMeshEditor(shape, size = { x: 0.9, y: 0.9, z: 0.9 }, color = 0x8B5A2B, opacity = 1, type = 'block') {
-            let geometry;
-            switch(shape) {
-                case 'sphere': geometry = new THREE.SphereGeometry(0.45, 32, 32); break;
-                case 'cylinder': geometry = new THREE.CylinderGeometry(0.45, 0.45, 0.9, 32); break;
-                case 'cone': geometry = new THREE.ConeGeometry(0.45, 0.9, 32); break;
-                default: geometry = new THREE.BoxGeometry(0.9, 0.9, 0.9);
+    // ========== ЧАТ ==========
+    function renderChat() {
+        const container = document.getElementById('chatMessages');
+        if (!container) return;
+        container.innerHTML = '';
+        chatMessages.slice(-30).forEach(msg => { const div = document.createElement('div'); div.innerHTML = `<span style="color:#ffaa44;">[${msg.time}]</span> <b>${msg.user}:</b> ${msg.text}`; container.appendChild(div); });
+        container.scrollTop = container.scrollHeight;
+    }
+    function sendChatMessage() {
+        const input = document.getElementById('chatInput');
+        const text = input.value.trim();
+        if (!text || !currentUser) return;
+        const newMsg = { user: currentUser.username, text: text, time: new Date().toLocaleTimeString() };
+        chatMessages.push(newMsg);
+        saveChat();
+        renderChat();
+        input.value = '';
+    }
+    function startChatPolling() { setInterval(() => { const stored = JSON.parse(localStorage.getItem('blockverse_chat')) || []; if (JSON.stringify(stored) !== JSON.stringify(chatMessages)) { chatMessages = stored; renderChat(); } }, 2000); }
+
+    // ========== МУЛЬТИПЛЕЕР (WebSocket) ==========
+    let ws = null;
+    let currentGameId = null;
+    let myPlayerId = null;
+    let remotePlayers = new Map();   // playerId -> mesh
+    let gameScene = null, gameCamera = null, gameRenderer = null, gamePlayer = null;
+    let gameActive = false;
+    let gameAnimationId = null;
+    let gameCoins = [], gameScore = 0;
+    let collisionBlocks = [];
+    let keyState = { w: false, s: false, a: false, d: false, space: false };
+    let joystickVector = { x: 0, z: 0 }, joystickActive = false;
+    let cameraDistance = 8;
+    let moveSpeed = 4;
+    let mouseSensitivity = 0.005;
+    let controls = null;
+
+    function connectToWebSocket() {
+        const serverUrl = 'wss://matrix-5uvi.onrender.com'; // или ws:// если нужно
+        ws = new WebSocket(serverUrl);
+        ws.onopen = () => {
+            console.log('WebSocket connected');
+            requestGamesList();
+        };
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            switch (data.type) {
+                case 'games_list':
+                    renderGamesList(data.games);
+                    break;
+                case 'game_created':
+                    alert(`Игра "${data.gameName}" создана! ID: ${data.gameId}`);
+                    navigator.clipboard.writeText(data.gameId).then(() => {
+                        alert(`ID скопирован в буфер обмена: ${data.gameId}`);
+                    }).catch(() => alert(`ID сервера: ${data.gameId}`));
+                    requestGamesList();
+                    break;
+                case 'joined':
+                    myPlayerId = data.playerId;
+                    startGameSession(data.gameData, data.gameName);
+                    break;
+                case 'player_joined':
+                    const newPlayer = createRemotePlayer();
+                    newPlayer.position.set(data.position.x, data.position.y, data.position.z);
+                    gameScene.add(newPlayer);
+                    remotePlayers.set(data.playerId, newPlayer);
+                    break;
+                case 'player_moved':
+                    const movedPlayer = remotePlayers.get(data.playerId);
+                    if (movedPlayer) movedPlayer.position.set(data.position.x, data.position.y, data.position.z);
+                    break;
+                case 'player_left':
+                    const leftPlayer = remotePlayers.get(data.playerId);
+                    if (leftPlayer) gameScene.remove(leftPlayer);
+                    remotePlayers.delete(data.playerId);
+                    break;
+                case 'error':
+                    alert(data.message);
+                    break;
             }
-            const material = new THREE.MeshStandardMaterial({ color });
-            material.transparent = opacity < 1;
-            material.opacity = opacity;
-            const mesh = new THREE.Mesh(geometry, material);
-            mesh.scale.set(size.x, size.y, size.z);
-            mesh.userData = { type, shape, color: '#' + color.toString(16).padStart(6,'0'), opacity, physType: currentPhysType, texture: currentTexture, script: '', groupId: null };
-            mesh.castShadow = true;
-            mesh.receiveShadow = true;
-            return mesh;
+        };
+        ws.onerror = (err) => console.error('WebSocket error:', err);
+        ws.onclose = () => console.log('WebSocket closed');
+    }
+
+    function requestGamesList() {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'get_games_list' }));
+        }
+    }
+
+    function createGameOnServer(gameName, gameData) {
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+            alert('Нет соединения с сервером');
+            return;
+        }
+        ws.send(JSON.stringify({
+            type: 'create_game',
+            gameName: gameName,
+            author: currentUser.username,
+            gameData: gameData
+        }));
+    }
+
+    function joinGame(gameId) {
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+            alert('Нет соединения с сервером');
+            return;
+        }
+        currentGameId = gameId;
+        ws.send(JSON.stringify({ type: 'join_game', gameId }));
+    }
+
+    function sendPosition(pos) {
+        if (ws && ws.readyState === WebSocket.OPEN && currentGameId) {
+            ws.send(JSON.stringify({ type: 'update_position', position: pos }));
+        }
+    }
+
+    function leaveGame() {
+        if (ws && ws.readyState === WebSocket.OPEN && currentGameId) {
+            ws.send(JSON.stringify({ type: 'leave_game' }));
+        }
+        currentGameId = null;
+    }
+
+    function renderGamesList(games) {
+        const container = document.getElementById('gamesList');
+        if (!container) return;
+        container.innerHTML = '';
+        if (!games || games.length === 0) {
+            container.innerHTML = '<p>Нет активных серверов. Создайте новый!</p>';
+            attachMobileEvents();
+            return;
+        }
+        games.forEach(game => {
+            const card = document.createElement('div');
+            card.className = 'game-card';
+            card.innerHTML = `
+                <div class="game-image">🎲</div>
+                <div class="game-info">
+                    <div class="game-title">${game.name}</div>
+                    <div class="game-author">👤 ${game.author} | 🟢 ${game.players} игроков</div>
+                    <button class="play-btn" data-id="${game.id}">Играть</button>
+                </div>
+            `;
+            container.appendChild(card);
+        });
+        document.querySelectorAll('.play-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const gameId = btn.dataset.id;
+                joinGame(gameId);
+            });
+        });
+        attachMobileEvents();
+    }
+
+    function findSpawnBlock(blocks) {
+        for (let block of blocks) {
+            if (block.userData && block.userData.type === 'spawn') return block;
+        }
+        return null;
+    }
+
+    async function startGameSession(gameData, gameName) {
+        document.getElementById('mainMenuScreen').classList.add('hidden');
+        document.getElementById('customGameScreen').classList.remove('hidden');
+        const container = document.getElementById('customGameContainer');
+        container.innerHTML = '';
+
+        gameScene = new THREE.Scene();
+        gameScene.background = new THREE.Color(0x87CEEB);
+        gameScene.fog = new THREE.Fog(0x87CEEB, 30, 60);
+        gameCamera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+        gameRenderer = new THREE.WebGLRenderer({ antialias: true });
+        gameRenderer.setSize(window.innerWidth, window.innerHeight);
+        gameRenderer.shadowMap.enabled = true;
+        container.appendChild(gameRenderer.domElement);
+
+        const ambient = new THREE.AmbientLight(0x404060);
+        gameScene.add(ambient);
+        const dirLight = new THREE.DirectionalLight(0xfff5d1, 1);
+        dirLight.position.set(5,10,7);
+        dirLight.castShadow = true;
+        gameScene.add(dirLight);
+        const pointLight = new THREE.PointLight(0xffaa66, 1, 20);
+        pointLight.position.set(0, 3, 0);
+        pointLight.castShadow = true;
+        gameScene.add(pointLight);
+
+        collisionBlocks = [];
+        if (gameData && gameData.blocks) {
+            gameData.blocks.forEach(block => {
+                const mesh = createMesh(block.shape || 'cube', block.scale, block.color, block.opacity);
+                mesh.position.set(block.x, block.y, block.z);
+                mesh.rotation.set(block.rotation.x, block.rotation.y, block.rotation.z);
+                mesh.userData = { ...mesh.userData, ...block.userData };
+                gameScene.add(mesh);
+                collisionBlocks.push(mesh);
+            });
+        } else {
+            const platform = createMesh('cube', { x: 20/0.9, y: 1/0.9, z: 20/0.9 }, 0x6B8E23);
+            platform.position.set(0, -0.5, 0);
+            gameScene.add(platform);
+            collisionBlocks.push(platform);
         }
 
-        function createStartPlatform() {
-            // Платформа
-            const platform = createMeshEditor('cube', { x: 10, y: 0.5, z: 10 }, 0x6B8E23, 1, 'block');
-            platform.position.set(0, -0.25, 0);
-            platform.userData.color = '#6B8E23';
-            editorScene.add(platform);
-            editorBlocks.push(platform);
-            // Спавн-блок (красный, немного приподнят над платформой)
-            const spawn = createMeshEditor('cube', { x: 0.8, y: 0.4, z: 0.8 }, 0xff3333, 1, 'spawn');
-            spawn.position.set(0, 0.3, 0);
-            editorScene.add(spawn);
-            editorBlocks.push(spawn);
+        let spawnBlock = findSpawnBlock(collisionBlocks);
+        let spawnPos = { x: 0, y: 1, z: 0 };
+        if (spawnBlock) {
+            const bHalfSize = { x: 0.45 * spawnBlock.scale.x, y: 0.45 * spawnBlock.scale.y, z: 0.45 * spawnBlock.scale.z };
+            spawnPos = { x: spawnBlock.position.x, y: spawnBlock.position.y + bHalfSize.y + 0.8, z: spawnBlock.position.z };
         }
 
-        function addDefaultBlock() {
-            const color = parseInt(currentColor.slice(1), 16);
-            const block = createMeshEditor(currentShape, { x:0.9, y:0.9, z:0.9 }, color, currentOpacity, 'block');
-            block.position.set(0, 1, 0);
+        let globalPlayerModel = null;
+        if (currentUser && currentUser.customModel) {
+            try {
+                globalPlayerModel = await loadCustomModel(currentUser.customModel);
+                globalPlayerModel.scale.set(0.5,0.5,0.5);
+            } catch(e) { console.warn(e); }
+        }
+        if (globalPlayerModel) {
+            const playerModel = globalPlayerModel.clone();
+            playerModel.position.set(spawnPos.x, spawnPos.y, spawnPos.z);
+            gameScene.add(playerModel);
+            gamePlayer = playerModel;
+        } else {
+            const defaultChar = createDefaultCharacter(0x3a86ff);
+            defaultChar.position.set(spawnPos.x, spawnPos.y, spawnPos.z);
+            gameScene.add(defaultChar);
+            gamePlayer = defaultChar;
+        }
+
+        const handleKey = (e, val) => {
+            if(!gameActive) return;
+            if(e.key==='w') keyState.w=val;
+            if(e.key==='s') keyState.s=val;
+            if(e.key==='a') keyState.a=val;
+            if(e.key==='d') keyState.d=val;
+            if(e.key===' ' || e.key==='Space') { keyState.space=val; e.preventDefault(); }
+        };
+        window.addEventListener('keydown', e=>handleKey(e,true));
+        window.addEventListener('keyup', e=>handleKey(e,false));
+
+        const joystickDiv = document.getElementById('joystick');
+        const jumpBtnDiv = document.getElementById('jumpBtn');
+        const zoomDiv = document.getElementById('cameraZoom');
+        let joystickThumb = joystickDiv?.querySelector('.joystick-thumb');
+        if (joystickDiv) {
+            joystickDiv.style.display = 'block';
+            jumpBtnDiv.style.display = 'flex';
+            zoomDiv.style.display = 'flex';
+            let joystickCenter = { x: 0, y: 0 };
+            let activeTouch = false;
+            const updateJoystick = (touch) => {
+                if (!activeTouch) return;
+                const dx = touch.clientX - joystickCenter.x;
+                const dy = touch.clientY - joystickCenter.y;
+                const maxDist = 40;
+                let dist = Math.hypot(dx, dy);
+                if (dist > maxDist) {
+                    const angle = Math.atan2(dy, dx);
+                    const nx = Math.cos(angle) * maxDist;
+                    const ny = Math.sin(angle) * maxDist;
+                    joystickVector = { x: nx / maxDist, z: ny / maxDist };
+                    if (joystickThumb) joystickThumb.style.transform = `translate(${nx}px, ${ny}px)`;
+                } else {
+                    joystickVector = { x: dx / maxDist, z: dy / maxDist };
+                    if (joystickThumb) joystickThumb.style.transform = `translate(${dx}px, ${dy}px)`;
+                }
+            };
+            joystickDiv.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                const rect = joystickDiv.getBoundingClientRect();
+                joystickCenter = { x: rect.left + rect.width/2, y: rect.top + rect.height/2 };
+                activeTouch = true;
+                joystickActive = true;
+                updateJoystick(e.touches[0]);
+            });
+            joystickDiv.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                if (activeTouch) updateJoystick(e.touches[0]);
+            });
+            joystickDiv.addEventListener('touchend', () => {
+                activeTouch = false;
+                joystickActive = false;
+                joystickVector = { x: 0, z: 0 };
+                if (joystickThumb) joystickThumb.style.transform = `translate(0px, 0px)`;
+            });
+            jumpBtnDiv.addEventListener('touchstart', (e) => { e.preventDefault(); keyState.space = true; });
+            jumpBtnDiv.addEventListener('touchend', () => { keyState.space = false; });
+            jumpBtnDiv.addEventListener('mousedown', () => { keyState.space = true; });
+            jumpBtnDiv.addEventListener('mouseup', () => { keyState.space = false; });
+        }
+
+        controls = new OrbitControls(gameCamera, gameRenderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.rotateSpeed = 1.0;
+        controls.zoomSpeed = 1.2;
+        controls.enableZoom = true;
+        controls.enablePan = false;
+        controls.target.copy(gamePlayer.position);
+
+        const zoomInBtn = document.getElementById('zoomIn');
+        const zoomOutBtn = document.getElementById('zoomOut');
+        if (zoomInBtn) zoomInBtn.onclick = () => { controls.object.zoom = Math.min(3, controls.object.zoom - 0.2); controls.update(); };
+        if (zoomOutBtn) zoomOutBtn.onclick = () => { controls.object.zoom = Math.max(0.5, controls.object.zoom + 0.2); controls.update(); };
+
+        const scoreDiv = document.querySelector('#customGameScreen .custom-game-ui:first-of-type');
+        if(scoreDiv) scoreDiv.innerText = 'Счёт: 0';
+
+        let playerVelocityY = 0;
+        const GRAVITY = 15;
+        const JUMP_FORCE = 7;
+        let isOnGround = false;
+
+        function checkCollisionAndAdjust(pos, playerSize = { x: 0.4, y: 0.8, z: 0.4 }) {
+            let newPos = pos.clone();
+            for (let block of collisionBlocks) {
+                const bPos = block.position;
+                const bScale = block.scale;
+                const bHalfSize = { x: 0.45 * bScale.x, y: 0.45 * bScale.y, z: 0.45 * bScale.z };
+                if (Math.abs(newPos.x - bPos.x) < playerSize.x + bHalfSize.x &&
+                    Math.abs(newPos.y - bPos.y) < playerSize.y + bHalfSize.y &&
+                    Math.abs(newPos.z - bPos.z) < playerSize.z + bHalfSize.z) {
+                    const dx = newPos.x - bPos.x;
+                    if (dx > 0) newPos.x = bPos.x + playerSize.x + bHalfSize.x;
+                    else newPos.x = bPos.x - playerSize.x - bHalfSize.x;
+                }
+            }
+            for (let block of collisionBlocks) {
+                const bPos = block.position;
+                const bScale = block.scale;
+                const bHalfSize = { x: 0.45 * bScale.x, y: 0.45 * bScale.y, z: 0.45 * bScale.z };
+                if (Math.abs(newPos.x - bPos.x) < playerSize.x + bHalfSize.x &&
+                    Math.abs(newPos.y - bPos.y) < playerSize.y + bHalfSize.y &&
+                    Math.abs(newPos.z - bPos.z) < playerSize.z + bHalfSize.z) {
+                    const dz = newPos.z - bPos.z;
+                    if (dz > 0) newPos.z = bPos.z + playerSize.z + bHalfSize.z;
+                    else newPos.z = bPos.z - playerSize.z - bHalfSize.z;
+                }
+            }
+            let onGroundFlag = false;
+            for (let block of collisionBlocks) {
+                const bPos = block.position;
+                const bScale = block.scale;
+                const bHalfSize = { x: 0.45 * bScale.x, y: 0.45 * bScale.y, z: 0.45 * bScale.z };
+                if (Math.abs(newPos.x - bPos.x) < playerSize.x + bHalfSize.x &&
+                    Math.abs(newPos.z - bPos.z) < playerSize.z + bHalfSize.z &&
+                    Math.abs(newPos.y - playerSize.y - (bPos.y + bHalfSize.y)) < 0.3) {
+                    onGroundFlag = true;
+                    newPos.y = bPos.y + bHalfSize.y + playerSize.y;
+                }
+                if (Math.abs(newPos.x - bPos.x) < playerSize.x + bHalfSize.x &&
+                    Math.abs(newPos.z - bPos.z) < playerSize.z + bHalfSize.z &&
+                    Math.abs(newPos.y - bPos.y) < playerSize.y + bHalfSize.y) {
+                    const dy = newPos.y - bPos.y;
+                    if (dy > 0) newPos.y = bPos.y + bHalfSize.y + playerSize.y;
+                    else newPos.y = bPos.y - bHalfSize.y - playerSize.y;
+                }
+            }
+            return { pos: newPos, onGround: onGroundFlag };
+        }
+
+        let lastTime = performance.now()/1000;
+        function update() {
+            if(!gameActive) return;
+            const now = performance.now()/1000;
+            const delta = Math.min(0.033, now - lastTime);
+            lastTime = now;
+
+            let moveX = 0, moveZ = 0;
+            if (joystickActive && (joystickVector.x !== 0 || joystickVector.z !== 0)) {
+                moveX = joystickVector.x;
+                moveZ = joystickVector.z;
+            } else {
+                if(keyState.w) moveZ -= 1;
+                if(keyState.s) moveZ += 1;
+                if(keyState.a) moveX -= 1;
+                if(keyState.d) moveX += 1;
+                if(moveX !==0 || moveZ !==0) { const len = Math.hypot(moveX, moveZ); moveX/=len; moveZ/=len; }
+            }
+            let speed = moveSpeed * delta;
+            let newPos = gamePlayer.position.clone();
+            newPos.x += moveX * speed;
+            newPos.z += moveZ * speed;
+            playerVelocityY -= GRAVITY * delta;
+            newPos.y += playerVelocityY * delta;
+            const collisionResult = checkCollisionAndAdjust(newPos);
+            newPos = collisionResult.pos;
+            isOnGround = collisionResult.onGround;
+            if (isOnGround && keyState.space) {
+                playerVelocityY = JUMP_FORCE;
+                isOnGround = false;
+                keyState.space = false;
+            }
+            gamePlayer.position.copy(newPos);
+
+            sendPosition({ x: gamePlayer.position.x, y: gamePlayer.position.y, z: gamePlayer.position.z });
+
+            for(let i=0;i<gameCoins.length;i++) {
+                const coin = gameCoins[i];
+                if(coin && gamePlayer.position.distanceTo(coin.position) < 0.8) {
+                    gameScene.remove(coin);
+                    gameCoins.splice(i,1);
+                    gameScore++;
+                    if(scoreDiv) scoreDiv.innerText = `Счёт: ${gameScore}`;
+                    i--;
+                }
+            }
+
+            controls.target.copy(gamePlayer.position);
+            controls.update();
+            pointLight.position.set(gamePlayer.position.x, gamePlayer.position.y + 2, gamePlayer.position.z);
+        }
+        function animate() { if(!gameActive) return; gameAnimationId = requestAnimationFrame(animate); update(); gameRenderer.render(gameScene, gameCamera); }
+        gameActive = true;
+        animate();
+
+        const exitBtn = document.querySelector('#customGameScreen .exit-game');
+        exitBtn.onclick = () => {
+            gameActive = false;
+            if(gameAnimationId) cancelAnimationFrame(gameAnimationId);
+            leaveGame();
+            document.getElementById('customGameScreen').classList.add('hidden');
+            document.getElementById('mainMenuScreen').classList.remove('hidden');
+            requestGamesList();
+        };
+        attachMobileEvents();
+    }
+
+    function createDefaultCharacter(color = 0x3a86ff) {
+        const group = new THREE.Group();
+        const body = new THREE.Mesh(new THREE.BoxGeometry(0.6,0.8,0.4), new THREE.MeshStandardMaterial({ color }));
+        body.position.y=0; body.castShadow=true; group.add(body);
+        const head = new THREE.Mesh(new THREE.SphereGeometry(0.4,32,32), new THREE.MeshStandardMaterial({ color:0xffccaa }));
+        head.position.y=0.6; head.castShadow=true; group.add(head);
+        const leftEye = new THREE.Mesh(new THREE.SphereGeometry(0.12,16,16), new THREE.MeshStandardMaterial({ color:0xffffff }));
+        leftEye.position.set(-0.15,0.75,0.4);
+        const rightEye = new THREE.Mesh(new THREE.SphereGeometry(0.12,16,16), new THREE.MeshStandardMaterial({ color:0xffffff }));
+        rightEye.position.set(0.15,0.75,0.4);
+        group.add(leftEye,rightEye);
+        const leftPupil = new THREE.Mesh(new THREE.SphereGeometry(0.07,16,16), new THREE.MeshStandardMaterial({ color:0x000000 }));
+        leftPupil.position.set(-0.15,0.73,0.52);
+        const rightPupil = new THREE.Mesh(new THREE.SphereGeometry(0.07,16,16), new THREE.MeshStandardMaterial({ color:0x000000 }));
+        rightPupil.position.set(0.15,0.73,0.52);
+        group.add(leftPupil,rightPupil);
+        const leftArm = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.6,0.3), new THREE.MeshStandardMaterial({ color }));
+        leftArm.position.set(-0.55,0.3,0);
+        const rightArm = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.6,0.3), new THREE.MeshStandardMaterial({ color }));
+        rightArm.position.set(0.55,0.3,0);
+        group.add(leftArm,rightArm);
+        const leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.6,0.3), new THREE.MeshStandardMaterial({ color:0x2c5f8a }));
+        leftLeg.position.set(-0.25,-0.5,0);
+        const rightLeg = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.6,0.3), new THREE.MeshStandardMaterial({ color:0x2c5f8a }));
+        rightLeg.position.set(0.25,-0.5,0);
+        group.add(leftLeg,rightLeg);
+        return group;
+    }
+
+    function createRemotePlayer() {
+        const group = new THREE.Group();
+        const body = new THREE.Mesh(new THREE.BoxGeometry(0.6,0.8,0.4), new THREE.MeshStandardMaterial({ color:0xffaa44 }));
+        body.position.y=0; group.add(body);
+        const head = new THREE.Mesh(new THREE.SphereGeometry(0.4,32,32), new THREE.MeshStandardMaterial({ color:0xffccaa }));
+        head.position.y=0.6; group.add(head);
+        const leftEye = new THREE.Mesh(new THREE.SphereGeometry(0.12,16,16), new THREE.MeshStandardMaterial({ color:0xffffff }));
+        leftEye.position.set(-0.15,0.75,0.4);
+        const rightEye = new THREE.Mesh(new THREE.SphereGeometry(0.12,16,16), new THREE.MeshStandardMaterial({ color:0xffffff }));
+        rightEye.position.set(0.15,0.75,0.4);
+        group.add(leftEye,rightEye);
+        const leftPupil = new THREE.Mesh(new THREE.SphereGeometry(0.07,16,16), new THREE.MeshStandardMaterial({ color:0x000000 }));
+        leftPupil.position.set(-0.15,0.73,0.52);
+        const rightPupil = new THREE.Mesh(new THREE.SphereGeometry(0.07,16,16), new THREE.MeshStandardMaterial({ color:0x000000 }));
+        rightPupil.position.set(0.15,0.73,0.52);
+        group.add(leftPupil,rightPupil);
+        group.castShadow = true;
+        return group;
+    }
+
+    function createMesh(shape, size = { x: 0.9, y: 0.9, z: 0.9 }, color = 0x8B5A2B, opacity = 1) {
+        let geometry;
+        switch(shape) {
+            case 'sphere': geometry = new THREE.SphereGeometry(0.45, 32, 32); break;
+            case 'cylinder': geometry = new THREE.CylinderGeometry(0.45, 0.45, 0.9, 32); break;
+            case 'cone': geometry = new THREE.ConeGeometry(0.45, 0.9, 32); break;
+            default: geometry = new THREE.BoxGeometry(0.9, 0.9, 0.9);
+        }
+        const material = new THREE.MeshStandardMaterial({ color });
+        material.transparent = opacity < 1;
+        material.opacity = opacity;
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.scale.set(size.x, size.y, size.z);
+        return mesh;
+    }
+
+    async function loadCustomModel(url) {
+        return new Promise((resolve, reject) => {
+            new GLTFLoader().load(url, gltf => { gltf.scene.traverse(c=>{if(c.isMesh){c.castShadow=true;c.receiveShadow=true;}}); resolve(gltf.scene); }, undefined, error => {
+                new OBJLoader().load(url, obj => { obj.traverse(c=>{if(c.isMesh){c.castShadow=true;c.receiveShadow=true;}}); resolve(obj); }, undefined, err2 => reject(new Error(`Не удалось загрузить: ${error.message||err2.message}`)));
+            });
+        });
+    }
+
+    // ========== МОИ ПРОЕКТЫ ==========
+    function renderMyProjects() {
+        const container = document.getElementById('myProjectsList');
+        if (!container) return;
+        container.innerHTML = '';
+        const myGames = customGames.filter(g => g.author === currentUser.username);
+        if (myGames.length === 0) {
+            container.innerHTML = '<p>У вас пока нет созданных игр. Перейдите в конструктор, чтобы создать свою первую игру!</p>';
+            attachMobileEvents();
+            return;
+        }
+        myGames.forEach(game => {
+            const card = document.createElement('div');
+            card.className = 'project-card';
+            card.innerHTML = `
+                <div class="game-title">${game.name}</div>
+                <div class="game-desc" style="font-size:12px; color:#aaa;">${game.desc || 'Без описания'}</div>
+                <div style="margin-top:12px; display:flex; gap:8px;">
+                    <button class="play-btn-small" data-id="${game.id}" style="background:#ff5722; border:none; padding:4px 12px; border-radius:20px; cursor:pointer;">Одиночная игра</button>
+                    <button class="host-btn-small" data-id="${game.id}" style="background:#4a6e8a; border:none; padding:4px 12px; border-radius:20px; cursor:pointer;">🌐 Мультиплеер (создать сервер)</button>
+                    <button class="edit-btn-small" data-id="${game.id}" style="background:#ffaa44; border:none; padding:4px 12px; border-radius:20px; cursor:pointer;">Редактировать</button>
+                    <button class="delete-btn-small" data-id="${game.id}" style="background:#ff3333; border:none; padding:4px 12px; border-radius:20px; cursor:pointer;">Удалить</button>
+                </div>
+            `;
+            container.appendChild(card);
+        });
+        document.querySelectorAll('.play-btn-small').forEach(btn => btn.addEventListener('click', async () => {
+            const id = parseInt(btn.dataset.id);
+            const game = customGames.find(g => g.id === id);
+            if (game) startLocalGameSession(game.data, game.name);
+        }));
+        document.querySelectorAll('.host-btn-small').forEach(btn => btn.addEventListener('click', async () => {
+            const id = parseInt(btn.dataset.id);
+            const game = customGames.find(g => g.id === id);
+            if (game) {
+                createGameOnServer(game.name, game.data);
+            }
+        }));
+        document.querySelectorAll('.edit-btn-small').forEach(btn => btn.addEventListener('click', async () => {
+            const id = parseInt(btn.dataset.id);
+            const game = customGames.find(g => g.id === id);
+            if (game) openEditor(game);
+        }));
+        document.querySelectorAll('.delete-btn-small').forEach(btn => btn.addEventListener('click', () => {
+            const id = parseInt(btn.dataset.id);
+            if (confirm('Удалить игру?')) {
+                customGames = customGames.filter(g => g.id !== id);
+                saveGames();
+                renderMyProjects();
+                renderGamesList();
+            }
+        }));
+        attachMobileEvents();
+    }
+
+    async function startLocalGameSession(gameData, gameName) {
+        document.getElementById('mainMenuScreen').classList.add('hidden');
+        document.getElementById('customGameScreen').classList.remove('hidden');
+        const container = document.getElementById('customGameContainer');
+        container.innerHTML = '';
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87CEEB);
+        scene.fog = new THREE.Fog(0x87CEEB, 30, 60);
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        container.appendChild(renderer.domElement);
+
+        const ambient = new THREE.AmbientLight(0x404060);
+        scene.add(ambient);
+        const dirLight = new THREE.DirectionalLight(0xfff5d1, 1);
+        dirLight.position.set(5,10,7);
+        dirLight.castShadow = true;
+        scene.add(dirLight);
+        const pointLight = new THREE.PointLight(0xffaa66, 1, 20);
+        pointLight.position.set(0, 3, 0);
+        pointLight.castShadow = true;
+        scene.add(pointLight);
+
+        const blocks = [];
+        if (gameData && gameData.blocks) {
+            gameData.blocks.forEach(block => {
+                const mesh = createMesh(block.shape || 'cube', block.scale, block.color, block.opacity);
+                mesh.position.set(block.x, block.y, block.z);
+                mesh.rotation.set(block.rotation.x, block.rotation.y, block.rotation.z);
+                scene.add(mesh);
+                blocks.push(mesh);
+            });
+        } else {
+            const platform = createMesh('cube', { x: 20/0.9, y: 1/0.9, z: 20/0.9 }, 0x6B8E23);
+            platform.position.set(0, -0.5, 0);
+            scene.add(platform);
+            blocks.push(platform);
+        }
+
+        let spawnBlock = findSpawnBlock(blocks);
+        let spawnPos = { x: 0, y: 1, z: 0 };
+        if (spawnBlock) {
+            const bHalfSize = { x: 0.45 * spawnBlock.scale.x, y: 0.45 * spawnBlock.scale.y, z: 0.45 * spawnBlock.scale.z };
+            spawnPos = { x: spawnBlock.position.x, y: spawnBlock.position.y + bHalfSize.y + 0.8, z: spawnBlock.position.z };
+        }
+
+        let globalPlayerModel = null;
+        if (currentUser && currentUser.customModel) {
+            try {
+                globalPlayerModel = await loadCustomModel(currentUser.customModel);
+                globalPlayerModel.scale.set(0.5,0.5,0.5);
+            } catch(e) { console.warn(e); }
+        }
+        let player;
+        if (globalPlayerModel) {
+            player = globalPlayerModel.clone();
+            player.position.set(spawnPos.x, spawnPos.y, spawnPos.z);
+            scene.add(player);
+        } else {
+            player = createDefaultCharacter();
+            player.position.set(spawnPos.x, spawnPos.y, spawnPos.z);
+            scene.add(player);
+        }
+
+        let localKeyState = { w: false, s: false, a: false, d: false, space: false };
+        let localJoystickVector = { x: 0, z: 0 }, localJoystickActive = false;
+        let localCameraDistance = 8;
+        let localMoveSpeed = moveSpeed;
+
+        const handleKey = (e, val) => {
+            if(e.key==='w') localKeyState.w=val;
+            if(e.key==='s') localKeyState.s=val;
+            if(e.key==='a') localKeyState.a=val;
+            if(e.key==='d') localKeyState.d=val;
+            if(e.key===' ' || e.key==='Space') { localKeyState.space=val; e.preventDefault(); }
+        };
+        window.addEventListener('keydown', e=>handleKey(e,true));
+        window.addEventListener('keyup', e=>handleKey(e,false));
+
+        const joystickDiv = document.getElementById('joystick');
+        const jumpBtnDiv = document.getElementById('jumpBtn');
+        const zoomDiv = document.getElementById('cameraZoom');
+        let joystickThumb = joystickDiv?.querySelector('.joystick-thumb');
+        if (joystickDiv) {
+            joystickDiv.style.display = 'block';
+            jumpBtnDiv.style.display = 'flex';
+            zoomDiv.style.display = 'flex';
+            let joystickCenter = { x: 0, y: 0 };
+            let activeTouch = false;
+            const updateJoystick = (touch) => {
+                if (!activeTouch) return;
+                const dx = touch.clientX - joystickCenter.x;
+                const dy = touch.clientY - joystickCenter.y;
+                const maxDist = 40;
+                let dist = Math.hypot(dx, dy);
+                if (dist > maxDist) {
+                    const angle = Math.atan2(dy, dx);
+                    const nx = Math.cos(angle) * maxDist;
+                    const ny = Math.sin(angle) * maxDist;
+                    localJoystickVector = { x: nx / maxDist, z: ny / maxDist };
+                    if (joystickThumb) joystickThumb.style.transform = `translate(${nx}px, ${ny}px)`;
+                } else {
+                    localJoystickVector = { x: dx / maxDist, z: dy / maxDist };
+                    if (joystickThumb) joystickThumb.style.transform = `translate(${dx}px, ${dy}px)`;
+                }
+            };
+            joystickDiv.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                const rect = joystickDiv.getBoundingClientRect();
+                joystickCenter = { x: rect.left + rect.width/2, y: rect.top + rect.height/2 };
+                activeTouch = true;
+                localJoystickActive = true;
+                updateJoystick(e.touches[0]);
+            });
+            joystickDiv.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                if (activeTouch) updateJoystick(e.touches[0]);
+            });
+            joystickDiv.addEventListener('touchend', () => {
+                activeTouch = false;
+                localJoystickActive = false;
+                localJoystickVector = { x: 0, z: 0 };
+                if (joystickThumb) joystickThumb.style.transform = `translate(0px, 0px)`;
+            });
+            jumpBtnDiv.addEventListener('touchstart', (e) => { e.preventDefault(); localKeyState.space = true; });
+            jumpBtnDiv.addEventListener('touchend', () => { localKeyState.space = false; });
+            jumpBtnDiv.addEventListener('mousedown', () => { localKeyState.space = true; });
+            jumpBtnDiv.addEventListener('mouseup', () => { localKeyState.space = false; });
+        }
+
+        const localControls = new OrbitControls(camera, renderer.domElement);
+        localControls.enableDamping = true;
+        localControls.dampingFactor = 0.05;
+        localControls.rotateSpeed = 1.0;
+        localControls.zoomSpeed = 1.2;
+        localControls.enableZoom = true;
+        localControls.enablePan = false;
+        localControls.target.copy(player.position);
+
+        const zoomInBtn = document.getElementById('zoomIn');
+        const zoomOutBtn = document.getElementById('zoomOut');
+        if (zoomInBtn) zoomInBtn.onclick = () => { localControls.object.zoom = Math.min(3, localControls.object.zoom - 0.2); localControls.update(); };
+        if (zoomOutBtn) zoomOutBtn.onclick = () => { localControls.object.zoom = Math.max(0.5, localControls.object.zoom + 0.2); localControls.update(); };
+
+        const scoreDiv = document.querySelector('#customGameScreen .custom-game-ui:first-of-type');
+        if(scoreDiv) scoreDiv.innerText = 'Счёт: 0';
+
+        let playerVelocityY = 0;
+        const GRAVITY = 15;
+        const JUMP_FORCE = 7;
+        let isOnGround = false;
+
+        function checkCollisionAndAdjust(pos, playerSize = { x: 0.4, y: 0.8, z: 0.4 }) {
+            let newPos = pos.clone();
+            for (let block of blocks) {
+                const bPos = block.position;
+                const bScale = block.scale;
+                const bHalfSize = { x: 0.45 * bScale.x, y: 0.45 * bScale.y, z: 0.45 * bScale.z };
+                if (Math.abs(newPos.x - bPos.x) < playerSize.x + bHalfSize.x &&
+                    Math.abs(newPos.y - bPos.y) < playerSize.y + bHalfSize.y &&
+                    Math.abs(newPos.z - bPos.z) < playerSize.z + bHalfSize.z) {
+                    const dx = newPos.x - bPos.x;
+                    if (dx > 0) newPos.x = bPos.x + playerSize.x + bHalfSize.x;
+                    else newPos.x = bPos.x - playerSize.x - bHalfSize.x;
+                }
+            }
+            for (let block of blocks) {
+                const bPos = block.position;
+                const bScale = block.scale;
+                const bHalfSize = { x: 0.45 * bScale.x, y: 0.45 * bScale.y, z: 0.45 * bScale.z };
+                if (Math.abs(newPos.x - bPos.x) < playerSize.x + bHalfSize.x &&
+                    Math.abs(newPos.y - bPos.y) < playerSize.y + bHalfSize.y &&
+                    Math.abs(newPos.z - bPos.z) < playerSize.z + bHalfSize.z) {
+                    const dz = newPos.z - bPos.z;
+                    if (dz > 0) newPos.z = bPos.z + playerSize.z + bHalfSize.z;
+                    else newPos.z = bPos.z - playerSize.z - bHalfSize.z;
+                }
+            }
+            let onGroundFlag = false;
+            for (let block of blocks) {
+                const bPos = block.position;
+                const bScale = block.scale;
+                const bHalfSize = { x: 0.45 * bScale.x, y: 0.45 * bScale.y, z: 0.45 * bScale.z };
+                if (Math.abs(newPos.x - bPos.x) < playerSize.x + bHalfSize.x &&
+                    Math.abs(newPos.z - bPos.z) < playerSize.z + bHalfSize.z &&
+                    Math.abs(newPos.y - playerSize.y - (bPos.y + bHalfSize.y)) < 0.3) {
+                    onGroundFlag = true;
+                    newPos.y = bPos.y + bHalfSize.y + playerSize.y;
+                }
+                if (Math.abs(newPos.x - bPos.x) < playerSize.x + bHalfSize.x &&
+                    Math.abs(newPos.z - bPos.z) < playerSize.z + bHalfSize.z &&
+                    Math.abs(newPos.y - bPos.y) < playerSize.y + bHalfSize.y) {
+                    const dy = newPos.y - bPos.y;
+                    if (dy > 0) newPos.y = bPos.y + bHalfSize.y + playerSize.y;
+                    else newPos.y = bPos.y - bHalfSize.y - playerSize.y;
+                }
+            }
+            return { pos: newPos, onGround: onGroundFlag };
+        }
+
+        let lastTime = performance.now()/1000;
+        let localGameActive = true;
+        function updateLocal() {
+            if(!localGameActive) return;
+            const now = performance.now()/1000;
+            const delta = Math.min(0.033, now - lastTime);
+            lastTime = now;
+
+            let moveX = 0, moveZ = 0;
+            if (localJoystickActive && (localJoystickVector.x !== 0 || localJoystickVector.z !== 0)) {
+                moveX = localJoystickVector.x;
+                moveZ = localJoystickVector.z;
+            } else {
+                if(localKeyState.w) moveZ -= 1;
+                if(localKeyState.s) moveZ += 1;
+                if(localKeyState.a) moveX -= 1;
+                if(localKeyState.d) moveX += 1;
+                if(moveX !==0 || moveZ !==0) { const len = Math.hypot(moveX, moveZ); moveX/=len; moveZ/=len; }
+            }
+            let speed = localMoveSpeed * delta;
+            let newPos = player.position.clone();
+            newPos.x += moveX * speed;
+            newPos.z += moveZ * speed;
+            playerVelocityY -= GRAVITY * delta;
+            newPos.y += playerVelocityY * delta;
+            const collisionResult = checkCollisionAndAdjust(newPos);
+            newPos = collisionResult.pos;
+            isOnGround = collisionResult.onGround;
+            if (isOnGround && localKeyState.space) {
+                playerVelocityY = JUMP_FORCE;
+                isOnGround = false;
+                localKeyState.space = false;
+            }
+            player.position.copy(newPos);
+
+            localControls.target.copy(player.position);
+            localControls.update();
+            pointLight.position.set(player.position.x, player.position.y + 2, player.position.z);
+            renderer.render(scene, camera);
+            requestAnimationFrame(updateLocal);
+        }
+        updateLocal();
+
+        const exitBtn = document.querySelector('#customGameScreen .exit-game');
+        exitBtn.onclick = () => {
+            localGameActive = false;
+            document.getElementById('customGameScreen').classList.add('hidden');
+            document.getElementById('mainMenuScreen').classList.remove('hidden');
+        };
+        attachMobileEvents();
+    }
+
+    function renderReports() {
+        const container = document.getElementById('reportsList');
+        if (!container) return;
+        container.innerHTML = '';
+        reports.slice().reverse().forEach(report => {
+            const div = document.createElement('div');
+            div.style.background = '#1e263a';
+            div.style.margin = '8px 0';
+            div.style.padding = '8px';
+            div.style.borderRadius = '12px';
+            div.innerHTML = `<b>${report.user}</b> (${report.time}): ${report.text}`;
+            container.appendChild(div);
+        });
+    }
+
+    function showReportDialog() {
+        const overlay = document.createElement('div');
+        overlay.className = 'overlay';
+        const dialog = document.createElement('div');
+        dialog.className = 'report-dialog';
+        dialog.innerHTML = `
+            <div style="display:flex; justify-content:space-between; margin-bottom:12px;">
+                <h3>Сообщить о проблеме</h3>
+                <button class="close-dialog" style="background:none; border:none; color:white; font-size:20px;">✖</button>
+            </div>
+            <textarea id="reportText" rows="4" style="width:100%; background:#1a1f2e; border:1px solid #ffaa44; border-radius:12px; padding:8px; color:white;"></textarea>
+            <button id="submitReportBtn" class="btn" style="margin-top:12px;">Отправить</button>
+        `;
+        document.body.appendChild(overlay);
+        document.body.appendChild(dialog);
+        const close = () => { overlay.remove(); dialog.remove(); };
+        dialog.querySelector('.close-dialog').onclick = close;
+        overlay.onclick = close;
+        dialog.querySelector('#submitReportBtn').onclick = () => {
+            const text = dialog.querySelector('#reportText').value.trim();
+            if (!text) return;
+            reports.push({ user: currentUser.username, text: text, time: new Date().toLocaleString() });
+            saveReports();
+            renderReports();
+            alert('Спасибо! Сообщение отправлено разработчикам.');
+            close();
+        };
+        attachMobileEvents();
+    }
+
+    function applySettings() { moveSpeed = parseFloat(document.getElementById('moveSpeed').value); }
+    document.getElementById('mouseSensitivity')?.addEventListener('input', applySettings);
+    document.getElementById('moveSpeed')?.addEventListener('input', applySettings);
+    document.getElementById('reportBugBtn')?.addEventListener('click', showReportDialog);
+    document.getElementById('createNewGameBtn')?.addEventListener('click', () => {
+        const gameName = document.getElementById('newGameName').value.trim();
+        if (!gameName) { alert('Введите название игры'); return; }
+        const gameData = { blocks: [] };
+        createGameOnServer(gameName, gameData);
+        document.getElementById('newGameName').value = '';
+    });
+    document.getElementById('refreshGamesBtn')?.addEventListener('click', () => requestGamesList());
+    document.getElementById('connectToServerBtn')?.addEventListener('click', () => {
+        const serverId = document.getElementById('serverIdInput').value.trim();
+        if (!serverId) { alert('Введите ID сервера'); return; }
+        joinGame(serverId);
+    });
+
+    // ========== КОНСТРУКТОР ==========
+    let editorScene, editorCamera, editorRenderer, editorControls, transformControls;
+    let editorBlocks = [];
+    let selectedObjects = [];
+    let isDraggingSelection = false;
+    let dragSelectionStart = null;
+    let dragSelectionEnd = null;
+    let currentTransformMode = 'move';
+    let currentShape = 'cube';
+    let currentBlockType = 'wood';
+    let currentPhysType = 'solid';
+    let currentTexture = 'wood';
+    let currentColor = '#8B5A2B';
+    let currentOpacity = 1;
+    let editorActive = false;
+    let editorAnimationId = null;
+    let gameBeingEdited = null;
+    let directionalLight = null;
+
+    function createMeshEditor(shape, size = { x: 0.9, y: 0.9, z: 0.9 }, color = 0x8B5A2B, opacity = 1, type = 'block') {
+        let geometry;
+        switch(shape) {
+            case 'sphere': geometry = new THREE.SphereGeometry(0.45, 32, 32); break;
+            case 'cylinder': geometry = new THREE.CylinderGeometry(0.45, 0.45, 0.9, 32); break;
+            case 'cone': geometry = new THREE.ConeGeometry(0.45, 0.9, 32); break;
+            default: geometry = new THREE.BoxGeometry(0.9, 0.9, 0.9);
+        }
+        const material = new THREE.MeshStandardMaterial({ color });
+        material.transparent = opacity < 1;
+        material.opacity = opacity;
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.scale.set(size.x, size.y, size.z);
+        mesh.userData = { type, shape, color: '#' + color.toString(16).padStart(6,'0'), opacity, physType: currentPhysType, texture: currentTexture, script: '', groupId: null };
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        return mesh;
+    }
+
+    function createStartPlatform() {
+        const platform = createMeshEditor('cube', { x: 10, y: 0.5, z: 10 }, 0x6B8E23, 1, 'block');
+        platform.position.set(0, -0.25, 0);
+        platform.userData.color = '#6B8E23';
+        editorScene.add(platform);
+        editorBlocks.push(platform);
+        const spawn = createMeshEditor('cube', { x: 0.8, y: 0.4, z: 0.8 }, 0xff3333, 1, 'spawn');
+        spawn.position.set(0, 0.3, 0);
+        editorScene.add(spawn);
+        editorBlocks.push(spawn);
+    }
+
+    function addDefaultBlock() {
+        const color = parseInt(currentColor.slice(1), 16);
+        const block = createMeshEditor(currentShape, { x:0.9, y:0.9, z:0.9 }, color, currentOpacity, 'block');
+        block.position.set(0, 1, 0);
+        editorScene.add(block);
+        editorBlocks.push(block);
+        selectObject(block);
+    }
+
+    function applyLightSettings() {
+        if (!directionalLight) return;
+        const intensity = parseFloat(document.getElementById('lightIntensity').value);
+        const color = document.getElementById('lightColor').value;
+        const height = parseFloat(document.getElementById('lightHeight').value);
+        const angleX = parseFloat(document.getElementById('lightAngleX').value);
+        const angleY = parseFloat(document.getElementById('lightAngleY').value);
+        directionalLight.intensity = intensity;
+        directionalLight.color.set(color);
+        const radX = angleX * Math.PI/180;
+        const radY = angleY * Math.PI/180;
+        const x = Math.cos(radY) * Math.cos(radX);
+        const y = Math.sin(radX);
+        const z = Math.sin(radY) * Math.cos(radX);
+        directionalLight.position.set(x * height, y * height, z * height);
+        directionalLight.target.position.set(0,0,0);
+        editorScene.add(directionalLight.target);
+        document.getElementById('lightIntensityVal').innerText = intensity.toFixed(2);
+        document.getElementById('lightHeightVal').innerText = height.toFixed(1);
+        document.getElementById('lightAngleXVal').innerText = angleX;
+        document.getElementById('lightAngleYVal').innerText = angleY;
+    }
+
+    function createGroup(objects) {
+        const group = new THREE.Group();
+        group.userData = { type: 'group', children: objects.map(obj => ({ original: obj, position: obj.position.clone(), rotation: obj.rotation.clone(), scale: obj.scale.clone() })), groupId: Date.now() };
+        objects.forEach(obj => { group.add(obj); obj.userData.groupId = group.userData.groupId; });
+        return group;
+    }
+
+    function ungroup(group) {
+        if (group.userData.type !== 'group') return null;
+        const children = [...group.children];
+        group.remove(...children);
+        children.forEach(child => { child.userData.groupId = null; editorScene.add(child); });
+        editorScene.remove(group);
+        return children;
+    }
+
+    function updatePropertiesPanel() {
+        let panel = document.getElementById('propertiesPanel');
+        if (!panel) { panel = document.createElement('div'); panel.id = 'propertiesPanel'; panel.className = 'properties-panel'; document.body.appendChild(panel); }
+        if (selectedObjects.length === 0) { panel.innerHTML = '<div style="padding:12px; color:#aaa;">Ничего не выбрано</div>'; return; }
+        const obj = selectedObjects[0];
+        const isGroup = obj.userData.type === 'group';
+        let html = `<div class="prop-section"><h4>${isGroup ? 'Группа' : 'Блок'}</h4>
+            <div class="prop-row"><label>Позиция X:</label><input type="number" id="propPosX" step="0.1" value="${obj.position.x.toFixed(2)}"></div>
+            <div class="prop-row"><label>Позиция Y:</label><input type="number" id="propPosY" step="0.1" value="${obj.position.y.toFixed(2)}"></div>
+            <div class="prop-row"><label>Позиция Z:</label><input type="number" id="propPosZ" step="0.1" value="${obj.position.z.toFixed(2)}"></div>
+            <div class="prop-row"><label>Поворот X:</label><input type="number" id="propRotX" step="15" value="${(obj.rotation.x * 180/Math.PI).toFixed(0)}"></div>
+            <div class="prop-row"><label>Поворот Y:</label><input type="number" id="propRotY" step="15" value="${(obj.rotation.y * 180/Math.PI).toFixed(0)}"></div>
+            <div class="prop-row"><label>Поворот Z:</label><input type="number" id="propRotZ" step="15" value="${(obj.rotation.z * 180/Math.PI).toFixed(0)}"></div>
+            <div class="prop-row"><label>Масштаб X:</label><input type="number" id="propScaleX" step="0.1" min="0.2" max="5" value="${obj.scale.x.toFixed(2)}"></div>
+            <div class="prop-row"><label>Масштаб Y:</label><input type="number" id="propScaleY" step="0.1" min="0.2" max="5" value="${obj.scale.y.toFixed(2)}"></div>
+            <div class="prop-row"><label>Масштаб Z:</label><input type="number" id="propScaleZ" step="0.1" min="0.2" max="5" value="${obj.scale.z.toFixed(2)}"></div>`;
+        if (!isGroup) {
+            html += `<div class="prop-row"><label>Цвет:</label><input type="color" id="propColor" value="${obj.userData.color}"></div>
+            <div class="prop-row"><label>Прозрачность:</label><input type="range" id="propOpacity" min="0" max="1" step="0.01" value="${obj.userData.opacity}"><span id="propOpacityVal">${obj.userData.opacity.toFixed(2)}</span></div>
+            <div class="prop-row"><label>Тип:</label><select id="propPhysType"><option value="solid" ${obj.userData.physType === 'solid' ? 'selected' : ''}>Твёрдый</option><option value="platform" ${obj.userData.physType === 'platform' ? 'selected' : ''}>Платформа</option><option value="trigger" ${obj.userData.physType === 'trigger' ? 'selected' : ''}>Триггер</option></select></div>
+            <div class="prop-row"><label>Текстура:</label><select id="propTexture"><option value="wood" ${obj.userData.texture === 'wood' ? 'selected' : ''}>Дерево</option><option value="stone" ${obj.userData.texture === 'stone' ? 'selected' : ''}>Камень</option><option value="brick" ${obj.userData.texture === 'brick' ? 'selected' : ''}>Кирпич</option><option value="grass" ${obj.userData.texture === 'grass' ? 'selected' : ''}>Трава</option></select></div>
+            <div class="prop-row"><label>Скрипт:</label><textarea id="propScript" rows="3" style="width:100%">${obj.userData.script || ''}</textarea></div>`;
+        }
+        html += `<button id="applyPropsBtn" class="tool-btn" style="margin-top:8px;">💾 Применить</button>`;
+        if (isGroup) html += `<button id="ungroupBtn" class="tool-btn" style="margin-top:8px; background:#ffaa44;">🔓 Разгруппировать</button>`;
+        panel.innerHTML = html;
+        document.getElementById('applyPropsBtn')?.addEventListener('click', () => applyPropertiesToSelected());
+        if (isGroup) document.getElementById('ungroupBtn')?.addEventListener('click', () => { const newChildren = ungroup(obj); if (newChildren) { editorBlocks = editorBlocks.filter(b => b !== obj); editorBlocks.push(...newChildren); selectedObjects = []; updatePropertiesPanel(); } });
+        const posX = document.getElementById('propPosX'), posY = document.getElementById('propPosY'), posZ = document.getElementById('propPosZ');
+        const rotX = document.getElementById('propRotX'), rotY = document.getElementById('propRotY'), rotZ = document.getElementById('propRotZ');
+        const scaleX = document.getElementById('propScaleX'), scaleY = document.getElementById('propScaleY'), scaleZ = document.getElementById('propScaleZ');
+        const applyTransform = () => {
+            if (!selectedObjects.length) return;
+            const obj = selectedObjects[0];
+            obj.position.set(parseFloat(posX.value), parseFloat(posY.value), parseFloat(posZ.value));
+            obj.rotation.set(parseFloat(rotX.value) * Math.PI/180, parseFloat(rotY.value) * Math.PI/180, parseFloat(rotZ.value) * Math.PI/180);
+            obj.scale.set(parseFloat(scaleX.value), parseFloat(scaleY.value), parseFloat(scaleZ.value));
+            if (transformControls.object === obj) transformControls.update();
+        };
+        posX?.addEventListener('change', applyTransform); posY?.addEventListener('change', applyTransform); posZ?.addEventListener('change', applyTransform);
+        rotX?.addEventListener('change', applyTransform); rotY?.addEventListener('change', applyTransform); rotZ?.addEventListener('change', applyTransform);
+        scaleX?.addEventListener('change', applyTransform); scaleY?.addEventListener('change', applyTransform); scaleZ?.addEventListener('change', applyTransform);
+        if (!isGroup) {
+            const colorInput = document.getElementById('propColor');
+            const opacityInput = document.getElementById('propOpacity');
+            const opacityVal = document.getElementById('propOpacityVal');
+            const physType = document.getElementById('propPhysType');
+            const texture = document.getElementById('propTexture');
+            const script = document.getElementById('propScript');
+            colorInput?.addEventListener('change', () => { obj.material.color.set(colorInput.value); obj.userData.color = colorInput.value; });
+            opacityInput?.addEventListener('input', () => { const val = parseFloat(opacityInput.value); obj.material.transparent = val < 1; obj.material.opacity = val; obj.userData.opacity = val; if (opacityVal) opacityVal.innerText = val.toFixed(2); });
+            physType?.addEventListener('change', () => { obj.userData.physType = physType.value; });
+            texture?.addEventListener('change', () => { obj.userData.texture = texture.value; });
+            script?.addEventListener('change', () => { obj.userData.script = script.value; });
+        }
+    }
+
+    function applyPropertiesToSelected() { if (selectedObjects.length === 0) return; updatePropertiesPanel(); }
+
+    function clearSelection() {
+        selectedObjects.forEach(obj => {
+            if (obj.userData.originalMaterial) { obj.material = obj.userData.originalMaterial; delete obj.userData.originalMaterial; }
+            if (obj.children) obj.children.forEach(child => { if (child.userData.originalMaterial) { child.material = child.userData.originalMaterial; delete child.userData.originalMaterial; } });
+        });
+        selectedObjects = [];
+        if (transformControls.object) transformControls.detach();
+        updatePropertiesPanel();
+    }
+
+    function selectObject(obj, addToSelection = false) {
+        if (!addToSelection) clearSelection();
+        if (!selectedObjects.includes(obj)) {
+            selectedObjects.push(obj);
+            if (obj.isGroup) {
+                obj.children.forEach(child => { if (!child.userData.originalMaterial) { child.userData.originalMaterial = child.material; child.material = child.material.clone(); child.material.emissive = new THREE.Color(0x444444); } });
+            } else {
+                if (!obj.userData.originalMaterial) { obj.userData.originalMaterial = obj.material; obj.material = obj.material.clone(); obj.material.emissive = new THREE.Color(0x444444); }
+            }
+            if (selectedObjects.length === 1) transformControls.attach(obj);
+        }
+        updatePropertiesPanel();
+    }
+
+    function startDragSelection(e) {
+        isDraggingSelection = true;
+        dragSelectionStart = { x: e.clientX, y: e.clientY };
+        dragSelectionEnd = null;
+        const rectDiv = document.createElement('div'); rectDiv.id = 'dragSelectionRect'; rectDiv.style.cssText = 'position:fixed; border:1px dashed #fff; background:rgba(100,100,255,0.2); pointer-events:none; z-index:1000;'; document.body.appendChild(rectDiv);
+    }
+    function updateDragSelection(e) {
+        if (!isDraggingSelection || !dragSelectionStart) return;
+        dragSelectionEnd = { x: e.clientX, y: e.clientY };
+        const rectDiv = document.getElementById('dragSelectionRect');
+        if (rectDiv) {
+            const left = Math.min(dragSelectionStart.x, dragSelectionEnd.x);
+            const top = Math.min(dragSelectionStart.y, dragSelectionEnd.y);
+            const width = Math.abs(dragSelectionStart.x - dragSelectionEnd.x);
+            const height = Math.abs(dragSelectionStart.y - dragSelectionEnd.y);
+            rectDiv.style.left = left + 'px'; rectDiv.style.top = top + 'px'; rectDiv.style.width = width + 'px'; rectDiv.style.height = height + 'px';
+        }
+    }
+    function endDragSelection() {
+        isDraggingSelection = false;
+        const rectDiv = document.getElementById('dragSelectionRect'); if (rectDiv) rectDiv.remove();
+        if (!dragSelectionStart || !dragSelectionEnd) { dragSelectionStart = null; dragSelectionEnd = null; return; }
+        const start = new THREE.Vector2(dragSelectionStart.x, dragSelectionStart.y);
+        const end = new THREE.Vector2(dragSelectionEnd.x, dragSelectionEnd.y);
+        const rect = { left: Math.min(start.x, end.x), top: Math.min(start.y, end.y), right: Math.max(start.x, end.x), bottom: Math.max(start.y, end.y) };
+        const toSelect = [];
+        editorBlocks.forEach(obj => {
+            const vector = obj.position.clone().project(editorCamera);
+            const x = (vector.x * 0.5 + 0.5) * editorRenderer.domElement.clientWidth;
+            const y = (-(vector.y * 0.5 - 0.5)) * editorRenderer.domElement.clientHeight;
+            if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) toSelect.push(obj);
+        });
+        if (toSelect.length) { clearSelection(); toSelect.forEach(obj => selectObject(obj, true)); }
+        dragSelectionStart = null; dragSelectionEnd = null;
+    }
+
+    function groupSelected() {
+        if (selectedObjects.length < 2) return;
+        const objectsToGroup = [...selectedObjects];
+        const group = createGroup(objectsToGroup);
+        editorScene.add(group);
+        objectsToGroup.forEach(obj => { const idx = editorBlocks.indexOf(obj); if (idx !== -1) editorBlocks.splice(idx, 1); });
+        editorBlocks.push(group);
+        clearSelection();
+        selectObject(group);
+    }
+
+    function duplicateSelected() {
+        if (selectedObjects.length === 0) return;
+        const obj = selectedObjects[0];
+        if (obj.userData.type === 'group') return;
+        const newBlock = createMeshEditor(obj.userData.shape, obj.scale, parseInt(obj.userData.color.slice(1),16), obj.userData.opacity, obj.userData.type);
+        newBlock.position.copy(obj.position); newBlock.position.x += 1;
+        newBlock.rotation.copy(obj.rotation);
+        newBlock.userData = { ...obj.userData };
+        editorScene.add(newBlock);
+        editorBlocks.push(newBlock);
+        selectObject(newBlock);
+    }
+
+    function initEditor() {
+        if (editorActive) return;
+        const container = document.getElementById('editorCanvasContainer');
+        container.innerHTML = '';
+        editorScene = new THREE.Scene();
+        editorScene.background = new THREE.Color(0x87CEEB);
+        editorScene.fog = new THREE.Fog(0x87CEEB, 40, 80);
+        editorCamera = new THREE.PerspectiveCamera(45, container.clientWidth/container.clientHeight, 0.1, 1000);
+        editorCamera.position.set(10, 8, 10);
+        editorRenderer = new THREE.WebGLRenderer({ antialias: true });
+        editorRenderer.setSize(container.clientWidth, container.clientHeight);
+        editorRenderer.shadowMap.enabled = true;
+        container.appendChild(editorRenderer.domElement);
+        editorControls = new OrbitControls(editorCamera, editorRenderer.domElement);
+        editorControls.enableDamping = true;
+        editorControls.screenSpacePanning = true;
+        transformControls = new TransformControls(editorCamera, editorRenderer.domElement);
+        transformControls.addEventListener('dragging-changed', (event) => { editorControls.enabled = !event.value; });
+        transformControls.addEventListener('objectChange', () => { if (selectedObjects.length) updatePropertiesPanel(); });
+        editorScene.add(transformControls);
+        const ambient = new THREE.AmbientLight(0x404060);
+        editorScene.add(ambient);
+        directionalLight = new THREE.DirectionalLight(0xffaa66, 1);
+        directionalLight.position.set(5, 10, 7);
+        directionalLight.castShadow = true;
+        editorScene.add(directionalLight);
+        const fillLight = new THREE.PointLight(0x4466cc, 0.5);
+        fillLight.position.set(2, 3, 4);
+        editorScene.add(fillLight);
+        const gridHelper = new THREE.GridHelper(30, 20, 0x88aaff, 0x335588);
+        editorScene.add(gridHelper);
+        const axesHelper = new THREE.AxesHelper(5);
+        editorScene.add(axesHelper);
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        editorRenderer.domElement.addEventListener('click', (event) => {
+            if (isDraggingSelection) return;
+            const rect = editorRenderer.domElement.getBoundingClientRect();
+            mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+            raycaster.setFromCamera(mouse, editorCamera);
+            const intersects = raycaster.intersectObjects(editorBlocks, true);
+            if (intersects.length > 0) {
+                let hit = intersects[0].object;
+                while (hit.parent && hit.parent !== editorScene && hit.parent.userData.type === 'group') hit = hit.parent;
+                if (event.ctrlKey) {
+                    if (selectedObjects.includes(hit)) {
+                        const idx = selectedObjects.indexOf(hit);
+                        if (idx !== -1) selectedObjects.splice(idx, 1);
+                        if (hit.userData.originalMaterial) { hit.material = hit.userData.originalMaterial; delete hit.userData.originalMaterial; }
+                        if (hit.isGroup) hit.children.forEach(child => { if (child.userData.originalMaterial) { child.material = child.userData.originalMaterial; delete child.userData.originalMaterial; } });
+                        if (selectedObjects.length === 1) transformControls.attach(selectedObjects[0]);
+                        else if (selectedObjects.length === 0) transformControls.detach();
+                        updatePropertiesPanel();
+                    } else selectObject(hit, true);
+                } else selectObject(hit, false);
+            } else clearSelection();
+        });
+        editorRenderer.domElement.addEventListener('mousedown', (e) => { if (e.button === 0 && !e.ctrlKey && !e.shiftKey) startDragSelection(e); });
+        editorRenderer.domElement.addEventListener('mousemove', (e) => { if (isDraggingSelection) updateDragSelection(e); });
+        editorRenderer.domElement.addEventListener('mouseup', (e) => { if (isDraggingSelection) endDragSelection(); });
+        editorRenderer.domElement.addEventListener('touchstart', (e) => { if (e.touches.length === 1) { e.preventDefault(); startDragSelection(e.touches[0]); } });
+        editorRenderer.domElement.addEventListener('touchmove', (e) => { if (isDraggingSelection && e.touches.length === 1) { e.preventDefault(); updateDragSelection(e.touches[0]); } });
+        editorRenderer.domElement.addEventListener('touchend', (e) => { if (isDraggingSelection) endDragSelection(); });
+
+        document.getElementById('modeMove').onclick = () => { transformControls.setMode('translate'); currentTransformMode = 'move'; };
+        document.getElementById('modeRotate').onclick = () => { transformControls.setMode('rotate'); currentTransformMode = 'rotate'; };
+        document.getElementById('modeScale').onclick = () => { transformControls.setMode('scale'); currentTransformMode = 'scale'; };
+        document.getElementById('shapeCube').onclick = () => { currentShape = 'cube'; };
+        document.getElementById('shapeSphere').onclick = () => { currentShape = 'sphere'; };
+        document.getElementById('shapeCylinder').onclick = () => { currentShape = 'cylinder'; };
+        document.getElementById('shapeCone').onclick = () => { currentShape = 'cone'; };
+        document.getElementById('shapeWedge').onclick = () => { currentShape = 'wedge'; };
+        document.getElementById('duplicateBtn').onclick = duplicateSelected;
+        document.getElementById('addCubeBtn').onclick = addDefaultBlock;
+        document.getElementById('groupBtn').onclick = groupSelected;
+        document.getElementById('applyLightBtn').onclick = applyLightSettings;
+        document.getElementById('publishGameBtn').onclick = publishGameLocal;
+        document.getElementById('exitEditorBtn').onclick = () => { document.getElementById('editorScreen').classList.add('hidden'); document.getElementById('mainMenuScreen').classList.remove('hidden'); if (editorActive) { editorActive = false; cancelAnimationFrame(editorAnimationId); } };
+        document.querySelectorAll('.block-option').forEach(opt => {
+            opt.addEventListener('click', () => {
+                document.querySelectorAll('.block-option').forEach(o => o.classList.remove('selected'));
+                opt.classList.add('selected');
+                currentBlockType = opt.dataset.type;
+                if (currentBlockType === 'wood') currentColor = '#8B5A2B';
+                else if (currentBlockType === 'stone') currentColor = '#808080';
+                else if (currentBlockType === 'concrete') currentColor = '#B0B0B0';
+                else if (currentBlockType === 'dirt') currentColor = '#6B4C3B';
+            });
+        });
+        document.querySelector('.block-option').classList.add('selected');
+        if (gameBeingEdited) loadGameForEditing(gameBeingEdited);
+        else { createStartPlatform(); addDefaultBlock(); }
+        function animateEditor() { if (!editorActive) return; editorAnimationId = requestAnimationFrame(animateEditor); editorControls.update(); editorRenderer.render(editorScene, editorCamera); }
+        editorActive = true; animateEditor();
+        window.addEventListener('resize', () => { const container = document.getElementById('editorCanvasContainer'); editorCamera.aspect = container.clientWidth / container.clientHeight; editorCamera.updateProjectionMatrix(); editorRenderer.setSize(container.clientWidth, container.clientHeight); });
+        const toolsPanel = document.getElementById('toolsPanel');
+        const propsPanel = document.getElementById('propertiesPanel');
+        document.getElementById('toggleToolsPanelBtn').onclick = () => { toolsPanel.classList.toggle('hidden'); };
+        document.getElementById('togglePropsPanelBtn').onclick = () => { propsPanel.classList.toggle('hidden'); };
+        document.getElementById('toggleToolsBtn').onclick = () => { toolsPanel.classList.toggle('hidden'); };
+        document.getElementById('togglePropsBtn').onclick = () => { propsPanel.classList.toggle('hidden'); };
+    }
+
+    function publishGameLocal() {
+        const gameName = prompt('Введите название игры для публикации:');
+        if (!gameName) return;
+        const blocksData = editorBlocks.map(block => serializeBlockForServer(block));
+        const gameData = { blocks: blocksData };
+        const gameId = Date.now();
+        const newGame = { id: gameId, name: gameName, author: currentUser.username, desc: 'Опубликовано', data: gameData };
+        customGames.push(newGame);
+        saveGames();
+        renderMyProjects();
+        if (confirm('Игра сохранена. Создать мультиплеерный сервер для неё?')) {
+            createGameOnServer(gameName, gameData);
+        }
+    }
+
+    function serializeBlockForServer(obj) {
+        if (obj.userData.type === 'group') return { type: 'group', children: obj.children.map(c => serializeBlockForServer(c)) };
+        else return {
+            shape: obj.userData.shape,
+            scale: { x: obj.scale.x, y: obj.scale.y, z: obj.scale.z },
+            color: parseInt(obj.userData.color.slice(1),16),
+            opacity: obj.userData.opacity,
+            x: obj.position.x,
+            y: obj.position.y,
+            z: obj.position.z,
+            rotation: { x: obj.rotation.x, y: obj.rotation.y, z: obj.rotation.z },
+            userData: { type: obj.userData.type, ...obj.userData }
+        };
+    }
+
+    function loadGameForEditing(game) {
+        clearEditor();
+        if (!game.data || !game.data.blocks) return;
+        game.data.blocks.forEach(blockData => {
+            const block = deserializeBlock(blockData);
             editorScene.add(block);
             editorBlocks.push(block);
-            selectObject(block);
-        }
+        });
+        selectObject(null);
+    }
 
-        // Применение настроек света
-        function applyLightSettings() {
-            if (!directionalLight) return;
-            const intensity = parseFloat(document.getElementById('lightIntensity').value);
-            const color = document.getElementById('lightColor').value;
-            const height = parseFloat(document.getElementById('lightHeight').value);
-            const angleX = parseFloat(document.getElementById('lightAngleX').value);
-            const angleY = parseFloat(document.getElementById('lightAngleY').value);
-            directionalLight.intensity = intensity;
-            directionalLight.color.set(color);
-            const radX = angleX * Math.PI/180;
-            const radY = angleY * Math.PI/180;
-            const x = Math.cos(radY) * Math.cos(radX);
-            const y = Math.sin(radX);
-            const z = Math.sin(radY) * Math.cos(radX);
-            directionalLight.position.set(x * height, y * height, z * height);
-            directionalLight.target.position.set(0,0,0);
-            editorScene.add(directionalLight.target);
-            document.getElementById('lightIntensityVal').innerText = intensity.toFixed(2);
-            document.getElementById('lightHeightVal').innerText = height.toFixed(1);
-            document.getElementById('lightAngleXVal').innerText = angleX;
-            document.getElementById('lightAngleYVal').innerText = angleY;
-        }
-
-        function initEditor() {
-            if (editorActive) return;
-            const container = document.getElementById('editorCanvasContainer');
-            container.innerHTML = '';
-            editorScene = new THREE.Scene();
-            editorScene.background = new THREE.Color(0x87CEEB);
-            editorScene.fog = new THREE.Fog(0x87CEEB, 40, 80);
-            editorCamera = new THREE.PerspectiveCamera(45, container.clientWidth/container.clientHeight, 0.1, 1000);
-            editorCamera.position.set(10, 8, 10);
-            editorRenderer = new THREE.WebGLRenderer({ antialias: true });
-            editorRenderer.setSize(container.clientWidth, container.clientHeight);
-            editorRenderer.shadowMap.enabled = true;
-            container.appendChild(editorRenderer.domElement);
-            editorControls = new OrbitControls(editorCamera, editorRenderer.domElement);
-            editorControls.enableDamping = true;
-            editorControls.screenSpacePanning = true;
-            transformControls = new TransformControls(editorCamera, editorRenderer.domElement);
-            transformControls.addEventListener('dragging-changed', (event) => { editorControls.enabled = !event.value; });
-            transformControls.addEventListener('objectChange', () => { if (selectedObjects.length) updatePropertiesPanel(); });
-            editorScene.add(transformControls);
-            const ambient = new THREE.AmbientLight(0x404060);
-            editorScene.add(ambient);
-            directionalLight = new THREE.DirectionalLight(0xffaa66, 1);
-            directionalLight.position.set(5, 10, 7);
-            directionalLight.castShadow = true;
-            editorScene.add(directionalLight);
-            const fillLight = new THREE.PointLight(0x4466cc, 0.5);
-            fillLight.position.set(2, 3, 4);
-            editorScene.add(fillLight);
-            const gridHelper = new THREE.GridHelper(30, 20, 0x88aaff, 0x335588);
-            editorScene.add(gridHelper);
-            const axesHelper = new THREE.AxesHelper(5);
-            editorScene.add(axesHelper);
-            const raycaster = new THREE.Raycaster();
-            const mouse = new THREE.Vector2();
-            editorRenderer.domElement.addEventListener('click', (event) => {
-                if (isDraggingSelection) return;
-                const rect = editorRenderer.domElement.getBoundingClientRect();
-                mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-                mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-                raycaster.setFromCamera(mouse, editorCamera);
-                const intersects = raycaster.intersectObjects(editorBlocks, true);
-                if (intersects.length > 0) {
-                    let hit = intersects[0].object;
-                    while (hit.parent && hit.parent !== editorScene && hit.parent.userData.type === 'group') hit = hit.parent;
-                    if (event.ctrlKey) {
-                        if (selectedObjects.includes(hit)) {
-                            const idx = selectedObjects.indexOf(hit);
-                            if (idx !== -1) selectedObjects.splice(idx, 1);
-                            if (hit.userData.originalMaterial) { hit.material = hit.userData.originalMaterial; delete hit.userData.originalMaterial; }
-                            if (hit.isGroup) hit.children.forEach(child => { if (child.userData.originalMaterial) { child.material = child.userData.originalMaterial; delete child.userData.originalMaterial; } });
-                            if (selectedObjects.length === 1) transformControls.attach(selectedObjects[0]);
-                            else if (selectedObjects.length === 0) transformControls.detach();
-                            updatePropertiesPanel();
-                        } else selectObject(hit, true);
-                    } else selectObject(hit, false);
-                } else clearSelection();
+    function deserializeBlock(data) {
+        if (data.type === 'group') {
+            const group = new THREE.Group();
+            group.position.set(data.position.x, data.position.y, data.position.z);
+            group.rotation.set(data.rotation.x, data.rotation.y, data.rotation.z);
+            group.scale.set(data.scale.x, data.scale.y, data.scale.z);
+            group.userData = { type: 'group', groupId: Date.now() };
+            data.children.forEach(childData => {
+                const child = deserializeBlock(childData);
+                group.add(child);
+                child.userData.groupId = group.userData.groupId;
             });
-            editorRenderer.domElement.addEventListener('mousedown', (e) => { if (e.button === 0 && !e.ctrlKey && !e.shiftKey) startDragSelection(e); });
-            editorRenderer.domElement.addEventListener('mousemove', (e) => { if (isDraggingSelection) updateDragSelection(e); });
-            editorRenderer.domElement.addEventListener('mouseup', (e) => { if (isDraggingSelection) endDragSelection(); });
-            editorRenderer.domElement.addEventListener('touchstart', (e) => { if (e.touches.length === 1) { e.preventDefault(); startDragSelection(e.touches[0]); } });
-            editorRenderer.domElement.addEventListener('touchmove', (e) => { if (isDraggingSelection && e.touches.length === 1) { e.preventDefault(); updateDragSelection(e.touches[0]); } });
-            editorRenderer.domElement.addEventListener('touchend', (e) => { if (isDraggingSelection) endDragSelection(); });
-
-            document.getElementById('modeMove').onclick = () => { transformControls.setMode('translate'); currentTransformMode = 'move'; };
-            document.getElementById('modeRotate').onclick = () => { transformControls.setMode('rotate'); currentTransformMode = 'rotate'; };
-            document.getElementById('modeScale').onclick = () => { transformControls.setMode('scale'); currentTransformMode = 'scale'; };
-            document.getElementById('shapeCube').onclick = () => { currentShape = 'cube'; };
-            document.getElementById('shapeSphere').onclick = () => { currentShape = 'sphere'; };
-            document.getElementById('shapeCylinder').onclick = () => { currentShape = 'cylinder'; };
-            document.getElementById('shapeCone').onclick = () => { currentShape = 'cone'; };
-            document.getElementById('shapeWedge').onclick = () => { currentShape = 'wedge'; };
-            document.getElementById('duplicateBtn').onclick = duplicateSelected;
-            document.getElementById('addCubeBtn').onclick = addDefaultBlock;
-            document.getElementById('groupBtn').onclick = groupSelected;
-            document.getElementById('applyLightBtn').onclick = applyLightSettings;
-            document.getElementById('publishGameBtn').onclick = publishGameLocal;
-            document.getElementById('exitEditorBtn').onclick = () => { document.getElementById('editorScreen').classList.add('hidden'); document.getElementById('mainMenuScreen').classList.remove('hidden'); if (editorActive) { editorActive = false; cancelAnimationFrame(editorAnimationId); } };
-            document.querySelectorAll('.block-option').forEach(opt => {
-                opt.addEventListener('click', () => {
-                    document.querySelectorAll('.block-option').forEach(o => o.classList.remove('selected'));
-                    opt.classList.add('selected');
-                    currentBlockType = opt.dataset.type;
-                    if (currentBlockType === 'wood') currentColor = '#8B5A2B';
-                    else if (currentBlockType === 'stone') currentColor = '#808080';
-                    else if (currentBlockType === 'concrete') currentColor = '#B0B0B0';
-                    else if (currentBlockType === 'dirt') currentColor = '#6B4C3B';
-                });
-            });
-            document.querySelector('.block-option').classList.add('selected');
-            if (gameBeingEdited) loadGameForEditing(gameBeingEdited);
-            else { createStartPlatform(); addDefaultBlock(); }
-            function animateEditor() { if (!editorActive) return; editorAnimationId = requestAnimationFrame(animateEditor); editorControls.update(); editorRenderer.render(editorScene, editorCamera); }
-            editorActive = true; animateEditor();
-            window.addEventListener('resize', () => { const container = document.getElementById('editorCanvasContainer'); editorCamera.aspect = container.clientWidth / container.clientHeight; editorCamera.updateProjectionMatrix(); editorRenderer.setSize(container.clientWidth, container.clientHeight); });
-            const toolsPanel = document.getElementById('toolsPanel');
-            const propsPanel = document.getElementById('propertiesPanel');
-            document.getElementById('toggleToolsPanelBtn').onclick = () => { toolsPanel.classList.toggle('hidden'); };
-            document.getElementById('togglePropsPanelBtn').onclick = () => { propsPanel.classList.toggle('hidden'); };
-            document.getElementById('toggleToolsBtn').onclick = () => { toolsPanel.classList.toggle('hidden'); };
-            document.getElementById('togglePropsBtn').onclick = () => { propsPanel.classList.toggle('hidden'); };
+            return group;
+        } else {
+            const colorNum = parseInt(data.color.slice(1), 16);
+            const block = createMeshEditor(data.shape, data.scale, colorNum, data.opacity, data.userData?.type || 'block');
+            block.position.set(data.x, data.y, data.z);
+            block.rotation.set(data.rotation.x, data.rotation.y, data.rotation.z);
+            block.userData = { ...block.userData, ...data.userData };
+            return block;
         }
+    }
 
-        function publishGameLocal() {
-            const gameName = prompt('Введите название игры для публикации:');
-            if (!gameName) return;
-            const blocksData = editorBlocks.map(block => serializeBlockForServer(block));
-            const gameData = { blocks: blocksData };
-            const gameId = Date.now();
-            const newGame = { id: gameId, name: gameName, author: currentUser.username, desc: 'Опубликовано', data: gameData };
-            customGames.push(newGame);
-            saveGames();
-            renderMyProjects();
-            if (confirm('Игра сохранена. Создать мультиплеерный сервер для неё?')) {
-                createMultiplayerServer(gameData, gameName, (serverId) => {});
-            }
-        }
+    function clearEditor() { editorBlocks.forEach(block => editorScene.remove(block)); editorBlocks = []; selectedObjects = []; if (transformControls.object) transformControls.detach(); updatePropertiesPanel(); }
 
-        function serializeBlockForServer(obj) {
-            if (obj.userData.type === 'group') return { type: 'group', children: obj.children.map(c => serializeBlockForServer(c)) };
-            else return {
-                shape: obj.userData.shape,
-                scale: { x: obj.scale.x, y: obj.scale.y, z: obj.scale.z },
-                color: parseInt(obj.userData.color.slice(1),16),
-                opacity: obj.userData.opacity,
-                x: obj.position.x,
-                y: obj.position.y,
-                z: obj.position.z,
-                rotation: { x: obj.rotation.x, y: obj.rotation.y, z: obj.rotation.z },
-                userData: { type: obj.userData.type, ...obj.userData }
-            };
-        }
+    function openEditor(gameToEdit = null) { gameBeingEdited = gameToEdit; document.getElementById('mainMenuScreen').classList.add('hidden'); document.getElementById('editorScreen').classList.remove('hidden'); initEditor(); }
 
-        function loadGameForEditing(game) {
-            clearEditor();
-            if (!game.data || !game.data.blocks) return;
-            game.data.blocks.forEach(blockData => {
-                const block = deserializeBlock(blockData);
-                editorScene.add(block);
-                editorBlocks.push(block);
-            });
-            selectObject(null);
-        }
+    // ========== МОБИЛЬНЫЕ СОБЫТИЯ ==========
+    function attachMobileEvents() {
+        const selectors = '.btn, .nav-btn, .play-btn, .buy-btn, .tool-btn, .block-option, .close-dialog, .exit-game, .publish-btn, .exit-editor-btn, .play-btn-small, .edit-btn-small, .delete-btn-small, #createNewGameBtn, #refreshGamesBtn, #earnCoinsBtn, #addFriendBtn, #sendChatBtn, #reportBugBtn, #toggleToolsPanelBtn, #togglePropsPanelBtn, #toggleToolsBtn, #togglePropsBtn, #connectToServerBtn, .host-btn, .host-btn-small';
+        document.querySelectorAll(selectors).forEach(el => {
+            if (el.hasAttribute('data-touch-fixed')) return;
+            el.setAttribute('data-touch-fixed', 'true');
+            el.addEventListener('touchstart', (e) => { if (e.defaultPrevented) return; if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return; e.preventDefault(); el.click(); }, { passive: false });
+        });
+    }
+    setInterval(attachMobileEvents, 1500);
+    attachMobileEvents();
 
-        function deserializeBlock(data) {
-            if (data.type === 'group') {
-                const group = new THREE.Group();
-                group.position.set(data.position.x, data.position.y, data.position.z);
-                group.rotation.set(data.rotation.x, data.rotation.y, data.rotation.z);
-                group.scale.set(data.scale.x, data.scale.y, data.scale.z);
-                group.userData = { type: 'group', groupId: Date.now() };
-                data.children.forEach(childData => {
-                    const child = deserializeBlock(childData);
-                    group.add(child);
-                    child.userData.groupId = group.userData.groupId;
-                });
-                return group;
-            } else {
-                const colorNum = parseInt(data.color.slice(1), 16);
-                const block = createMeshEditor(data.shape, data.scale, colorNum, data.opacity, data.userData?.type || 'block');
-                block.position.set(data.x, data.y, data.z);
-                block.rotation.set(data.rotation.x, data.rotation.y, data.rotation.z);
-                block.userData = { ...block.userData, ...data.userData };
-                return block;
-            }
-        }
+    // ========== АВТОРИЗАЦИЯ ==========
+    function showLogin() { document.getElementById('loginForm').style.display='block'; document.getElementById('registerForm').style.display='none'; document.getElementById('authMessage').innerText=''; }
+    function showRegister() { document.getElementById('loginForm').style.display='none'; document.getElementById('registerForm').style.display='block'; document.getElementById('authMessage').innerText=''; }
+    function registerUser() {
+        const u = document.getElementById('regUsername').value.trim(), p = document.getElementById('regPassword').value.trim();
+        if (!u||!p) { alert("Введите имя и пароль"); return; }
+        if (users.find(us=>us.username===u)) { alert("Пользователь уже существует"); return; }
+        users.push({ username:u, password:p, coins:500, inventory:[], isGuest:false, friends:[], friendRequests:[], customModel:null });
+        saveUsers();
+        alert("Аккаунт создан! Войдите.");
+        showLogin();
+    }
+    function loginUser() {
+        const u = document.getElementById('loginUsername').value.trim(), p = document.getElementById('loginPassword').value.trim();
+        const user = users.find(us=>us.username===u && us.password===p);
+        if (!user) { document.getElementById('authMessage').innerText = "Неверные данные"; return; }
+        currentUser = user;
+        initUserData(currentUser.username);
+        localStorage.setItem('blockverse_current_user', JSON.stringify({ username: currentUser.username, isGuest: currentUser.isGuest }));
+        document.getElementById('authScreen').classList.add('hidden');
+        document.getElementById('mainMenuScreen').classList.remove('hidden');
+        updateUIafterAuth();
+    }
+    function guestLogin() {
+        const guestName = "Guest_" + Math.floor(Math.random()*10000);
+        currentUser = { username:guestName, coins:300, inventory:[], isGuest:true, friends:[], friendRequests:[], customModel:null };
+        localStorage.setItem('blockverse_current_user', JSON.stringify({ username: guestName, isGuest: true }));
+        document.getElementById('authScreen').classList.add('hidden');
+        document.getElementById('mainMenuScreen').classList.remove('hidden');
+        updateUIafterAuth();
+        alert("Вы вошли как гость. Монеты и игры не сохранятся.");
+    }
+    function logout() {
+        if (gameActive) { gameActive = false; if (gameAnimationId) cancelAnimationFrame(gameAnimationId); }
+        if (editorActive) { editorActive = false; if (editorAnimationId) cancelAnimationFrame(editorAnimationId); }
+        if (ws) ws.close();
+        currentUser = null;
+        localStorage.removeItem('blockverse_current_user');
+        document.getElementById('mainMenuScreen').classList.add('hidden');
+        document.getElementById('editorScreen').classList.add('hidden');
+        document.getElementById('customGameScreen').classList.add('hidden');
+        document.getElementById('authScreen').classList.remove('hidden');
+        showLogin();
+    }
 
-        function clearEditor() { editorBlocks.forEach(block => editorScene.remove(block)); editorBlocks = []; selectedObjects = []; if (transformControls.object) transformControls.detach(); updatePropertiesPanel(); }
-
-        function openEditor(gameToEdit = null) { gameBeingEdited = gameToEdit; document.getElementById('mainMenuScreen').classList.add('hidden'); document.getElementById('editorScreen').classList.remove('hidden'); initEditor(); }
-
-        // (остальные функции: groupSelected, duplicateSelected, updatePropertiesPanel, selectObject, clearSelection, startDragSelection и т.д. – они уже есть в коде выше, но для краткости не дублируются)
-        // ...
-
-        // ========== МОБИЛЬНЫЕ СОБЫТИЯ ==========
-        function attachMobileEvents() {
-            const selectors = '.btn, .nav-btn, .play-btn, .buy-btn, .tool-btn, .block-option, .close-dialog, .exit-game, .publish-btn, .exit-editor-btn, .play-btn-small, .edit-btn-small, .delete-btn-small, #createNewGameBtn, #refreshGamesBtn, #earnCoinsBtn, #addFriendBtn, #sendChatBtn, #reportBugBtn, #toggleToolsPanelBtn, #togglePropsPanelBtn, #toggleToolsBtn, #togglePropsBtn, #connectToServerBtn, .host-btn, .host-btn-small';
-            document.querySelectorAll(selectors).forEach(el => {
-                if (el.hasAttribute('data-touch-fixed')) return;
-                el.setAttribute('data-touch-fixed', 'true');
-                el.addEventListener('touchstart', (e) => { if (e.defaultPrevented) return; if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return; e.preventDefault(); el.click(); }, { passive: false });
-            });
-        }
-        setInterval(attachMobileEvents, 1500);
-        attachMobileEvents();
-
-        // ========== АВТОРИЗАЦИЯ С СОХРАНЕНИЕМ СЕССИИ ==========
-        function showLogin() { document.getElementById('loginForm').style.display='block'; document.getElementById('registerForm').style.display='none'; document.getElementById('authMessage').innerText=''; }
-        function showRegister() { document.getElementById('loginForm').style.display='none'; document.getElementById('registerForm').style.display='block'; document.getElementById('authMessage').innerText=''; }
-        function registerUser() { const u = document.getElementById('regUsername').value.trim(), p = document.getElementById('regPassword').value.trim(); if (!u||!p) { alert("Введите имя и пароль"); return; } if (users.find(us=>us.username===u)) { alert("Пользователь уже существует"); return; } users.push({ username:u, password:p, coins:500, inventory:[], isGuest:false, friends:[], friendRequests:[], customModel:null }); saveUsers(); alert("Аккаунт создан! Войдите."); showLogin(); }
-        function loginUser() { const u = document.getElementById('loginUsername').value.trim(), p = document.getElementById('loginPassword').value.trim(); const user = users.find(us=>us.username===u && us.password===p); if (!user) { document.getElementById('authMessage').innerText = "Неверные данные"; return; } currentUser = user; initUserData(currentUser.username); localStorage.setItem('blockverse_current_user', JSON.stringify({ username: currentUser.username, isGuest: currentUser.isGuest })); document.getElementById('authScreen').classList.add('hidden'); document.getElementById('mainMenuScreen').classList.remove('hidden'); updateUIafterAuth(); }
-        function guestLogin() { const guestName = "Guest_" + Math.floor(Math.random()*10000); currentUser = { username:guestName, coins:300, inventory:[], isGuest:true, friends:[], friendRequests:[], customModel:null }; localStorage.setItem('blockverse_current_user', JSON.stringify({ username: guestName, isGuest: true })); document.getElementById('authScreen').classList.add('hidden'); document.getElementById('mainMenuScreen').classList.remove('hidden'); updateUIafterAuth(); alert("Вы вошли как гость. Монеты и игры не сохранятся."); }
-        function logout() { if (gameActive) { gameActive = false; if (gameAnimationId) cancelAnimationFrame(gameAnimationId); } if (editorActive) { editorActive = false; if (editorAnimationId) cancelAnimationFrame(editorAnimationId); } if (peer && isHost) { for (let conn of connections.values()) conn.close(); peer.destroy(); peer = null; } currentUser = null; localStorage.removeItem('blockverse_current_user'); document.getElementById('mainMenuScreen').classList.add('hidden'); document.getElementById('editorScreen').classList.add('hidden'); document.getElementById('customGameScreen').classList.add('hidden'); document.getElementById('authScreen').classList.remove('hidden'); showLogin(); }
-
-        const savedUser = localStorage.getItem('blockverse_current_user');
-        if (savedUser) {
-            const userData = JSON.parse(savedUser);
-            if (userData.isGuest) {
-                currentUser = { username: userData.username, coins:300, inventory:[], isGuest:true, friends:[], friendRequests:[], customModel:null };
+    const savedUser = localStorage.getItem('blockverse_current_user');
+    if (savedUser) {
+        const userData = JSON.parse(savedUser);
+        if (userData.isGuest) {
+            currentUser = { username: userData.username, coins:300, inventory:[], isGuest:true, friends:[], friendRequests:[], customModel:null };
+            document.getElementById('authScreen').classList.add('hidden');
+            document.getElementById('mainMenuScreen').classList.remove('hidden');
+            updateUIafterAuth();
+        } else {
+            const user = users.find(u => u.username === userData.username);
+            if (user) {
+                currentUser = user;
+                initUserData(currentUser.username);
                 document.getElementById('authScreen').classList.add('hidden');
                 document.getElementById('mainMenuScreen').classList.remove('hidden');
                 updateUIafterAuth();
             } else {
-                const user = users.find(u => u.username === userData.username);
-                if (user) {
-                    currentUser = user;
-                    initUserData(currentUser.username);
-                    document.getElementById('authScreen').classList.add('hidden');
-                    document.getElementById('mainMenuScreen').classList.remove('hidden');
-                    updateUIafterAuth();
-                } else {
-                    showLogin();
-                }
+                showLogin();
             }
-        } else {
-            showLogin();
         }
+    } else {
+        showLogin();
+    }
 
-        document.getElementById('showLoginBtn').onclick = showLogin;
-        document.getElementById('showRegisterBtn').onclick = showRegister;
-        document.getElementById('doLoginBtn').onclick = loginUser;
-        document.getElementById('doRegisterBtn').onclick = registerUser;
-        document.getElementById('guestLoginBtn').onclick = guestLogin;
-        document.getElementById('guestRegisterBtn').onclick = guestLogin;
-        document.getElementById('logoutBtn').onclick = logout;
-        document.getElementById('showGamesBtn').onclick = () => { document.getElementById('gamesPanel').style.display='block'; document.getElementById('myProjectsPanel').style.display='none'; document.getElementById('shopPanel').style.display='none'; document.getElementById('socialPanel').style.display='none'; document.getElementById('settingsPanel').style.display='none'; };
-        document.getElementById('showMyProjectsBtn').onclick = () => { document.getElementById('gamesPanel').style.display='none'; document.getElementById('myProjectsPanel').style.display='block'; document.getElementById('shopPanel').style.display='none'; document.getElementById('socialPanel').style.display='none'; document.getElementById('settingsPanel').style.display='none'; renderMyProjects(); };
-        document.getElementById('showShopBtn').onclick = () => { document.getElementById('gamesPanel').style.display='none'; document.getElementById('myProjectsPanel').style.display='none'; document.getElementById('shopPanel').style.display='block'; document.getElementById('socialPanel').style.display='none'; document.getElementById('settingsPanel').style.display='none'; renderShop(); };
-        document.getElementById('showSocialBtn').onclick = () => { document.getElementById('gamesPanel').style.display='none'; document.getElementById('myProjectsPanel').style.display='none'; document.getElementById('shopPanel').style.display='none'; document.getElementById('socialPanel').style.display='block'; document.getElementById('settingsPanel').style.display='none'; renderFriendsList(); renderChat(); };
-        document.getElementById('showSettingsBtn').onclick = () => { document.getElementById('gamesPanel').style.display='none'; document.getElementById('myProjectsPanel').style.display='none'; document.getElementById('shopPanel').style.display='none'; document.getElementById('socialPanel').style.display='none'; document.getElementById('settingsPanel').style.display='block'; };
-        document.getElementById('createGameBtn').onclick = () => openEditor();
-        document.getElementById('earnCoinsBtn').onclick = () => addCoins(100);
-        document.getElementById('addFriendBtn').onclick = addFriend;
-        document.getElementById('sendChatBtn').onclick = sendChatMessage;
-        document.getElementById('chatInput').addEventListener('keypress', e=>{ if(e.key==='Enter') sendChatMessage(); });
+    document.getElementById('showLoginBtn').onclick = showLogin;
+    document.getElementById('showRegisterBtn').onclick = showRegister;
+    document.getElementById('doLoginBtn').onclick = loginUser;
+    document.getElementById('doRegisterBtn').onclick = registerUser;
+    document.getElementById('guestLoginBtn').onclick = guestLogin;
+    document.getElementById('guestRegisterBtn').onclick = guestLogin;
+    document.getElementById('logoutBtn').onclick = logout;
+    document.getElementById('showGamesBtn').onclick = () => { document.getElementById('gamesPanel').style.display='block'; document.getElementById('myProjectsPanel').style.display='none'; document.getElementById('shopPanel').style.display='none'; document.getElementById('socialPanel').style.display='none'; document.getElementById('settingsPanel').style.display='none'; };
+    document.getElementById('showMyProjectsBtn').onclick = () => { document.getElementById('gamesPanel').style.display='none'; document.getElementById('myProjectsPanel').style.display='block'; document.getElementById('shopPanel').style.display='none'; document.getElementById('socialPanel').style.display='none'; document.getElementById('settingsPanel').style.display='none'; renderMyProjects(); };
+    document.getElementById('showShopBtn').onclick = () => { document.getElementById('gamesPanel').style.display='none'; document.getElementById('myProjectsPanel').style.display='none'; document.getElementById('shopPanel').style.display='block'; document.getElementById('socialPanel').style.display='none'; document.getElementById('settingsPanel').style.display='none'; renderShop(); };
+    document.getElementById('showSocialBtn').onclick = () => { document.getElementById('gamesPanel').style.display='none'; document.getElementById('myProjectsPanel').style.display='none'; document.getElementById('shopPanel').style.display='none'; document.getElementById('socialPanel').style.display='block'; document.getElementById('settingsPanel').style.display='none'; renderFriendsList(); renderChat(); };
+    document.getElementById('showSettingsBtn').onclick = () => { document.getElementById('gamesPanel').style.display='none'; document.getElementById('myProjectsPanel').style.display='none'; document.getElementById('shopPanel').style.display='none'; document.getElementById('socialPanel').style.display='none'; document.getElementById('settingsPanel').style.display='block'; };
+    document.getElementById('createGameBtn').onclick = () => openEditor();
+    document.getElementById('earnCoinsBtn').onclick = () => addCoins(100);
+    document.getElementById('addFriendBtn').onclick = addFriend;
+    document.getElementById('sendChatBtn').onclick = sendChatMessage;
+    document.getElementById('chatInput').addEventListener('keypress', e=>{ if(e.key==='Enter') sendChatMessage(); });
 
-        if(users.length===0) { users.push({ username:"demo", password:"123", coins:800, inventory:[], isGuest:false, friends:[], friendRequests:[], customModel:null }); saveUsers(); }
-        if (!savedUser) showLogin();
-    </script>
+    if(users.length===0) { users.push({ username:"demo", password:"123", coins:800, inventory:[], isGuest:false, friends:[], friendRequests:[], customModel:null }); saveUsers(); }
+    if (!savedUser) showLogin();
+</script>
 </body>
 </html>

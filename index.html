@@ -256,7 +256,7 @@
         { id: 'trail', name: 'Искрящийся след', price: 150 }
     ];
 
-    // ========== МОДЕЛЬ ПЕРСОНАЖА (ВАША ССЫЛКА) ==========
+    // ========== МОДЕЛЬ ПЕРСОНАЖА ==========
     const PLAYER_MODEL_URL = 'https://raw.githubusercontent.com/mat8trooe888-art/Matblox/refs/heads/main/%D0%9D%D0%BE%D0%B2%D1%8B%D0%B9%20%D0%BF%D1%80%D0%BE%D0%B5%D0%BA%D1%82%201.gltf';
     let globalPlayerModel = null;
 
@@ -303,7 +303,7 @@
         renderChat();
         renderReports();
         startChatPolling();
-        await loadPlayerModel(); // загружаем модель один раз
+        await loadPlayerModel();
         connectToWebSocket();
     }
 
@@ -514,51 +514,63 @@
     }
 
     // ========== УЛУЧШЕННАЯ КОЛЛИЗИЯ ==========
-    function checkCollisionAndAdjust(pos, playerSize, blocks) {
-        let newPos = pos.clone();
-        const halfSize = { x: playerSize.x, y: playerSize.y, z: playerSize.z };
+    // Размеры игрока (половинные размеры)
+    const PLAYER_HALF_SIZE = { x: 0.4, y: 0.8, z: 0.4 };
+    // Размеры блока (половинные) — стандартный куб 0.9×0.9×0.9, половина 0.45
+    const BLOCK_HALF_SIZE = { x: 0.45, y: 0.45, z: 0.45 };
 
+    function applyCollision(pos, blocks) {
+        let newPos = pos.clone();
+        // Корректировка по X
         for (let block of blocks) {
             const bPos = block.position;
-            const bScale = block.scale;
-            const bHalfSize = { x: 0.45 * bScale.x, y: 0.45 * bScale.y, z: 0.45 * bScale.z };
-            if (Math.abs(newPos.x - bPos.x) < halfSize.x + bHalfSize.x &&
-                Math.abs(newPos.y - bPos.y) < halfSize.y + bHalfSize.y &&
-                Math.abs(newPos.z - bPos.z) < halfSize.z + bHalfSize.z) {
-                const dx = newPos.x - bPos.x;
-                if (dx > 0) newPos.x = bPos.x + halfSize.x + bHalfSize.x;
-                else newPos.x = bPos.x - halfSize.x - bHalfSize.x;
+            const bHalf = BLOCK_HALF_SIZE;
+            const dx = newPos.x - bPos.x;
+            const overlapX = PLAYER_HALF_SIZE.x + bHalf.x - Math.abs(dx);
+            if (overlapX > 0) {
+                const overlapY = PLAYER_HALF_SIZE.y + bHalf.y - Math.abs(newPos.y - bPos.y);
+                const overlapZ = PLAYER_HALF_SIZE.z + bHalf.z - Math.abs(newPos.z - bPos.z);
+                if (overlapY > 0 && overlapZ > 0) {
+                    if (dx > 0) newPos.x = bPos.x + PLAYER_HALF_SIZE.x + bHalf.x;
+                    else newPos.x = bPos.x - PLAYER_HALF_SIZE.x - bHalf.x;
+                }
             }
         }
+        // Корректировка по Z
         for (let block of blocks) {
             const bPos = block.position;
-            const bScale = block.scale;
-            const bHalfSize = { x: 0.45 * bScale.x, y: 0.45 * bScale.y, z: 0.45 * bScale.z };
-            if (Math.abs(newPos.x - bPos.x) < halfSize.x + bHalfSize.x &&
-                Math.abs(newPos.y - bPos.y) < halfSize.y + bHalfSize.y &&
-                Math.abs(newPos.z - bPos.z) < halfSize.z + bHalfSize.z) {
-                const dz = newPos.z - bPos.z;
-                if (dz > 0) newPos.z = bPos.z + halfSize.z + bHalfSize.z;
-                else newPos.z = bPos.z - halfSize.z - bHalfSize.z;
+            const bHalf = BLOCK_HALF_SIZE;
+            const dz = newPos.z - bPos.z;
+            const overlapZ = PLAYER_HALF_SIZE.z + bHalf.z - Math.abs(dz);
+            if (overlapZ > 0) {
+                const overlapX = PLAYER_HALF_SIZE.x + bHalf.x - Math.abs(newPos.x - bPos.x);
+                const overlapY = PLAYER_HALF_SIZE.y + bHalf.y - Math.abs(newPos.y - bPos.y);
+                if (overlapX > 0 && overlapY > 0) {
+                    if (dz > 0) newPos.z = bPos.z + PLAYER_HALF_SIZE.z + bHalf.z;
+                    else newPos.z = bPos.z - PLAYER_HALF_SIZE.z - bHalf.z;
+                }
             }
         }
+        // Проверка земли и выталкивание по Y
         let onGround = false;
         for (let block of blocks) {
             const bPos = block.position;
-            const bScale = block.scale;
-            const bHalfSize = { x: 0.45 * bScale.x, y: 0.45 * bScale.y, z: 0.45 * bScale.z };
-            if (Math.abs(newPos.x - bPos.x) < halfSize.x + bHalfSize.x &&
-                Math.abs(newPos.z - bPos.z) < halfSize.z + bHalfSize.z &&
-                Math.abs(newPos.y - halfSize.y - (bPos.y + bHalfSize.y)) < 0.3) {
-                onGround = true;
-                newPos.y = bPos.y + bHalfSize.y + halfSize.y;
-            }
-            if (Math.abs(newPos.x - bPos.x) < halfSize.x + bHalfSize.x &&
-                Math.abs(newPos.z - bPos.z) < halfSize.z + bHalfSize.z &&
-                Math.abs(newPos.y - bPos.y) < halfSize.y + bHalfSize.y) {
-                const dy = newPos.y - bPos.y;
-                if (dy > 0) newPos.y = bPos.y + bHalfSize.y + halfSize.y;
-                else newPos.y = bPos.y - bHalfSize.y - halfSize.y;
+            const bHalf = BLOCK_HALF_SIZE;
+            const dy = newPos.y - bPos.y;
+            const overlapY = PLAYER_HALF_SIZE.y + bHalf.y - Math.abs(dy);
+            if (overlapY > 0) {
+                const overlapX = PLAYER_HALF_SIZE.x + bHalf.x - Math.abs(newPos.x - bPos.x);
+                const overlapZ = PLAYER_HALF_SIZE.z + bHalf.z - Math.abs(newPos.z - bPos.z);
+                if (overlapX > 0 && overlapZ > 0) {
+                    // Если игрок сверху блока и расстояние до верха блока меньше 0.3, считаем что он на земле
+                    if (dy > 0 && (newPos.y - PLAYER_HALF_SIZE.y) - (bPos.y + bHalf.y) < 0.3) {
+                        onGround = true;
+                        newPos.y = bPos.y + bHalf.y + PLAYER_HALF_SIZE.y;
+                    } else if (dy < 0) {
+                        // Если снизу – выталкиваем вниз
+                        newPos.y = bPos.y - bHalf.y - PLAYER_HALF_SIZE.y;
+                    }
+                }
             }
         }
         return { pos: newPos, onGround };
@@ -611,8 +623,8 @@
         let spawnBlock = findSpawnBlock(collisionBlocks);
         let spawnPos = { x: 0, y: 1, z: 0 };
         if (spawnBlock) {
-            const bHalfSize = { x: 0.45 * spawnBlock.scale.x, y: 0.45 * spawnBlock.scale.y, z: 0.45 * spawnBlock.scale.z };
-            spawnPos = { x: spawnBlock.position.x, y: spawnBlock.position.y + bHalfSize.y + 0.8, z: spawnBlock.position.z };
+            const bHalf = { x: 0.45 * spawnBlock.scale.x, y: 0.45 * spawnBlock.scale.y, z: 0.45 * spawnBlock.scale.z };
+            spawnPos = { x: spawnBlock.position.x, y: spawnBlock.position.y + bHalf.y + PLAYER_HALF_SIZE.y, z: spawnBlock.position.z };
         }
 
         // Используем глобальную модель
@@ -728,7 +740,6 @@
         let isOnGround = false;
 
         let lastTime = performance.now()/1000;
-        const playerSize = { x: 0.4, y: 0.8, z: 0.4 };
 
         function update() {
             if(!gameActive) return;
@@ -762,7 +773,7 @@
             newPos.z += moveZ * speed;
             playerVelocityY -= GRAVITY * delta;
             newPos.y += playerVelocityY * delta;
-            const collisionResult = checkCollisionAndAdjust(newPos, playerSize, collisionBlocks);
+            const collisionResult = applyCollision(newPos, collisionBlocks);
             newPos = collisionResult.pos;
             isOnGround = collisionResult.onGround;
             if (isOnGround && keyState.space) {
@@ -954,8 +965,8 @@
         let spawnBlock = findSpawnBlock(blocks);
         let spawnPos = { x: 0, y: 1, z: 0 };
         if (spawnBlock) {
-            const bHalfSize = { x: 0.45 * spawnBlock.scale.x, y: 0.45 * spawnBlock.scale.y, z: 0.45 * spawnBlock.scale.z };
-            spawnPos = { x: spawnBlock.position.x, y: spawnBlock.position.y + bHalfSize.y + 0.8, z: spawnBlock.position.z };
+            const bHalf = { x: 0.45 * spawnBlock.scale.x, y: 0.45 * spawnBlock.scale.y, z: 0.45 * spawnBlock.scale.z };
+            spawnPos = { x: spawnBlock.position.x, y: spawnBlock.position.y + bHalf.y + PLAYER_HALF_SIZE.y, z: spawnBlock.position.z };
         }
 
         let player;
@@ -1068,7 +1079,6 @@
         const GRAVITY = 15;
         const JUMP_FORCE = 7;
         let isOnGround = false;
-        const playerSize = { x: 0.4, y: 0.8, z: 0.4 };
 
         let lastTime = performance.now()/1000;
         let localGameActive = true;
@@ -1104,7 +1114,7 @@
             newPos.z += moveZ * speed;
             playerVelocityY -= GRAVITY * delta;
             newPos.y += playerVelocityY * delta;
-            const collisionResult = checkCollisionAndAdjust(newPos, playerSize, blocks);
+            const collisionResult = applyCollision(newPos, blocks);
             newPos = collisionResult.pos;
             isOnGround = collisionResult.onGround;
             if (isOnGround && localKeyState.space) {

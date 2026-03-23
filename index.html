@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>BlockVerse — мультиплеер + конструктор</title>
     <style>
+        /* стили без изменений (оставляем как в предыдущем ответе) */
         * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-tap-highlight-color:transparent; }
         body { font-family:'Segoe UI', 'Poppins', system-ui, sans-serif; background:linear-gradient(135deg,#0a0f1e,#0e1a2a); color:white; overflow:hidden; height:100vh; position:fixed; width:100%; touch-action:manipulation; }
         .screen { position:absolute; top:0; left:0; width:100%; height:100%; transition:opacity 0.3s ease; overflow-y:auto; padding:20px; -webkit-overflow-scrolling:touch; }
@@ -507,7 +508,7 @@
                 newPos.y = hit.point.y + PLAYER_HALF_HEIGHT;
             }
         }
-        // Выталкивание по Y если всё ещё внутри блока
+        // Выталкивание по Y
         for (let block of blocks) {
             const bPos = block.position;
             const bScale = block.scale;
@@ -552,6 +553,14 @@
         gameScene.add(pointLight);
 
         collisionBlocks = [];
+
+        // ВСЕГДА добавляем платформу (большой пол)
+        const platformMesh = createMesh('cube', { x: 20/0.9, y: 1/0.9, z: 20/0.9 }, 0x6B8E23);
+        platformMesh.position.set(0, -0.5, 0);
+        gameScene.add(platformMesh);
+        collisionBlocks.push(platformMesh);
+
+        // Загружаем блоки из сохранённой игры (если есть)
         if (gameData && gameData.blocks) {
             gameData.blocks.forEach(block => {
                 const mesh = createMesh(block.shape || 'cube', block.scale, block.color, block.opacity);
@@ -561,20 +570,32 @@
                 gameScene.add(mesh);
                 collisionBlocks.push(mesh);
             });
-        } else {
-            const platform = createMesh('cube', { x: 20/0.9, y: 1/0.9, z: 20/0.9 }, 0x6B8E23);
-            platform.position.set(0, -0.5, 0);
-            gameScene.add(platform);
-            collisionBlocks.push(platform);
         }
 
+        // Ищем спавн-блок (красный)
         let spawnBlock = findSpawnBlock(collisionBlocks);
-        let spawnPos = { x: 0, y: 1, z: 0 };
-        if (spawnBlock) {
-            const bHalfY = BLOCK_HALF_SIZE * spawnBlock.scale.y;
-            spawnPos = { x: spawnBlock.position.x, y: spawnBlock.position.y + bHalfY + PLAYER_HALF_HEIGHT, z: spawnBlock.position.z };
+        // Ищем платформу (самый большой блок – это наша платформа)
+        let platformBlock = null;
+        for (let block of collisionBlocks) {
+            if (block === platformMesh) {
+                platformBlock = block;
+                break;
+            }
         }
 
+        // Вычисляем позицию спавна: по x,z спавн-блока (или 0,0), по y – верхняя грань платформы
+        let spawnX = spawnBlock ? spawnBlock.position.x : 0;
+        let spawnZ = spawnBlock ? spawnBlock.position.z : 0;
+        let spawnY = 0;
+        if (platformBlock) {
+            const bHalfY = BLOCK_HALF_SIZE * platformBlock.scale.y;
+            spawnY = platformBlock.position.y + bHalfY + PLAYER_HALF_HEIGHT;
+        } else {
+            spawnY = PLAYER_HALF_HEIGHT; // fallback
+        }
+        const spawnPos = { x: spawnX, y: spawnY, z: spawnZ };
+
+        // Создаём модель игрока
         let playerModel = null;
         if (globalPlayerModel) {
             playerModel = globalPlayerModel.clone();
@@ -588,6 +609,7 @@
             gamePlayer = defaultChar;
         }
 
+        // Скрипты блоков (оставляем)
         const scriptedBlocks = [];
         for (let block of collisionBlocks) {
             if (block.userData.script && block.userData.script.trim() !== '') {
@@ -598,6 +620,7 @@
             }
         }
 
+        // Управление (клавиатура + джойстик) – без изменений
         const handleKey = (e, val) => {
             if(!gameActive) return;
             if(e.key==='w') keyState.w=val;
@@ -856,6 +879,7 @@
     }
 
     async function startLocalGameSession(gameData, gameName) {
+        // Используем ту же логику, что и в startGameSession, но без WebSocket
         document.getElementById('mainMenuScreen').classList.add('hidden');
         document.getElementById('customGameScreen').classList.remove('hidden');
         const container = document.getElementById('customGameContainer');
@@ -882,6 +906,13 @@
         scene.add(pointLight);
 
         const blocks = [];
+
+        // ВСЕГДА добавляем платформу
+        const platformMesh = createMesh('cube', { x: 20/0.9, y: 1/0.9, z: 20/0.9 }, 0x6B8E23);
+        platformMesh.position.set(0, -0.5, 0);
+        scene.add(platformMesh);
+        blocks.push(platformMesh);
+
         if (gameData && gameData.blocks) {
             gameData.blocks.forEach(block => {
                 const mesh = createMesh(block.shape || 'cube', block.scale, block.color, block.opacity);
@@ -890,19 +921,27 @@
                 scene.add(mesh);
                 blocks.push(mesh);
             });
-        } else {
-            const platform = createMesh('cube', { x: 20/0.9, y: 1/0.9, z: 20/0.9 }, 0x6B8E23);
-            platform.position.set(0, -0.5, 0);
-            scene.add(platform);
-            blocks.push(platform);
         }
 
         let spawnBlock = findSpawnBlock(blocks);
-        let spawnPos = { x: 0, y: 1, z: 0 };
-        if (spawnBlock) {
-            const bHalfY = BLOCK_HALF_SIZE * spawnBlock.scale.y;
-            spawnPos = { x: spawnBlock.position.x, y: spawnBlock.position.y + bHalfY + PLAYER_HALF_HEIGHT, z: spawnBlock.position.z };
+        let platformBlock = null;
+        for (let block of blocks) {
+            if (block === platformMesh) {
+                platformBlock = block;
+                break;
+            }
         }
+
+        let spawnX = spawnBlock ? spawnBlock.position.x : 0;
+        let spawnZ = spawnBlock ? spawnBlock.position.z : 0;
+        let spawnY = 0;
+        if (platformBlock) {
+            const bHalfY = BLOCK_HALF_SIZE * platformBlock.scale.y;
+            spawnY = platformBlock.position.y + bHalfY + PLAYER_HALF_HEIGHT;
+        } else {
+            spawnY = PLAYER_HALF_HEIGHT;
+        }
+        const spawnPos = { x: spawnX, y: spawnY, z: spawnZ };
 
         let player;
         if (globalPlayerModel) {

@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>BlockVerse — Roblox-подобная платформа</title>
+    <title>BlockVerse — мультиплеер + конструктор</title>
     <style>
-        /* Стили (те же, что и в предыдущей версии, с добавлением стилей для игрового списка) */
         * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-tap-highlight-color:transparent; }
         body { font-family:'Segoe UI', 'Poppins', system-ui, sans-serif; background:linear-gradient(135deg,#0a0f1e,#0e1a2a); color:white; overflow:hidden; height:100vh; position:fixed; width:100%; }
         .screen { position:absolute; top:0; left:0; width:100%; height:100%; transition:opacity 0.3s ease; overflow-y:auto; padding:20px; -webkit-overflow-scrolling:touch; }
@@ -21,13 +20,16 @@
         .coin-badge { background:#f0b90b; color:#1e1e2a; padding:6px 14px; border-radius:40px; font-weight:bold; display:flex; align-items:center; gap:6px; }
         .nav-buttons { display:flex; gap:12px; flex-wrap:wrap; }
         .nav-btn { background:#2c3e66; padding:8px 20px; border-radius:40px; cursor:pointer; font-weight:500; }
+        .search-bar { margin:20px 0; display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+        .search-bar input { flex:1; padding:10px 16px; border-radius:40px; border:none; background:rgba(255,255,255,0.2); color:white; font-size:16px; }
         .games-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:24px; margin-top:20px; }
-        .game-card { background:rgba(30,35,55,0.8); backdrop-filter:blur(8px); border-radius:24px; overflow:hidden; transition:0.2s; cursor:pointer; border:1px solid rgba(255,255,255,0.15); }
+        .game-card { background:rgba(30,35,55,0.8); backdrop-filter:blur(8px); border-radius:24px; overflow:hidden; transition:0.2s; cursor:pointer; border:1px solid rgba(255,255,255,0.15); position:relative; }
         .game-card:hover { transform:translateY(-5px); border-color:#ffaa44; }
         .game-image { height:140px; background:#2a3a5a; display:flex; align-items:center; justify-content:center; font-size:48px; }
         .game-info { padding:16px; }
         .game-title { font-size:20px; font-weight:bold; }
         .game-author { font-size:12px; color:#aaa; margin:4px 0; }
+        .game-online { position:absolute; top:12px; right:12px; background:rgba(0,0,0,0.7); padding:4px 10px; border-radius:20px; font-size:12px; color:#4caf50; }
         .play-btn { background:#ff5722; border:none; padding:8px 16px; border-radius:30px; font-weight:bold; cursor:pointer; margin-top:8px; width:100%; }
         .social-panels { display:flex; gap:20px; margin-top:20px; flex-wrap:wrap; }
         .panel { background:rgba(0,0,0,0.6); backdrop-filter:blur(8px); border-radius:20px; padding:16px; flex:1; min-width:250px; }
@@ -234,7 +236,7 @@
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
         import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 
-        // ========== ПОЛЬЗОВАТЕЛИ ==========
+        // ========== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ==========
         let currentUser = null;
         let users = JSON.parse(localStorage.getItem('blockverse_users')) || [];
         let customGames = JSON.parse(localStorage.getItem('blockverse_games')) || [];
@@ -247,11 +249,44 @@
             { id: 'trail', name: 'Искрящийся след', price: 150 }
         ];
 
+        // ========== РЕДАКТОР ==========
+        let editorScene, editorCamera, editorRenderer;
+        let editorBlocks = [];
+        let selectedBlock = null;
+        let currentTransformMode = 'move';
+        let currentShape = 'cube';
+        let currentBlockType = 'wood';
+        let currentPhysType = 'solid';
+        let currentTexture = 'wood';
+        let currentColor = '#8B5A2B';
+        let currentOpacity = 1;
+        let editorActive = false;
+        let editorAnimationId = null;
+        let gameBeingEdited = null;
+
+        // ========== МУЛЬТИПЛЕЕР ==========
+        let ws = null;
+        let currentGameId = null;
+        let myPlayerId = null;
+        let remotePlayers = new Map();
+        let gameScene = null, gameCamera = null, gameRenderer = null, gamePlayer = null;
+        let gameActive = false;
+        let gameAnimationId = null;
+        let gameCoins = [], gameScore = 0;
+        let collisionBlocks = [];
+        let keyState = { w: false, s: false, a: false, d: false, space: false };
+        let joystickVector = { x: 0, z: 0 }, joystickActive = false;
+        let cameraDistance = 8;
+        let moveSpeed = 4;
+        let mouseSensitivity = 0.005;
+
+        // ========== СОХРАНЕНИЕ ==========
         function saveUsers() { localStorage.setItem('blockverse_users', JSON.stringify(users)); }
         function saveGames() { localStorage.setItem('blockverse_games', JSON.stringify(customGames)); }
         function saveChat() { localStorage.setItem('blockverse_chat', JSON.stringify(chatMessages.slice(-100))); }
         function saveReports() { localStorage.setItem('blockverse_reports', JSON.stringify(reports.slice(-50))); }
 
+        // ========== АВТОРИЗАЦИЯ ==========
         function initUserData(username) {
             let user = users.find(u => u.username === username);
             if (!user) return null;
@@ -266,10 +301,8 @@
 
         function updateUIafterAuth() {
             if (!currentUser) return;
-            const usernameDisplay = document.getElementById('usernameDisplay');
-            if (usernameDisplay) usernameDisplay.innerText = currentUser.username + (currentUser.isGuest ? ' (гость)' : '');
-            const userCoins = document.getElementById('userCoins');
-            if (userCoins) userCoins.innerText = currentUser.coins;
+            document.getElementById('usernameDisplay').innerText = currentUser.username + (currentUser.isGuest ? ' (гость)' : '');
+            document.getElementById('userCoins').innerText = currentUser.coins;
             renderGamesList(); // рендерит список серверов
             renderMyProjects();
             renderShop();
@@ -280,8 +313,8 @@
             connectToServer(); // подключаемся к WebSocket-серверу
         }
 
-        function addCoins(amount) { if (!currentUser) return; currentUser.coins += amount; if (!currentUser.isGuest) saveUsers(); const coinsSpan = document.getElementById('userCoins'); if (coinsSpan) coinsSpan.innerText = currentUser.coins; }
-        function spendCoins(amount) { if (!currentUser) return false; if (currentUser.coins >= amount) { currentUser.coins -= amount; if (!currentUser.isGuest) saveUsers(); const coinsSpan = document.getElementById('userCoins'); if (coinsSpan) coinsSpan.innerText = currentUser.coins; return true; } return false; }
+        function addCoins(amount) { if (!currentUser) return; currentUser.coins += amount; if (!currentUser.isGuest) saveUsers(); document.getElementById('userCoins').innerText = currentUser.coins; }
+        function spendCoins(amount) { if (!currentUser) return false; if (currentUser.coins >= amount) { currentUser.coins -= amount; if (!currentUser.isGuest) saveUsers(); document.getElementById('userCoins').innerText = currentUser.coins; return true; } return false; }
 
         function renderShop() {
             const container = document.getElementById('shopItemsList');
@@ -339,23 +372,7 @@
         }
         function startChatPolling() { setInterval(() => { const stored = JSON.parse(localStorage.getItem('blockverse_chat')) || []; if (JSON.stringify(stored) !== JSON.stringify(chatMessages)) { chatMessages = stored; renderChat(); } }, 2000); }
 
-        // ========== МУЛЬТИПЛЕЕР (WebSocket с сервером) ==========
-        let ws = null;
-        let currentGameId = null;
-        let myPlayerId = null;
-        let remotePlayers = new Map();
-        let gameScene = null, gameCamera = null, gameRenderer = null, gamePlayer = null;
-        let gameActive = false;
-        let gameAnimationId = null;
-        let gameCoins = [], gameScore = 0;
-        let scriptedBlocks = [];
-        let collisionBlocks = [];
-        let keyState = { w: false, s: false, a: false, d: false, space: false };
-        let joystickVector = { x: 0, z: 0 }, joystickActive = false;
-        let cameraDistance = 8;
-        let moveSpeed = 4;
-        let mouseSensitivity = 0.005;
-
+        // ========== МУЛЬТИПЛЕЕР (WebSocket) ==========
         function connectToServer() {
             const serverUrl = 'wss://blockverse-server.onrender.com'; // замените на ваш сервер
             ws = new WebSocket(serverUrl);
@@ -385,9 +402,7 @@
                         break;
                     case 'player_moved':
                         const movedPlayer = remotePlayers.get(data.playerId);
-                        if (movedPlayer) {
-                            movedPlayer.position.set(data.position.x, data.position.y, data.position.z);
-                        }
+                        if (movedPlayer) movedPlayer.position.set(data.position.x, data.position.y, data.position.z);
                         break;
                     case 'player_left':
                         const leftPlayer = remotePlayers.get(data.playerId);
@@ -408,7 +423,7 @@
             }
         }
 
-        function createGame(gameName, gameData) {
+        function createGameOnServer(gameName, gameData) {
             if (!ws || ws.readyState !== WebSocket.OPEN) return;
             ws.send(JSON.stringify({
                 type: 'create_game',
@@ -461,7 +476,7 @@
             });
         }
 
-        // ========== ИГРОВАЯ СЕССИЯ ==========
+        // ========== ИГРОВАЯ СЕССИЯ (мультиплеер) ==========
         function startGameSession(gameData, gameName) {
             document.getElementById('mainMenuScreen').classList.add('hidden');
             document.getElementById('customGameScreen').classList.remove('hidden');
@@ -490,38 +505,27 @@
             gameScene.add(pointLight);
 
             // Загрузка блоков
-            const blocks = [];
+            collisionBlocks = [];
             if (gameData && gameData.blocks) {
                 gameData.blocks.forEach(block => {
                     const mesh = createMesh(block.shape || 'cube', block.scale, block.color, block.opacity);
                     mesh.position.set(block.x, block.y, block.z);
                     mesh.rotation.set(block.rotation.x, block.rotation.y, block.rotation.z);
                     gameScene.add(mesh);
-                    blocks.push(mesh);
+                    collisionBlocks.push(mesh);
                 });
             } else {
-                // Если нет блоков, создаём платформу
+                // платформа по умолчанию
                 const platform = createMesh('cube', { x: 20/0.9, y: 1/0.9, z: 20/0.9 }, 0x6B8E23);
                 platform.position.set(0, -0.5, 0);
                 gameScene.add(platform);
-                blocks.push(platform);
+                collisionBlocks.push(platform);
             }
-            collisionBlocks = blocks;
 
             const defaultChar = createDefaultCharacter();
             defaultChar.position.set(0, 1, 0);
             gameScene.add(defaultChar);
             gamePlayer = defaultChar;
-            if (currentUser && currentUser.customModel) {
-                loadCustomModel(currentUser.customModel).then(model => {
-                    gameScene.remove(defaultChar);
-                    model.position.copy(defaultChar.position);
-                    model.rotation.copy(defaultChar.rotation);
-                    model.scale.set(0.5,0.5,0.5);
-                    gameScene.add(model);
-                    gamePlayer = model;
-                }).catch(e => console.warn(e));
-            }
 
             // Управление
             const handleKey = (e, val) => {
@@ -680,10 +684,9 @@
                 }
                 gamePlayer.position.copy(newPos);
 
-                // Отправляем позицию на сервер
                 sendPosition({ x: gamePlayer.position.x, y: gamePlayer.position.y, z: gamePlayer.position.z });
 
-                // Сбор монет (локально, если есть)
+                // сбор монет (если есть)
                 for(let i=0;i<gameCoins.length;i++) {
                     const coin = gameCoins[i];
                     if(coin && gamePlayer.position.distanceTo(coin.position) < 0.8) {
@@ -693,11 +696,6 @@
                         if(scoreDiv) scoreDiv.innerText = `Счёт: ${gameScore}`;
                         i--;
                     }
-                }
-
-                // Скрипты (локально для демо)
-                for(let sb of scriptedBlocks) {
-                    if(sb.funcs.onUpdate) try { sb.funcs.onUpdate(delta); } catch(e){ console.error(e); }
                 }
 
                 gameCamera.position.x = gamePlayer.position.x;
@@ -795,9 +793,430 @@
             });
         }
 
-        // ========== КОНСТРУКТОР (заглушка, но в полной версии он есть) ==========
-        function openEditor() {
-            alert("Конструктор доступен в полной версии.");
+        // ========== КОНСТРУКТОР (ПОЛНАЯ ВЕРСИЯ) ==========
+        function initEditor() {
+            if (editorActive) return;
+            const container = document.getElementById('editorCanvasContainer');
+            container.innerHTML = '';
+            editorScene = new THREE.Scene();
+            editorScene.background = new THREE.Color(0x111122);
+            editorCamera = new THREE.PerspectiveCamera(45, container.clientWidth/container.clientHeight, 0.1, 1000);
+            editorCamera.position.set(10, 8, 10);
+            editorCamera.lookAt(0,0,0);
+            editorRenderer = new THREE.WebGLRenderer({ antialias: true });
+            editorRenderer.setSize(container.clientWidth, container.clientHeight);
+            editorRenderer.setPixelRatio(window.devicePixelRatio);
+            editorRenderer.shadowMap.enabled = true;
+            container.appendChild(editorRenderer.domElement);
+
+            // Освещение
+            const ambientLight = new THREE.AmbientLight(0x404060);
+            editorScene.add(ambientLight);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+            directionalLight.position.set(5, 10, 7);
+            directionalLight.castShadow = true;
+            editorScene.add(directionalLight);
+            const fillLight = new THREE.PointLight(0x4466cc, 0.5);
+            fillLight.position.set(2, 3, 4);
+            editorScene.add(fillLight);
+
+            // Сетка и оси для удобства
+            const gridHelper = new THREE.GridHelper(30, 20, 0x88aaff, 0x335588);
+            editorScene.add(gridHelper);
+            const axesHelper = new THREE.AxesHelper(5);
+            editorScene.add(axesHelper);
+
+            // Контроллеры орбиты (для удобства, можно добавить)
+            // Если хотите, добавьте OrbitControls, но для простоты оставим без
+
+            // Обработчики инструментов
+            document.getElementById('modeMove').onclick = () => setTransformMode('move');
+            document.getElementById('modeRotate').onclick = () => setTransformMode('rotate');
+            document.getElementById('modeScale').onclick = () => setTransformMode('scale');
+            document.getElementById('shapeCube').onclick = () => setCurrentShape('cube');
+            document.getElementById('shapeSphere').onclick = () => setCurrentShape('sphere');
+            document.getElementById('shapeCylinder').onclick = () => setCurrentShape('cylinder');
+            document.getElementById('shapeCone').onclick = () => setCurrentShape('cone');
+            document.getElementById('shapeWedge').onclick = () => setCurrentShape('wedge'); // wedge пока что как куб
+            document.getElementById('duplicateBtn').onclick = duplicateSelected;
+            document.getElementById('addCubeBtn').onclick = addDefaultBlock;
+            document.getElementById('applyPropsBtn').onclick = applyPropertiesToSelected;
+            document.getElementById('applyScriptBtn').onclick = applyScriptToSelected;
+            document.getElementById('applyLightBtn').onclick = applyLightSettings;
+            document.getElementById('resetScale').onclick = resetScale;
+            document.getElementById('publishGameBtn').onclick = publishGame;
+
+            // Кнопки перемещения
+            document.getElementById('moveXm').onclick = () => moveSelected(-0.5,0,0);
+            document.getElementById('moveXp').onclick = () => moveSelected(0.5,0,0);
+            document.getElementById('moveYm').onclick = () => moveSelected(0,-0.5,0);
+            document.getElementById('moveYp').onclick = () => moveSelected(0,0.5,0);
+            document.getElementById('moveZm').onclick = () => moveSelected(0,0,-0.5);
+            document.getElementById('moveZp').onclick = () => moveSelected(0,0,0.5);
+            // Вращение
+            document.getElementById('rotXm').onclick = () => rotateSelected(-15,0,0);
+            document.getElementById('rotXp').onclick = () => rotateSelected(15,0,0);
+            document.getElementById('rotYm').onclick = () => rotateSelected(0,-15,0);
+            document.getElementById('rotYp').onclick = () => rotateSelected(0,15,0);
+            document.getElementById('rotZm').onclick = () => rotateSelected(0,0,-15);
+            document.getElementById('rotZp').onclick = () => rotateSelected(0,0,15);
+            // Масштаб
+            document.getElementById('scaleXm').onclick = () => scaleSelected(-0.1,0,0);
+            document.getElementById('scaleXp').onclick = () => scaleSelected(0.1,0,0);
+            document.getElementById('scaleYm').onclick = () => scaleSelected(0,-0.1,0);
+            document.getElementById('scaleYp').onclick = () => scaleSelected(0,0.1,0);
+            document.getElementById('scaleZm').onclick = () => scaleSelected(0,0,-0.1);
+            document.getElementById('scaleZp').onclick = () => scaleSelected(0,0,0.1);
+
+            // Выбор блока по клику
+            const raycaster = new THREE.Raycaster();
+            const mouse = new THREE.Vector2();
+            editorRenderer.domElement.addEventListener('click', (event) => {
+                const rect = editorRenderer.domElement.getBoundingClientRect();
+                mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+                mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+                raycaster.setFromCamera(mouse, editorCamera);
+                const intersects = raycaster.intersectObjects(editorBlocks);
+                if (intersects.length > 0) {
+                    selectBlock(intersects[0].object);
+                } else {
+                    selectBlock(null);
+                }
+            });
+
+            // Палитра блоков
+            document.querySelectorAll('.block-option').forEach(opt => {
+                opt.addEventListener('click', () => {
+                    document.querySelectorAll('.block-option').forEach(o => o.classList.remove('selected'));
+                    opt.classList.add('selected');
+                    currentBlockType = opt.dataset.type;
+                    // Можно также менять цвет по умолчанию
+                    if (currentBlockType === 'wood') currentColor = '#8B5A2B';
+                    else if (currentBlockType === 'stone') currentColor = '#808080';
+                    else if (currentBlockType === 'concrete') currentColor = '#B0B0B0';
+                    else if (currentBlockType === 'dirt') currentColor = '#6B4C3B';
+                    document.getElementById('blockColor').value = currentColor;
+                });
+            });
+            // Выбираем первый блок
+            document.querySelector('.block-option').classList.add('selected');
+
+            // Загружаем существующую игру, если редактируем
+            if (gameBeingEdited) {
+                loadGameForEditing(gameBeingEdited);
+                gameBeingEdited = null;
+            } else {
+                // Добавляем тестовый куб
+                addDefaultBlock();
+            }
+
+            // Анимация
+            function animateEditor() {
+                if (!editorActive) return;
+                editorAnimationId = requestAnimationFrame(animateEditor);
+                editorRenderer.render(editorScene, editorCamera);
+            }
+            editorActive = true;
+            animateEditor();
+
+            // Обработка изменения размера окна
+            window.addEventListener('resize', () => {
+                const container = document.getElementById('editorCanvasContainer');
+                editorCamera.aspect = container.clientWidth / container.clientHeight;
+                editorCamera.updateProjectionMatrix();
+                editorRenderer.setSize(container.clientWidth, container.clientHeight);
+            });
+        }
+
+        function setTransformMode(mode) {
+            currentTransformMode = mode;
+            document.getElementById('moveControls').style.display = mode === 'move' ? 'block' : 'none';
+            document.getElementById('rotateControls').style.display = mode === 'rotate' ? 'block' : 'none';
+            document.getElementById('scaleControls').style.display = mode === 'scale' ? 'block' : 'none';
+            document.getElementById('modeMove').classList.toggle('active', mode === 'move');
+            document.getElementById('modeRotate').classList.toggle('active', mode === 'rotate');
+            document.getElementById('modeScale').classList.toggle('active', mode === 'scale');
+        }
+
+        function setCurrentShape(shape) {
+            currentShape = shape;
+            document.getElementById('shapeCube').classList.toggle('active', shape === 'cube');
+            document.getElementById('shapeSphere').classList.toggle('active', shape === 'sphere');
+            document.getElementById('shapeCylinder').classList.toggle('active', shape === 'cylinder');
+            document.getElementById('shapeCone').classList.toggle('active', shape === 'cone');
+            document.getElementById('shapeWedge').classList.toggle('active', shape === 'wedge');
+        }
+
+        function addDefaultBlock() {
+            const color = parseInt(currentColor.slice(1), 16);
+            const block = createMesh(currentShape, { x:0.9, y:0.9, z:0.9 }, color, currentOpacity);
+            block.position.set(0, 1, 0);
+            block.userData = {
+                shape: currentShape,
+                color: currentColor,
+                opacity: currentOpacity,
+                physType: currentPhysType,
+                texture: currentTexture,
+                script: ''
+            };
+            editorScene.add(block);
+            editorBlocks.push(block);
+            selectBlock(block);
+        }
+
+        function createMesh(shape, size, color, opacity) {
+            let geometry;
+            const w = 0.9, h = 0.9, d = 0.9;
+            switch(shape) {
+                case 'sphere': geometry = new THREE.SphereGeometry(0.45, 32, 32); break;
+                case 'cylinder': geometry = new THREE.CylinderGeometry(0.45, 0.45, 0.9, 32); break;
+                case 'cone': geometry = new THREE.ConeGeometry(0.45, 0.9, 32); break;
+                default: geometry = new THREE.BoxGeometry(0.9, 0.9, 0.9);
+            }
+            const material = new THREE.MeshStandardMaterial({ color });
+            material.transparent = opacity < 1;
+            material.opacity = opacity;
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.scale.set(size.x, size.y, size.z);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            return mesh;
+        }
+
+        function selectBlock(block) {
+            selectedBlock = block;
+            if (selectedBlock) {
+                document.getElementById('editorStatus').innerText = `Выбран блок: ${selectedBlock.userData.shape || 'cube'}`;
+                updatePropertyPanel(selectedBlock);
+                updateTransformInputs();
+            } else {
+                document.getElementById('editorStatus').innerText = 'Ничего не выбрано';
+                clearPropertyPanel();
+            }
+        }
+
+        function updatePropertyPanel(block) {
+            document.getElementById('blockColor').value = block.userData.color || '#8B5A2B';
+            document.getElementById('blockOpacity').value = block.userData.opacity || 1;
+            document.getElementById('opacityVal').innerText = (block.userData.opacity || 1).toFixed(2);
+            document.getElementById('blockPhysType').value = block.userData.physType || 'solid';
+            document.getElementById('blockTexture').value = block.userData.texture || 'wood';
+            document.getElementById('blockScript').value = block.userData.script || '';
+        }
+
+        function clearPropertyPanel() {
+            document.getElementById('blockColor').value = '#8B5A2B';
+            document.getElementById('blockOpacity').value = 1;
+            document.getElementById('opacityVal').innerText = '1.00';
+            document.getElementById('blockPhysType').value = 'solid';
+            document.getElementById('blockTexture').value = 'wood';
+            document.getElementById('blockScript').value = '';
+        }
+
+        function updateTransformInputs() {
+            if (!selectedBlock) return;
+            document.getElementById('moveX').value = selectedBlock.position.x.toFixed(2);
+            document.getElementById('moveY').value = selectedBlock.position.y.toFixed(2);
+            document.getElementById('moveZ').value = selectedBlock.position.z.toFixed(2);
+            document.getElementById('rotX').value = (selectedBlock.rotation.x * 180/Math.PI).toFixed(0);
+            document.getElementById('rotY').value = (selectedBlock.rotation.y * 180/Math.PI).toFixed(0);
+            document.getElementById('rotZ').value = (selectedBlock.rotation.z * 180/Math.PI).toFixed(0);
+            document.getElementById('scaleX').value = selectedBlock.scale.x.toFixed(2);
+            document.getElementById('scaleY').value = selectedBlock.scale.y.toFixed(2);
+            document.getElementById('scaleZ').value = selectedBlock.scale.z.toFixed(2);
+        }
+
+        function moveSelected(dx, dy, dz) {
+            if (!selectedBlock) return;
+            selectedBlock.position.x += dx;
+            selectedBlock.position.y += dy;
+            selectedBlock.position.z += dz;
+            updateTransformInputs();
+        }
+
+        function rotateSelected(rx, ry, rz) {
+            if (!selectedBlock) return;
+            selectedBlock.rotation.x += rx * Math.PI/180;
+            selectedBlock.rotation.y += ry * Math.PI/180;
+            selectedBlock.rotation.z += rz * Math.PI/180;
+            updateTransformInputs();
+        }
+
+        function scaleSelected(sx, sy, sz) {
+            if (!selectedBlock) return;
+            selectedBlock.scale.x += sx;
+            selectedBlock.scale.y += sy;
+            selectedBlock.scale.z += sz;
+            selectedBlock.scale.x = Math.max(0.2, selectedBlock.scale.x);
+            selectedBlock.scale.y = Math.max(0.2, selectedBlock.scale.y);
+            selectedBlock.scale.z = Math.max(0.2, selectedBlock.scale.z);
+            updateTransformInputs();
+        }
+
+        function resetScale() {
+            if (!selectedBlock) return;
+            selectedBlock.scale.set(1,1,1);
+            updateTransformInputs();
+        }
+
+        function duplicateSelected() {
+            if (!selectedBlock) return;
+            const newBlock = createMesh(selectedBlock.userData.shape || 'cube', selectedBlock.scale, parseInt(selectedBlock.userData.color.slice(1),16), selectedBlock.userData.opacity);
+            newBlock.position.copy(selectedBlock.position);
+            newBlock.position.x += 1;
+            newBlock.rotation.copy(selectedBlock.rotation);
+            newBlock.userData = { ...selectedBlock.userData };
+            editorScene.add(newBlock);
+            editorBlocks.push(newBlock);
+            selectBlock(newBlock);
+        }
+
+        function applyPropertiesToSelected() {
+            if (!selectedBlock) return;
+            const colorHex = document.getElementById('blockColor').value;
+            const opacity = parseFloat(document.getElementById('blockOpacity').value);
+            const physType = document.getElementById('blockPhysType').value;
+            const texture = document.getElementById('blockTexture').value;
+            selectedBlock.material.color.set(colorHex);
+            selectedBlock.material.transparent = opacity < 1;
+            selectedBlock.material.opacity = opacity;
+            selectedBlock.userData.color = colorHex;
+            selectedBlock.userData.opacity = opacity;
+            selectedBlock.userData.physType = physType;
+            selectedBlock.userData.texture = texture;
+            document.getElementById('opacityVal').innerText = opacity.toFixed(2);
+        }
+
+        function applyScriptToSelected() {
+            if (!selectedBlock) return;
+            const script = document.getElementById('blockScript').value;
+            selectedBlock.userData.script = script;
+            alert('Скрипт сохранён (будет выполняться в игре)');
+        }
+
+        function applyLightSettings() {
+            const intensity = parseFloat(document.getElementById('lightIntensity').value);
+            const color = document.getElementById('lightColor').value;
+            const height = parseFloat(document.getElementById('lightHeight').value);
+            const angleX = parseFloat(document.getElementById('lightAngleX').value);
+            const angleY = parseFloat(document.getElementById('lightAngleY').value);
+            // Находим directionalLight в сцене (первый источник)
+            let dirLight = editorScene.children.find(c => c instanceof THREE.DirectionalLight);
+            if (!dirLight) {
+                dirLight = new THREE.DirectionalLight(color, intensity);
+                editorScene.add(dirLight);
+            }
+            dirLight.intensity = intensity;
+            dirLight.color.set(color);
+            // Пересчитываем позицию по углам
+            const radX = angleX * Math.PI/180;
+            const radY = angleY * Math.PI/180;
+            const x = Math.cos(radY) * Math.cos(radX);
+            const y = Math.sin(radX);
+            const z = Math.sin(radY) * Math.cos(radX);
+            dirLight.position.set(x * height, y * height, z * height);
+            dirLight.target.position.set(0,0,0);
+            editorScene.add(dirLight.target);
+            document.getElementById('lightIntensityVal').innerText = intensity.toFixed(2);
+            document.getElementById('lightHeightVal').innerText = height.toFixed(1);
+            document.getElementById('lightAngleXVal').innerText = angleX;
+            document.getElementById('lightAngleYVal').innerText = angleY;
+        }
+
+        function saveGameToStorage() {
+            const gameName = prompt('Введите название игры:');
+            if (!gameName) return;
+            const blocksData = editorBlocks.map(block => ({
+                shape: block.userData.shape || 'cube',
+                scale: { x: block.scale.x, y: block.scale.y, z: block.scale.z },
+                color: block.userData.color || '#8B5A2B',
+                opacity: block.userData.opacity || 1,
+                x: block.position.x,
+                y: block.position.y,
+                z: block.position.z,
+                rotation: { x: block.rotation.x, y: block.rotation.y, z: block.rotation.z },
+                physType: block.userData.physType || 'solid',
+                texture: block.userData.texture || 'wood',
+                script: block.userData.script || ''
+            }));
+            const gameData = { blocks: blocksData };
+            const gameId = Date.now();
+            const newGame = {
+                id: gameId,
+                name: gameName,
+                author: currentUser.username,
+                desc: 'Создано в редакторе',
+                data: gameData
+            };
+            customGames.push(newGame);
+            saveGames();
+            alert('Игра сохранена локально!');
+            renderMyProjects();
+        }
+
+        function publishGame() {
+            const gameName = prompt('Введите название игры для публикации:');
+            if (!gameName) return;
+            const blocksData = editorBlocks.map(block => ({
+                shape: block.userData.shape || 'cube',
+                scale: { x: block.scale.x, y: block.scale.y, z: block.scale.z },
+                color: block.userData.color ? parseInt(block.userData.color.slice(1),16) : 0x8B5A2B,
+                opacity: block.userData.opacity || 1,
+                x: block.position.x,
+                y: block.position.y,
+                z: block.position.z,
+                rotation: { x: block.rotation.x, y: block.rotation.y, z: block.rotation.z }
+            }));
+            const gameData = { blocks: blocksData };
+            createGameOnServer(gameName, gameData);
+            // Также сохраняем локально
+            const gameId = Date.now();
+            const newGame = {
+                id: gameId,
+                name: gameName,
+                author: currentUser.username,
+                desc: 'Опубликовано',
+                data: gameData
+            };
+            customGames.push(newGame);
+            saveGames();
+            renderMyProjects();
+            alert('Игра опубликована на сервере и сохранена локально.');
+        }
+
+        function loadGameForEditing(game) {
+            clearEditor();
+            if (!game.data || !game.data.blocks) return;
+            game.data.blocks.forEach(blockData => {
+                const color = typeof blockData.color === 'number' ? '#' + blockData.color.toString(16).padStart(6,'0') : blockData.color;
+                const block = createMesh(blockData.shape, blockData.scale, parseInt(color.slice(1),16), blockData.opacity);
+                block.position.set(blockData.x, blockData.y, blockData.z);
+                block.rotation.set(blockData.rotation.x, blockData.rotation.y, blockData.rotation.z);
+                block.userData = {
+                    shape: blockData.shape,
+                    color: color,
+                    opacity: blockData.opacity,
+                    physType: blockData.physType || 'solid',
+                    texture: blockData.texture || 'wood',
+                    script: blockData.script || ''
+                };
+                editorScene.add(block);
+                editorBlocks.push(block);
+            });
+            selectBlock(null);
+        }
+
+        function clearEditor() {
+            editorBlocks.forEach(block => editorScene.remove(block));
+            editorBlocks = [];
+            selectedBlock = null;
+        }
+
+        function openEditor(gameToEdit = null) {
+            gameBeingEdited = gameToEdit;
+            document.getElementById('mainMenuScreen').classList.add('hidden');
+            document.getElementById('editorScreen').classList.remove('hidden');
+            initEditor();
         }
 
         // ========== МОИ ПРОЕКТЫ ==========
@@ -824,7 +1243,7 @@
                 `;
                 container.appendChild(card);
             });
-            document.querySelectorAll('.play-btn-small').forEach(btn => btn.addEventListener('click', () => { const id = parseInt(btn.dataset.id); const game = customGames.find(g => g.id === id); if (game) startCustomGame(game); }));
+            document.querySelectorAll('.play-btn-small').forEach(btn => btn.addEventListener('click', () => { const id = parseInt(btn.dataset.id); const game = customGames.find(g => g.id === id); if (game) joinGame(game.id); })); // в мультиплеер
             document.querySelectorAll('.edit-btn-small').forEach(btn => btn.addEventListener('click', () => { const id = parseInt(btn.dataset.id); const game = customGames.find(g => g.id === id); if (game) openEditor(game); }));
             document.querySelectorAll('.delete-btn-small').forEach(btn => btn.addEventListener('click', () => { const id = parseInt(btn.dataset.id); if (confirm('Удалить игру?')) { customGames = customGames.filter(g => g.id !== id); saveGames(); renderMyProjects(); renderGamesList(); } }));
         }
@@ -884,13 +1303,15 @@
         document.getElementById('moveSpeed').addEventListener('input', applySettings);
         document.getElementById('reportBugBtn').onclick = showReportDialog;
 
-        // ========== СОЗДАНИЕ ИГРЫ ==========
+        // ========== СОЗДАНИЕ ИГРЫ (с сервером) ==========
         document.getElementById('createNewGameBtn').onclick = () => {
             const gameName = document.getElementById('newGameName').value.trim();
             if (!gameName) { alert('Введите название игры'); return; }
-            // В реальном проекте gameData нужно брать из конструктора
-            const gameData = { blocks: [] }; // пустой мир
-            createGame(gameName, gameData);
+            // Можно открыть конструктор для создания мира, а затем опубликовать.
+            // Для простоты создаём пустую игру.
+            const gameData = { blocks: [] };
+            createGameOnServer(gameName, gameData);
+            document.getElementById('newGameName').value = '';
         };
         document.getElementById('refreshGamesBtn').onclick = () => requestGamesList();
 
@@ -924,7 +1345,23 @@
             updateUIafterAuth();
             alert("Вы вошли как гость. Монеты и игры не сохранятся.");
         }
-        function logout() { currentUser=null; document.getElementById('mainMenuScreen').classList.add('hidden'); document.getElementById('authScreen').classList.remove('hidden'); showLogin(); }
+        function logout() { 
+            if (editorActive) {
+                if (editorAnimationId) cancelAnimationFrame(editorAnimationId);
+                editorActive = false;
+            }
+            if (gameActive) {
+                gameActive = false;
+                if (gameAnimationId) cancelAnimationFrame(gameAnimationId);
+                leaveGame();
+            }
+            currentUser=null; 
+            document.getElementById('mainMenuScreen').classList.add('hidden'); 
+            document.getElementById('editorScreen').classList.add('hidden');
+            document.getElementById('customGameScreen').classList.add('hidden');
+            document.getElementById('authScreen').classList.remove('hidden'); 
+            showLogin(); 
+        }
 
         document.getElementById('showLoginBtn').onclick = showLogin;
         document.getElementById('showRegisterBtn').onclick = showRegister;

@@ -569,7 +569,7 @@
                     const bHalfSize = { x: 0.45 * bScale.x, y: 0.45 * bScale.y, z: 0.45 * bScale.z };
                     if (Math.abs(newPos.x - bPos.x) < playerSize.x + bHalfSize.x &&
                         Math.abs(newPos.z - bPos.z) < playerSize.z + bHalfSize.z &&
-                        Math.abs(newPos.y - playerSize.y - (bPos.y + bHalfSize.y)) < 0.1) {
+                        Math.abs(newPos.y - playerSize.y - (bPos.y + bHalfSize.y)) < 0.3) {
                         onGround = true;
                         newPos.y = bPos.y + bHalfSize.y + playerSize.y;
                     }
@@ -927,7 +927,7 @@
                     const bHalfSize = { x: 0.45 * bScale.x, y: 0.45 * bScale.y, z: 0.45 * bScale.z };
                     if (Math.abs(newPos.x - bPos.x) < playerSize.x + bHalfSize.x &&
                         Math.abs(newPos.z - bPos.z) < playerSize.z + bHalfSize.z &&
-                        Math.abs(newPos.y - playerSize.y - (bPos.y + bHalfSize.y)) < 0.1) {
+                        Math.abs(newPos.y - playerSize.y - (bPos.y + bHalfSize.y)) < 0.3) {
                         onGround = true;
                         newPos.y = bPos.y + bHalfSize.y + playerSize.y;
                     }
@@ -1039,7 +1039,13 @@
         document.getElementById('mouseSensitivity')?.addEventListener('input', applySettings);
         document.getElementById('moveSpeed')?.addEventListener('input', applySettings);
         document.getElementById('reportBugBtn')?.addEventListener('click', showReportDialog);
-        document.getElementById('createNewGameBtn')?.addEventListener('click', () => { const name = document.getElementById('newGameName').value.trim(); if (name) createGameOnServer(name, { blocks: [] }); else alert('Введите название'); });
+        document.getElementById('createNewGameBtn')?.addEventListener('click', () => {
+            const name = document.getElementById('newGameName').value.trim();
+            if (name) {
+                createGameOnServer(name, { blocks: [] });
+                setTimeout(() => requestGamesList(), 1000);
+            } else alert('Введите название');
+        });
         document.getElementById('refreshGamesBtn')?.addEventListener('click', () => requestGamesList());
 
         // ========== КОНСТРУКТОР ==========
@@ -1363,7 +1369,10 @@
             if (!gameName) return;
             const blocksData = editorBlocks.map(block => serializeBlockForServer(block));
             const gameData = { blocks: blocksData };
-            if (window.createGameOnServer) createGameOnServer(gameName, gameData);
+            if (window.createGameOnServer) {
+                createGameOnServer(gameName, gameData);
+                setTimeout(() => requestGamesList(), 1000);
+            }
             const gameId = Date.now();
             const newGame = { id: gameId, name: gameName, author: currentUser.username, desc: 'Опубликовано', data: gameData };
             customGames.push(newGame);

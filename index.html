@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>BlockVerse — мультиплеер + конструктор</title>
     <style>
+        /* ========== СТИЛИ (без изменений) ========== */
         * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-tap-highlight-color:transparent; }
         body { font-family:'Segoe UI', 'Poppins', system-ui, sans-serif; background:linear-gradient(135deg,#0a0f1e,#0e1a2a); color:white; overflow:hidden; height:100vh; position:fixed; width:100%; touch-action:manipulation; }
         .screen { position:absolute; top:0; left:0; width:100%; height:100%; transition:opacity 0.3s ease; overflow-y:auto; padding:20px; -webkit-overflow-scrolling:touch; }
@@ -238,6 +239,7 @@
 <script type="module">
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { TransformControls } from 'three/addons/controls/TransformControls.js';
     import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 
@@ -253,6 +255,25 @@
         { id: 'pickaxe', name: 'Алмазная кирка', price: 500 },
         { id: 'trail', name: 'Искрящийся след', price: 150 }
     ];
+
+    // ========== МОДЕЛЬ ПЕРСОНАЖА (ВАША ССЫЛКА) ==========
+    const PLAYER_MODEL_URL = 'https://raw.githubusercontent.com/mat8trooe888-art/Matblox/refs/heads/main/%D0%9D%D0%BE%D0%B2%D1%8B%D0%B9%20%D0%BF%D1%80%D0%BE%D0%B5%D0%BA%D1%82%201.gltf';
+    let globalPlayerModel = null;
+
+    async function loadPlayerModel() {
+        if (globalPlayerModel) return globalPlayerModel;
+        try {
+            const model = await loadCustomModel(PLAYER_MODEL_URL);
+            model.scale.set(0.5, 0.5, 0.5);
+            model.traverse(child => { if (child.isMesh) { child.castShadow = true; child.receiveShadow = true; } });
+            globalPlayerModel = model;
+            console.log('Модель персонажа загружена');
+            return model;
+        } catch (err) {
+            console.error('Ошибка загрузки модели персонажа:', err);
+            return null;
+        }
+    }
 
     function saveUsers() { localStorage.setItem('blockverse_users', JSON.stringify(users)); }
     function saveGames() { localStorage.setItem('blockverse_games', JSON.stringify(customGames)); }
@@ -272,7 +293,7 @@
         return user;
     }
 
-    function updateUIafterAuth() {
+    async function updateUIafterAuth() {
         if (!currentUser) return;
         document.getElementById('usernameDisplay').innerText = currentUser.username + (currentUser.isGuest ? ' (гость)' : '');
         document.getElementById('userCoins').innerText = currentUser.coins;
@@ -282,7 +303,8 @@
         renderChat();
         renderReports();
         startChatPolling();
-        connectToWebSocket();  // подключаемся к WebSocket-серверу
+        await loadPlayerModel(); // загружаем модель один раз
+        connectToWebSocket();
     }
 
     function addCoins(amount) { if (!currentUser) return; currentUser.coins += amount; if (!currentUser.isGuest) saveUsers(); document.getElementById('userCoins').innerText = currentUser.coins; }
@@ -491,6 +513,58 @@
         return null;
     }
 
+    // ========== УЛУЧШЕННАЯ КОЛЛИЗИЯ ==========
+    function checkCollisionAndAdjust(pos, playerSize, blocks) {
+        let newPos = pos.clone();
+        const halfSize = { x: playerSize.x, y: playerSize.y, z: playerSize.z };
+
+        for (let block of blocks) {
+            const bPos = block.position;
+            const bScale = block.scale;
+            const bHalfSize = { x: 0.45 * bScale.x, y: 0.45 * bScale.y, z: 0.45 * bScale.z };
+            if (Math.abs(newPos.x - bPos.x) < halfSize.x + bHalfSize.x &&
+                Math.abs(newPos.y - bPos.y) < halfSize.y + bHalfSize.y &&
+                Math.abs(newPos.z - bPos.z) < halfSize.z + bHalfSize.z) {
+                const dx = newPos.x - bPos.x;
+                if (dx > 0) newPos.x = bPos.x + halfSize.x + bHalfSize.x;
+                else newPos.x = bPos.x - halfSize.x - bHalfSize.x;
+            }
+        }
+        for (let block of blocks) {
+            const bPos = block.position;
+            const bScale = block.scale;
+            const bHalfSize = { x: 0.45 * bScale.x, y: 0.45 * bScale.y, z: 0.45 * bScale.z };
+            if (Math.abs(newPos.x - bPos.x) < halfSize.x + bHalfSize.x &&
+                Math.abs(newPos.y - bPos.y) < halfSize.y + bHalfSize.y &&
+                Math.abs(newPos.z - bPos.z) < halfSize.z + bHalfSize.z) {
+                const dz = newPos.z - bPos.z;
+                if (dz > 0) newPos.z = bPos.z + halfSize.z + bHalfSize.z;
+                else newPos.z = bPos.z - halfSize.z - bHalfSize.z;
+            }
+        }
+        let onGround = false;
+        for (let block of blocks) {
+            const bPos = block.position;
+            const bScale = block.scale;
+            const bHalfSize = { x: 0.45 * bScale.x, y: 0.45 * bScale.y, z: 0.45 * bScale.z };
+            if (Math.abs(newPos.x - bPos.x) < halfSize.x + bHalfSize.x &&
+                Math.abs(newPos.z - bPos.z) < halfSize.z + bHalfSize.z &&
+                Math.abs(newPos.y - halfSize.y - (bPos.y + bHalfSize.y)) < 0.3) {
+                onGround = true;
+                newPos.y = bPos.y + bHalfSize.y + halfSize.y;
+            }
+            if (Math.abs(newPos.x - bPos.x) < halfSize.x + bHalfSize.x &&
+                Math.abs(newPos.z - bPos.z) < halfSize.z + bHalfSize.z &&
+                Math.abs(newPos.y - bPos.y) < halfSize.y + bHalfSize.y) {
+                const dy = newPos.y - bPos.y;
+                if (dy > 0) newPos.y = bPos.y + bHalfSize.y + halfSize.y;
+                else newPos.y = bPos.y - bHalfSize.y - halfSize.y;
+            }
+        }
+        return { pos: newPos, onGround };
+    }
+
+    // ========== ИГРОВАЯ СЕССИЯ ==========
     async function startGameSession(gameData, gameName) {
         document.getElementById('mainMenuScreen').classList.add('hidden');
         document.getElementById('customGameScreen').classList.remove('hidden');
@@ -541,15 +615,10 @@
             spawnPos = { x: spawnBlock.position.x, y: spawnBlock.position.y + bHalfSize.y + 0.8, z: spawnBlock.position.z };
         }
 
-        let globalPlayerModel = null;
-        if (currentUser && currentUser.customModel) {
-            try {
-                globalPlayerModel = await loadCustomModel(currentUser.customModel);
-                globalPlayerModel.scale.set(0.5,0.5,0.5);
-            } catch(e) { console.warn(e); }
-        }
+        // Используем глобальную модель
+        let playerModel = null;
         if (globalPlayerModel) {
-            const playerModel = globalPlayerModel.clone();
+            playerModel = globalPlayerModel.clone();
             playerModel.position.set(spawnPos.x, spawnPos.y, spawnPos.z);
             gameScene.add(playerModel);
             gamePlayer = playerModel;
@@ -560,6 +629,20 @@
             gamePlayer = defaultChar;
         }
 
+        // ========== ПОДГОТОВКА СКРИПТОВ БЛОКОВ ==========
+        const scriptedBlocks = [];
+        for (let block of collisionBlocks) {
+            if (block.userData.script && block.userData.script.trim() !== '') {
+                try {
+                    const scriptFunc = new Function('block', 'delta', block.userData.script);
+                    scriptedBlocks.push({ block, func: scriptFunc });
+                } catch(e) {
+                    console.warn('Ошибка в скрипте блока:', e);
+                }
+            }
+        }
+
+        // Управление
         const handleKey = (e, val) => {
             if(!gameActive) return;
             if(e.key==='w') keyState.w=val;
@@ -644,60 +727,23 @@
         const JUMP_FORCE = 7;
         let isOnGround = false;
 
-        function checkCollisionAndAdjust(pos, playerSize = { x: 0.4, y: 0.8, z: 0.4 }) {
-            let newPos = pos.clone();
-            for (let block of collisionBlocks) {
-                const bPos = block.position;
-                const bScale = block.scale;
-                const bHalfSize = { x: 0.45 * bScale.x, y: 0.45 * bScale.y, z: 0.45 * bScale.z };
-                if (Math.abs(newPos.x - bPos.x) < playerSize.x + bHalfSize.x &&
-                    Math.abs(newPos.y - bPos.y) < playerSize.y + bHalfSize.y &&
-                    Math.abs(newPos.z - bPos.z) < playerSize.z + bHalfSize.z) {
-                    const dx = newPos.x - bPos.x;
-                    if (dx > 0) newPos.x = bPos.x + playerSize.x + bHalfSize.x;
-                    else newPos.x = bPos.x - playerSize.x - bHalfSize.x;
-                }
-            }
-            for (let block of collisionBlocks) {
-                const bPos = block.position;
-                const bScale = block.scale;
-                const bHalfSize = { x: 0.45 * bScale.x, y: 0.45 * bScale.y, z: 0.45 * bScale.z };
-                if (Math.abs(newPos.x - bPos.x) < playerSize.x + bHalfSize.x &&
-                    Math.abs(newPos.y - bPos.y) < playerSize.y + bHalfSize.y &&
-                    Math.abs(newPos.z - bPos.z) < playerSize.z + bHalfSize.z) {
-                    const dz = newPos.z - bPos.z;
-                    if (dz > 0) newPos.z = bPos.z + playerSize.z + bHalfSize.z;
-                    else newPos.z = bPos.z - playerSize.z - bHalfSize.z;
-                }
-            }
-            let onGroundFlag = false;
-            for (let block of collisionBlocks) {
-                const bPos = block.position;
-                const bScale = block.scale;
-                const bHalfSize = { x: 0.45 * bScale.x, y: 0.45 * bScale.y, z: 0.45 * bScale.z };
-                if (Math.abs(newPos.x - bPos.x) < playerSize.x + bHalfSize.x &&
-                    Math.abs(newPos.z - bPos.z) < playerSize.z + bHalfSize.z &&
-                    Math.abs(newPos.y - playerSize.y - (bPos.y + bHalfSize.y)) < 0.3) {
-                    onGroundFlag = true;
-                    newPos.y = bPos.y + bHalfSize.y + playerSize.y;
-                }
-                if (Math.abs(newPos.x - bPos.x) < playerSize.x + bHalfSize.x &&
-                    Math.abs(newPos.z - bPos.z) < playerSize.z + bHalfSize.z &&
-                    Math.abs(newPos.y - bPos.y) < playerSize.y + bHalfSize.y) {
-                    const dy = newPos.y - bPos.y;
-                    if (dy > 0) newPos.y = bPos.y + bHalfSize.y + playerSize.y;
-                    else newPos.y = bPos.y - bHalfSize.y - playerSize.y;
-                }
-            }
-            return { pos: newPos, onGround: onGroundFlag };
-        }
-
         let lastTime = performance.now()/1000;
+        const playerSize = { x: 0.4, y: 0.8, z: 0.4 };
+
         function update() {
             if(!gameActive) return;
             const now = performance.now()/1000;
             const delta = Math.min(0.033, now - lastTime);
             lastTime = now;
+
+            // Выполнение скриптов блоков
+            for (let sb of scriptedBlocks) {
+                try {
+                    sb.func(sb.block, delta);
+                } catch(e) {
+                    console.warn('Ошибка выполнения скрипта:', e);
+                }
+            }
 
             let moveX = 0, moveZ = 0;
             if (joystickActive && (joystickVector.x !== 0 || joystickVector.z !== 0)) {
@@ -716,7 +762,7 @@
             newPos.z += moveZ * speed;
             playerVelocityY -= GRAVITY * delta;
             newPos.y += playerVelocityY * delta;
-            const collisionResult = checkCollisionAndAdjust(newPos);
+            const collisionResult = checkCollisionAndAdjust(newPos, playerSize, collisionBlocks);
             newPos = collisionResult.pos;
             isOnGround = collisionResult.onGround;
             if (isOnGround && keyState.space) {
@@ -778,23 +824,13 @@
     }
 
     function createRemotePlayer() {
-        const group = new THREE.Group();
-        const body = new THREE.Mesh(new THREE.BoxGeometry(0.6,0.8,0.4), new THREE.MeshStandardMaterial({ color:0xffaa44 }));
-        body.position.y=0; group.add(body);
-        const head = new THREE.Mesh(new THREE.SphereGeometry(0.4,32,32), new THREE.MeshStandardMaterial({ color:0xffccaa }));
-        head.position.y=0.6; group.add(head);
-        const leftEye = new THREE.Mesh(new THREE.SphereGeometry(0.12,16,16), new THREE.MeshStandardMaterial({ color:0xffffff }));
-        leftEye.position.set(-0.15,0.75,0.4);
-        const rightEye = new THREE.Mesh(new THREE.SphereGeometry(0.12,16,16), new THREE.MeshStandardMaterial({ color:0xffffff }));
-        rightEye.position.set(0.15,0.75,0.4);
-        group.add(leftEye,rightEye);
-        const leftPupil = new THREE.Mesh(new THREE.SphereGeometry(0.07,16,16), new THREE.MeshStandardMaterial({ color:0x000000 }));
-        leftPupil.position.set(-0.15,0.73,0.52);
-        const rightPupil = new THREE.Mesh(new THREE.SphereGeometry(0.07,16,16), new THREE.MeshStandardMaterial({ color:0x000000 }));
-        rightPupil.position.set(0.15,0.73,0.52);
-        group.add(leftPupil,rightPupil);
-        group.castShadow = true;
-        return group;
+        if (globalPlayerModel) {
+            const clone = globalPlayerModel.clone();
+            clone.traverse(child => { if (child.isMesh) { child.castShadow = true; child.receiveShadow = true; } });
+            return clone;
+        } else {
+            return createDefaultCharacter(0xffaa44);
+        }
     }
 
     function createMesh(shape, size = { x: 0.9, y: 0.9, z: 0.9 }, color = 0x8B5A2B, opacity = 1) {
@@ -855,9 +891,7 @@
         document.querySelectorAll('.host-btn-small').forEach(btn => btn.addEventListener('click', async () => {
             const id = parseInt(btn.dataset.id);
             const game = customGames.find(g => g.id === id);
-            if (game) {
-                createGameOnServer(game.name, game.data);
-            }
+            if (game) createGameOnServer(game.name, game.data);
         }));
         document.querySelectorAll('.edit-btn-small').forEach(btn => btn.addEventListener('click', async () => {
             const id = parseInt(btn.dataset.id);
@@ -924,13 +958,6 @@
             spawnPos = { x: spawnBlock.position.x, y: spawnBlock.position.y + bHalfSize.y + 0.8, z: spawnBlock.position.z };
         }
 
-        let globalPlayerModel = null;
-        if (currentUser && currentUser.customModel) {
-            try {
-                globalPlayerModel = await loadCustomModel(currentUser.customModel);
-                globalPlayerModel.scale.set(0.5,0.5,0.5);
-            } catch(e) { console.warn(e); }
-        }
         let player;
         if (globalPlayerModel) {
             player = globalPlayerModel.clone();
@@ -940,6 +967,19 @@
             player = createDefaultCharacter();
             player.position.set(spawnPos.x, spawnPos.y, spawnPos.z);
             scene.add(player);
+        }
+
+        // ========== ПОДГОТОВКА СКРИПТОВ БЛОКОВ (локальная игра) ==========
+        const scriptedBlocks = [];
+        for (let block of blocks) {
+            if (block.userData.script && block.userData.script.trim() !== '') {
+                try {
+                    const scriptFunc = new Function('block', 'delta', block.userData.script);
+                    scriptedBlocks.push({ block, func: scriptFunc });
+                } catch(e) {
+                    console.warn('Ошибка в скрипте блока:', e);
+                }
+            }
         }
 
         let localKeyState = { w: false, s: false, a: false, d: false, space: false };
@@ -1028,54 +1068,7 @@
         const GRAVITY = 15;
         const JUMP_FORCE = 7;
         let isOnGround = false;
-
-        function checkCollisionAndAdjust(pos, playerSize = { x: 0.4, y: 0.8, z: 0.4 }) {
-            let newPos = pos.clone();
-            for (let block of blocks) {
-                const bPos = block.position;
-                const bScale = block.scale;
-                const bHalfSize = { x: 0.45 * bScale.x, y: 0.45 * bScale.y, z: 0.45 * bScale.z };
-                if (Math.abs(newPos.x - bPos.x) < playerSize.x + bHalfSize.x &&
-                    Math.abs(newPos.y - bPos.y) < playerSize.y + bHalfSize.y &&
-                    Math.abs(newPos.z - bPos.z) < playerSize.z + bHalfSize.z) {
-                    const dx = newPos.x - bPos.x;
-                    if (dx > 0) newPos.x = bPos.x + playerSize.x + bHalfSize.x;
-                    else newPos.x = bPos.x - playerSize.x - bHalfSize.x;
-                }
-            }
-            for (let block of blocks) {
-                const bPos = block.position;
-                const bScale = block.scale;
-                const bHalfSize = { x: 0.45 * bScale.x, y: 0.45 * bScale.y, z: 0.45 * bScale.z };
-                if (Math.abs(newPos.x - bPos.x) < playerSize.x + bHalfSize.x &&
-                    Math.abs(newPos.y - bPos.y) < playerSize.y + bHalfSize.y &&
-                    Math.abs(newPos.z - bPos.z) < playerSize.z + bHalfSize.z) {
-                    const dz = newPos.z - bPos.z;
-                    if (dz > 0) newPos.z = bPos.z + playerSize.z + bHalfSize.z;
-                    else newPos.z = bPos.z - playerSize.z - bHalfSize.z;
-                }
-            }
-            let onGroundFlag = false;
-            for (let block of blocks) {
-                const bPos = block.position;
-                const bScale = block.scale;
-                const bHalfSize = { x: 0.45 * bScale.x, y: 0.45 * bScale.y, z: 0.45 * bScale.z };
-                if (Math.abs(newPos.x - bPos.x) < playerSize.x + bHalfSize.x &&
-                    Math.abs(newPos.z - bPos.z) < playerSize.z + bHalfSize.z &&
-                    Math.abs(newPos.y - playerSize.y - (bPos.y + bHalfSize.y)) < 0.3) {
-                    onGroundFlag = true;
-                    newPos.y = bPos.y + bHalfSize.y + playerSize.y;
-                }
-                if (Math.abs(newPos.x - bPos.x) < playerSize.x + bHalfSize.x &&
-                    Math.abs(newPos.z - bPos.z) < playerSize.z + bHalfSize.z &&
-                    Math.abs(newPos.y - bPos.y) < playerSize.y + bHalfSize.y) {
-                    const dy = newPos.y - bPos.y;
-                    if (dy > 0) newPos.y = bPos.y + bHalfSize.y + playerSize.y;
-                    else newPos.y = bPos.y - bHalfSize.y - playerSize.y;
-                }
-            }
-            return { pos: newPos, onGround: onGroundFlag };
-        }
+        const playerSize = { x: 0.4, y: 0.8, z: 0.4 };
 
         let lastTime = performance.now()/1000;
         let localGameActive = true;
@@ -1084,6 +1077,15 @@
             const now = performance.now()/1000;
             const delta = Math.min(0.033, now - lastTime);
             lastTime = now;
+
+            // Выполнение скриптов блоков
+            for (let sb of scriptedBlocks) {
+                try {
+                    sb.func(sb.block, delta);
+                } catch(e) {
+                    console.warn('Ошибка выполнения скрипта:', e);
+                }
+            }
 
             let moveX = 0, moveZ = 0;
             if (localJoystickActive && (localJoystickVector.x !== 0 || localJoystickVector.z !== 0)) {
@@ -1102,7 +1104,7 @@
             newPos.z += moveZ * speed;
             playerVelocityY -= GRAVITY * delta;
             newPos.y += playerVelocityY * delta;
-            const collisionResult = checkCollisionAndAdjust(newPos);
+            const collisionResult = checkCollisionAndAdjust(newPos, playerSize, blocks);
             newPos = collisionResult.pos;
             isOnGround = collisionResult.onGround;
             if (isOnGround && localKeyState.space) {
@@ -1186,7 +1188,6 @@
 
     // ========== КОНСТРУКТОР (динамическая загрузка) ==========
     let editorLoaded = false;
-
     async function openEditor(gameToEdit = null) {
         if (!editorLoaded) {
             try {

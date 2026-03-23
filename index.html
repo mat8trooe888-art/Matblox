@@ -6,7 +6,7 @@
     <title>BlockVerse — мультиплеер + конструктор</title>
     <style>
         * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-tap-highlight-color:transparent; }
-        body { font-family:'Segoe UI', 'Poppins', system-ui, sans-serif; background:linear-gradient(135deg,#0a0f1e,#0e1a2a); color:white; overflow:hidden; height:100vh; position:fixed; width:100%; }
+        body { font-family:'Segoe UI', 'Poppins', system-ui, sans-serif; background:linear-gradient(135deg,#0a0f1e,#0e1a2a); color:white; overflow:hidden; height:100vh; position:fixed; width:100%; touch-action:manipulation; }
         .screen { position:absolute; top:0; left:0; width:100%; height:100%; transition:opacity 0.3s ease; overflow-y:auto; padding:20px; -webkit-overflow-scrolling:touch; }
         .hidden { display:none; }
         .auth-container { max-width:400px; margin:10vh auto; background:rgba(20,25,40,0.9); backdrop-filter:blur(12px); border-radius:28px; padding:32px; box-shadow:0 20px 35px rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); }
@@ -84,6 +84,7 @@
         .create-game-form { display:flex; gap:12px; align-items:center; background:rgba(0,0,0,0.5); padding:8px 16px; border-radius:40px; }
         .create-game-form input { background:#1a1f2e; border:1px solid #ffaa44; border-radius:40px; padding:8px 16px; color:white; }
         @media (max-width:800px) { .tools-panel { width:260px; left:10px; top:10px; bottom:10px; padding:10px; gap:10px; } .tool-btn { padding:8px 10px; font-size:11px; min-height:36px; } .block-option { width:40px; height:40px; } .status-bar { font-size:10px; bottom:8px; right:8px; } .publish-btn { padding:6px 12px; font-size:12px; top:10px; right:10px; } .mobile-joystick { width:100px; height:100px; bottom:20px; left:20px; } .joystick-thumb { width:40px; height:40px; top:30px; left:30px; } .jump-button { width:60px; height:60px; bottom:20px; right:20px; font-size:20px; } .camera-zoom { right:100px; bottom:20px; } .light-controls { top:60px; right:10px; width:140px; } }
+        .exit-game { z-index:100; cursor:pointer; }
     </style>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 </head>
@@ -327,6 +328,7 @@
                 container.appendChild(div);
             });
             document.querySelectorAll('.buy-btn').forEach(btn => btn.addEventListener('click', () => { const price = parseInt(btn.dataset.price); if (spendCoins(price)) { alert(`Вы купили ${btn.dataset.id}`); renderShop(); } else alert("Недостаточно монет!"); }));
+            attachMobileEvents();
         }
 
         function renderFriendsList() {
@@ -340,6 +342,7 @@
                 container.appendChild(div);
             });
             document.querySelectorAll('.removeFriendBtn').forEach(btn => btn.addEventListener('click', () => { const friend = btn.dataset.friend; currentUser.friends = currentUser.friends.filter(f => f !== friend); saveUsers(); renderFriendsList(); }));
+            attachMobileEvents();
         }
         function addFriend() {
             const friendName = document.getElementById('friendSearch').value.trim();
@@ -455,6 +458,11 @@
             const container = document.getElementById('gamesList');
             if (!container) return;
             container.innerHTML = '';
+            if (!games || games.length === 0) {
+                container.innerHTML = '<p style="text-align:center; margin:40px;">Нет активных серверов. Создайте новый!</p>';
+                attachMobileEvents();
+                return;
+            }
             games.forEach(game => {
                 const card = document.createElement('div');
                 card.className = 'game-card';
@@ -474,6 +482,7 @@
                     joinGame(gameId);
                 });
             });
+            attachMobileEvents();
         }
 
         // ========== ИГРОВАЯ СЕССИЯ (мультиплеер) ==========
@@ -717,6 +726,7 @@
                 document.getElementById('mainMenuScreen').classList.remove('hidden');
                 requestGamesList();
             };
+            attachMobileEvents(); // для мобильной кнопки выхода
         }
 
         // ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
@@ -820,14 +830,11 @@
             fillLight.position.set(2, 3, 4);
             editorScene.add(fillLight);
 
-            // Сетка и оси для удобства
+            // Сетка и оси
             const gridHelper = new THREE.GridHelper(30, 20, 0x88aaff, 0x335588);
             editorScene.add(gridHelper);
             const axesHelper = new THREE.AxesHelper(5);
             editorScene.add(axesHelper);
-
-            // Контроллеры орбиты (для удобства, можно добавить)
-            // Если хотите, добавьте OrbitControls, но для простоты оставим без
 
             // Обработчики инструментов
             document.getElementById('modeMove').onclick = () => setTransformMode('move');
@@ -837,7 +844,7 @@
             document.getElementById('shapeSphere').onclick = () => setCurrentShape('sphere');
             document.getElementById('shapeCylinder').onclick = () => setCurrentShape('cylinder');
             document.getElementById('shapeCone').onclick = () => setCurrentShape('cone');
-            document.getElementById('shapeWedge').onclick = () => setCurrentShape('wedge'); // wedge пока что как куб
+            document.getElementById('shapeWedge').onclick = () => setCurrentShape('wedge');
             document.getElementById('duplicateBtn').onclick = duplicateSelected;
             document.getElementById('addCubeBtn').onclick = addDefaultBlock;
             document.getElementById('applyPropsBtn').onclick = applyPropertiesToSelected;
@@ -890,7 +897,6 @@
                     document.querySelectorAll('.block-option').forEach(o => o.classList.remove('selected'));
                     opt.classList.add('selected');
                     currentBlockType = opt.dataset.type;
-                    // Можно также менять цвет по умолчанию
                     if (currentBlockType === 'wood') currentColor = '#8B5A2B';
                     else if (currentBlockType === 'stone') currentColor = '#808080';
                     else if (currentBlockType === 'concrete') currentColor = '#B0B0B0';
@@ -898,7 +904,6 @@
                     document.getElementById('blockColor').value = currentColor;
                 });
             });
-            // Выбираем первый блок
             document.querySelector('.block-option').classList.add('selected');
 
             // Загружаем существующую игру, если редактируем
@@ -906,7 +911,6 @@
                 loadGameForEditing(gameBeingEdited);
                 gameBeingEdited = null;
             } else {
-                // Добавляем тестовый куб
                 addDefaultBlock();
             }
 
@@ -926,6 +930,7 @@
                 editorCamera.updateProjectionMatrix();
                 editorRenderer.setSize(container.clientWidth, container.clientHeight);
             });
+            attachMobileEvents();
         }
 
         function setTransformMode(mode) {
@@ -962,25 +967,6 @@
             editorScene.add(block);
             editorBlocks.push(block);
             selectBlock(block);
-        }
-
-        function createMesh(shape, size, color, opacity) {
-            let geometry;
-            const w = 0.9, h = 0.9, d = 0.9;
-            switch(shape) {
-                case 'sphere': geometry = new THREE.SphereGeometry(0.45, 32, 32); break;
-                case 'cylinder': geometry = new THREE.CylinderGeometry(0.45, 0.45, 0.9, 32); break;
-                case 'cone': geometry = new THREE.ConeGeometry(0.45, 0.9, 32); break;
-                default: geometry = new THREE.BoxGeometry(0.9, 0.9, 0.9);
-            }
-            const material = new THREE.MeshStandardMaterial({ color });
-            material.transparent = opacity < 1;
-            material.opacity = opacity;
-            const mesh = new THREE.Mesh(geometry, material);
-            mesh.scale.set(size.x, size.y, size.z);
-            mesh.castShadow = true;
-            mesh.receiveShadow = true;
-            return mesh;
         }
 
         function selectBlock(block) {
@@ -1100,7 +1086,6 @@
             const height = parseFloat(document.getElementById('lightHeight').value);
             const angleX = parseFloat(document.getElementById('lightAngleX').value);
             const angleY = parseFloat(document.getElementById('lightAngleY').value);
-            // Находим directionalLight в сцене (первый источник)
             let dirLight = editorScene.children.find(c => c instanceof THREE.DirectionalLight);
             if (!dirLight) {
                 dirLight = new THREE.DirectionalLight(color, intensity);
@@ -1108,7 +1093,6 @@
             }
             dirLight.intensity = intensity;
             dirLight.color.set(color);
-            // Пересчитываем позицию по углам
             const radX = angleX * Math.PI/180;
             const radY = angleY * Math.PI/180;
             const x = Math.cos(radY) * Math.cos(radX);
@@ -1169,7 +1153,7 @@
             }));
             const gameData = { blocks: blocksData };
             createGameOnServer(gameName, gameData);
-            // Также сохраняем локально
+            // также локально
             const gameId = Date.now();
             const newGame = {
                 id: gameId,
@@ -1227,6 +1211,7 @@
             const myGames = customGames.filter(g => g.author === currentUser.username);
             if (myGames.length === 0) {
                 container.innerHTML = '<p>У вас пока нет созданных игр. Перейдите в конструктор, чтобы создать свою первую игру!</p>';
+                attachMobileEvents();
                 return;
             }
             myGames.forEach(game => {
@@ -1243,9 +1228,10 @@
                 `;
                 container.appendChild(card);
             });
-            document.querySelectorAll('.play-btn-small').forEach(btn => btn.addEventListener('click', () => { const id = parseInt(btn.dataset.id); const game = customGames.find(g => g.id === id); if (game) joinGame(game.id); })); // в мультиплеер
+            document.querySelectorAll('.play-btn-small').forEach(btn => btn.addEventListener('click', () => { const id = parseInt(btn.dataset.id); const game = customGames.find(g => g.id === id); if (game) joinGame(game.id); }));
             document.querySelectorAll('.edit-btn-small').forEach(btn => btn.addEventListener('click', () => { const id = parseInt(btn.dataset.id); const game = customGames.find(g => g.id === id); if (game) openEditor(game); }));
             document.querySelectorAll('.delete-btn-small').forEach(btn => btn.addEventListener('click', () => { const id = parseInt(btn.dataset.id); if (confirm('Удалить игру?')) { customGames = customGames.filter(g => g.id !== id); saveGames(); renderMyProjects(); renderGamesList(); } }));
+            attachMobileEvents();
         }
 
         // ========== РЕПОРТЫ ==========
@@ -1291,13 +1277,13 @@
                 alert('Спасибо! Сообщение отправлено разработчикам.');
                 close();
             };
+            attachMobileEvents();
         }
 
         // ========== НАСТРОЙКИ ==========
         function applySettings() {
             mouseSensitivity = parseFloat(document.getElementById('mouseSensitivity').value);
             moveSpeed = parseFloat(document.getElementById('moveSpeed').value);
-            const shadowQuality = document.getElementById('shadowQuality').value;
         }
         document.getElementById('mouseSensitivity').addEventListener('input', applySettings);
         document.getElementById('moveSpeed').addEventListener('input', applySettings);
@@ -1307,13 +1293,29 @@
         document.getElementById('createNewGameBtn').onclick = () => {
             const gameName = document.getElementById('newGameName').value.trim();
             if (!gameName) { alert('Введите название игры'); return; }
-            // Можно открыть конструктор для создания мира, а затем опубликовать.
-            // Для простоты создаём пустую игру.
             const gameData = { blocks: [] };
             createGameOnServer(gameName, gameData);
             document.getElementById('newGameName').value = '';
         };
         document.getElementById('refreshGamesBtn').onclick = () => requestGamesList();
+
+        // ========== МОБИЛЬНАЯ ОПТИМИЗАЦИЯ ==========
+        function attachMobileEvents() {
+            const selectors = '.btn, .nav-btn, .play-btn, .buy-btn, .tool-btn, .block-option, .close-dialog, .exit-game, .publish-btn, .play-btn-small, .edit-btn-small, .delete-btn-small, #createNewGameBtn, #refreshGamesBtn, #earnCoinsBtn, #addFriendBtn, #sendChatBtn, #reportBugBtn, #applyLightBtn, #applyPropsBtn, #applyScriptBtn, #duplicateBtn, #addCubeBtn, #resetScale, .coord-group button, #modeMove, #modeRotate, #modeScale, #shapeCube, #shapeSphere, #shapeCylinder, #shapeCone, #shapeWedge';
+            document.querySelectorAll(selectors).forEach(el => {
+                if (el.hasAttribute('data-touch-fixed')) return;
+                el.setAttribute('data-touch-fixed', 'true');
+                el.addEventListener('touchstart', (e) => {
+                    if (e.defaultPrevented) return;
+                    e.preventDefault();
+                    el.click();
+                }, { passive: false });
+            });
+        }
+
+        // Периодически проверяем для динамических элементов
+        setInterval(attachMobileEvents, 1500);
+        attachMobileEvents();
 
         // ========== АВТОРИЗАЦИЯ ==========
         function showLogin() { document.getElementById('loginForm').style.display='block'; document.getElementById('registerForm').style.display='none'; document.getElementById('authMessage').innerText=''; }

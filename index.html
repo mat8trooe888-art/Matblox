@@ -242,6 +242,8 @@
     import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 
+    console.log("Скрипт запущен"); // Отладка
+
     // ========== ГЛОБАЛЬНЫЕ ДАННЫЕ ==========
     let currentUser = null;
     let users = JSON.parse(localStorage.getItem('blockverse_users')) || [];
@@ -1165,7 +1167,7 @@
                 editorLoaded = true;
             } catch (err) {
                 console.error('Ошибка загрузки редактора:', err);
-                alert('Не удалось загрузить конструктор. Проверьте наличие файла editor.js');
+                alert('Не удалось загрузить конструктор. Убедитесь, что файл editor.js находится рядом с index.html');
                 return;
             }
         }
@@ -1271,6 +1273,8 @@
 
     if(users.length===0) { users.push({ username:"demo", password:"123", coins:800, inventory:[], isGuest:false, friends:[], friendRequests:[], customModel:null }); saveUsers(); }
     if (!savedUser) showLogin();
+
+    console.log("Скрипт завершил выполнение");
 </script>
 </body>
-    </html>
+                                                                                                                                                                                                                                                                  </html>

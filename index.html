@@ -239,7 +239,7 @@
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-    // ========== ГЛОБАЛЬНЫЕ ДАННЫЕ ==========
+    // ========== ГЛОБАЛЬНЫЕ ДАННЫЕ (социальные функции, магазин, друзья, чат) ==========
     let currentUser = null;
     let users = JSON.parse(localStorage.getItem('blockverse_users')) || [];
     let customGames = JSON.parse(localStorage.getItem('blockverse_games')) || [];
@@ -299,7 +299,6 @@
     function addCoins(amount) { if (!currentUser) return; currentUser.coins += amount; if (!currentUser.isGuest) saveUsers(); document.getElementById('userCoins').innerText = currentUser.coins; updateGlobalRefs(); }
     function spendCoins(amount) { if (!currentUser) return false; if (currentUser.coins >= amount) { currentUser.coins -= amount; if (!currentUser.isGuest) saveUsers(); document.getElementById('userCoins').innerText = currentUser.coins; updateGlobalRefs(); return true; } return false; }
 
-    // ========== МАГАЗИН ==========
     function renderShop() {
         const container = document.getElementById('shopItemsList');
         if (!container) return;
@@ -314,7 +313,6 @@
         attachMobileEvents();
     }
 
-    // ========== ДРУЗЬЯ ==========
     function renderFriendsList() {
         const container = document.getElementById('friendsList');
         if (!container) return;
@@ -341,7 +339,6 @@
         document.getElementById('friendSearch').value = '';
     }
 
-    // ========== ЧАТ ==========
     function renderChat() {
         const container = document.getElementById('chatMessages');
         if (!container) return;
@@ -361,7 +358,7 @@
     }
     function startChatPolling() { setInterval(() => { const stored = JSON.parse(localStorage.getItem('blockverse_chat')) || []; if (JSON.stringify(stored) !== JSON.stringify(chatMessages)) { chatMessages = stored; renderChat(); } }, 2000); }
 
-    // ========== МУЛЬТИПЛЕЕР ==========
+    // ========== МУЛЬТИПЛЕЕР (WebSocket) ==========
     let ws = null;
     let currentGameId = null;
     let myPlayerId = null;
@@ -374,9 +371,16 @@
     let jumpRequest = false;
     let moveSpeed = 4;
     let controls = null;
-    const PLAYER_RADIUS = 0.4;
-    const PLAYER_HEIGHT = 1.0;
-    const PLAYER_HALF_HEIGHT = 0.5;
+
+    // Размеры игрока (куб 0.6 x 0.8)
+    const PLAYER_WIDTH = 0.6;
+    const PLAYER_HEIGHT = 0.8;
+    const PLAYER_DEPTH = 0.4;
+    const PLAYER_HALF_WIDTH = PLAYER_WIDTH / 2;
+    const PLAYER_HALF_HEIGHT = PLAYER_HEIGHT / 2;
+    const PLAYER_HALF_DEPTH = PLAYER_DEPTH / 2;
+
+    // Размеры блока (0.9 x 0.9 x 0.9 после масштабирования)
     const BLOCK_HALF_SIZE = 0.45;
 
     function connectToWebSocket() {
@@ -435,21 +439,21 @@
         return null;
     }
 
-    // Улучшенная коллизия с последовательной коррекцией по осям и рейкастом для земли
-    function resolveCollision(pos, velY, blocks, deltaTime) {
+    // ========== НОВАЯ КОЛЛИЗИЯ ==========
+    function checkCollisionAndAdjust(pos, velY, blocks) {
         let newPos = pos.clone();
         let newVelY = velY;
         let onGround = false;
 
-        // Функция для получения AABB игрока в текущей позиции
+        // Получаем AABB игрока
         function getPlayerBox(p) {
             return {
-                minX: p.x - PLAYER_RADIUS,
-                maxX: p.x + PLAYER_RADIUS,
+                minX: p.x - PLAYER_HALF_WIDTH,
+                maxX: p.x + PLAYER_HALF_WIDTH,
                 minY: p.y - PLAYER_HALF_HEIGHT,
                 maxY: p.y + PLAYER_HALF_HEIGHT,
-                minZ: p.z - PLAYER_RADIUS,
-                maxZ: p.z + PLAYER_RADIUS
+                minZ: p.z - PLAYER_HALF_DEPTH,
+                maxZ: p.z + PLAYER_HALF_DEPTH
             };
         }
 
@@ -517,7 +521,7 @@
             }
         }
 
-        // Коррекция по Y с учётом гравитации и прыжка
+        // Коррекция по Y с определением земли
         playerBox = getPlayerBox(newPos);
         for (let block of blocks) {
             const bPos = block.position;
@@ -740,10 +744,22 @@
             playerVelocityY -= GRAVITY * delta;
             newPos.y += playerVelocityY * delta;
 
-            const collisionResult = resolveCollision(newPos, playerVelocityY, collisionBlocks, delta);
+            const collisionResult = checkCollisionAndAdjust(newPos, playerVelocityY, collisionBlocks);
             newPos = collisionResult.pos;
             playerVelocityY = collisionResult.velY;
             isOnGround = collisionResult.onGround;
+
+            // Защита от падения в бездну
+            if (newPos.y < -5) {
+                let respawnBlock = findSpawnBlock(collisionBlocks);
+                if (!respawnBlock) respawnBlock = platformMesh;
+                if (respawnBlock) {
+                    placeModelOnBlock(gamePlayer, respawnBlock);
+                    newPos.copy(gamePlayer.position);
+                    playerVelocityY = 0;
+                    isOnGround = true;
+                }
+            }
 
             if (isOnGround && jumpRequest) {
                 playerVelocityY = JUMP_FORCE;
@@ -755,7 +771,7 @@
 
             controls.target.copy(gamePlayer.position);
             controls.update();
-            pointLight.position.set(gamePlayer.position.x, gamePlayer.position.y + 2, gamePlayer.position.z);
+            pointLight.position.set(gamePlayer.position.x, gamePlayer.position.y + 1, gamePlayer.position.z);
         }
         function animate() { if(!gameActive) return; gameAnimationId = requestAnimationFrame(animate); update(); gameRenderer.render(gameScene, gameCamera); }
         gameActive = true;
@@ -785,468 +801,4 @@
         rightEye.position.set(0.15,0.75,0.4);
         group.add(leftEye,rightEye);
         const leftPupil = new THREE.Mesh(new THREE.SphereGeometry(0.07,16,16), new THREE.MeshStandardMaterial({ color:0x000000 }));
-        leftPupil.position.set(-0.15,0.73,0.52);
-        const rightPupil = new THREE.Mesh(new THREE.SphereGeometry(0.07,16,16), new THREE.MeshStandardMaterial({ color:0x000000 }));
-        rightPupil.position.set(0.15,0.73,0.52);
-        group.add(leftPupil,rightPupil);
-        const leftArm = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.6,0.3), new THREE.MeshStandardMaterial({ color }));
-        leftArm.position.set(-0.55,0.3,0);
-        const rightArm = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.6,0.3), new THREE.MeshStandardMaterial({ color }));
-        rightArm.position.set(0.55,0.3,0);
-        group.add(leftArm,rightArm);
-        const leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.6,0.3), new THREE.MeshStandardMaterial({ color:0x2c5f8a }));
-        leftLeg.position.set(-0.25,-0.5,0);
-        const rightLeg = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.6,0.3), new THREE.MeshStandardMaterial({ color:0x2c5f8a }));
-        rightLeg.position.set(0.25,-0.5,0);
-        group.add(leftLeg,rightLeg);
-        return group;
-    }
-
-    function createRemotePlayer() {
-        return createDefaultCharacter(0xffaa44);
-    }
-
-    function createMesh(shape, size = { x: 0.9, y: 0.9, z: 0.9 }, color = 0x8B5A2B, opacity = 1) {
-        let geometry;
-        switch(shape) {
-            case 'sphere': geometry = new THREE.SphereGeometry(0.45, 32, 32); break;
-            case 'cylinder': geometry = new THREE.CylinderGeometry(0.45, 0.45, 0.9, 32); break;
-            case 'cone': geometry = new THREE.ConeGeometry(0.45, 0.9, 32); break;
-            default: geometry = new THREE.BoxGeometry(0.9, 0.9, 0.9);
-        }
-        const material = new THREE.MeshStandardMaterial({ color });
-        material.transparent = opacity < 1;
-        material.opacity = opacity;
-        const mesh = new THREE.Mesh(geometry, material);
-        mesh.scale.set(size.x, size.y, size.z);
-        return mesh;
-    }
-
-    // ========== МОИ ПРОЕКТЫ ==========
-    function renderMyProjects() {
-        const container = document.getElementById('myProjectsList');
-        if (!container) return;
-        container.innerHTML = '';
-        const myGames = customGames.filter(g => g.author === currentUser.username);
-        if (myGames.length === 0) {
-            container.innerHTML = '<p>У вас пока нет созданных игр. Перейдите в конструктор, чтобы создать свою первую игру!</p>';
-            attachMobileEvents();
-            return;
-        }
-        myGames.forEach(game => {
-            const card = document.createElement('div');
-            card.className = 'project-card';
-            card.innerHTML = `
-                <div class="game-title">${game.name}</div>
-                <div class="game-desc" style="font-size:12px; color:#aaa;">${game.desc || 'Без описания'}</div>
-                <div style="margin-top:12px; display:flex; gap:8px;">
-                    <button class="play-btn-small" data-id="${game.id}" style="background:#ff5722; border:none; padding:4px 12px; border-radius:20px; cursor:pointer;">Одиночная игра</button>
-                    <button class="host-btn-small" data-id="${game.id}" style="background:#4a6e8a; border:none; padding:4px 12px; border-radius:20px; cursor:pointer;">🌐 Мультиплеер (создать сервер)</button>
-                    <button class="edit-btn-small" data-id="${game.id}" style="background:#ffaa44; border:none; padding:4px 12px; border-radius:20px; cursor:pointer;">Редактировать</button>
-                    <button class="delete-btn-small" data-id="${game.id}" style="background:#ff3333; border:none; padding:4px 12px; border-radius:20px; cursor:pointer;">Удалить</button>
-                </div>
-            `;
-            container.appendChild(card);
-        });
-        document.querySelectorAll('.play-btn-small').forEach(btn => btn.addEventListener('click', async () => {
-            const id = parseInt(btn.dataset.id);
-            const game = customGames.find(g => g.id === id);
-            if (game) startLocalGameSession(game.data, game.name);
-        }));
-        document.querySelectorAll('.host-btn-small').forEach(btn => btn.addEventListener('click', async () => {
-            const id = parseInt(btn.dataset.id);
-            const game = customGames.find(g => g.id === id);
-            if (game) createGameOnServer(game.name, game.data);
-        }));
-        document.querySelectorAll('.edit-btn-small').forEach(btn => btn.addEventListener('click', async () => {
-            const id = parseInt(btn.dataset.id);
-            const game = customGames.find(g => g.id === id);
-            if (game) openEditor(game);
-        }));
-        document.querySelectorAll('.delete-btn-small').forEach(btn => btn.addEventListener('click', () => {
-            const id = parseInt(btn.dataset.id);
-            if (confirm('Удалить игру?')) {
-                customGames = customGames.filter(g => g.id !== id);
-                saveGames();
-                renderMyProjects();
-            }
-        }));
-        attachMobileEvents();
-    }
-
-    async function startLocalGameSession(gameData, gameName) {
-        document.getElementById('mainMenuScreen').classList.add('hidden');
-        document.getElementById('customGameScreen').classList.remove('hidden');
-        const container = document.getElementById('customGameContainer');
-        container.innerHTML = '';
-
-        const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x87CEEB);
-        scene.fog = new THREE.Fog(0x87CEEB, 30, 60);
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.shadowMap.enabled = true;
-        container.appendChild(renderer.domElement);
-
-        const ambient = new THREE.AmbientLight(0x404060);
-        scene.add(ambient);
-        const dirLight = new THREE.DirectionalLight(0xfff5d1, 1);
-        dirLight.position.set(5,10,7);
-        dirLight.castShadow = true;
-        scene.add(dirLight);
-        const pointLight = new THREE.PointLight(0xffaa66, 1, 20);
-        pointLight.position.set(0, 3, 0);
-        pointLight.castShadow = true;
-        scene.add(pointLight);
-
-        const blocks = [];
-
-        const platformMesh = createMesh('cube', { x: 20/0.9, y: 1/0.9, z: 20/0.9 }, 0x6B8E23);
-        platformMesh.position.set(0, -0.5, 0);
-        scene.add(platformMesh);
-        blocks.push(platformMesh);
-
-        if (gameData && gameData.blocks) {
-            gameData.blocks.forEach(block => {
-                const mesh = createMesh(block.shape || 'cube', block.scale, block.color, block.opacity);
-                mesh.position.set(block.x, block.y, block.z);
-                mesh.rotation.set(block.rotation.x, block.rotation.y, block.rotation.z);
-                scene.add(mesh);
-                blocks.push(mesh);
-            });
-        }
-
-        let standBlock = findSpawnBlock(blocks);
-        if (!standBlock) {
-            for (let block of blocks) {
-                if (block === platformMesh) { standBlock = block; break; }
-            }
-        }
-        if (!standBlock) standBlock = platformMesh;
-
-        const player = createDefaultCharacter(0x3a86ff);
-        placeModelOnBlock(player, standBlock);
-        scene.add(player);
-
-        // Управление (копируем из мультиплеерной)
-        const keyState = { w: false, s: false, a: false, d: false };
-        let moveDirectionLocal = { x: 0, z: 0 };
-        let jumpRequestLocal = false;
-        const handleKey = (e, val) => {
-            switch(e.key) {
-                case 'w': keyState.w = val; break;
-                case 's': keyState.s = val; break;
-                case 'a': keyState.a = val; break;
-                case 'd': keyState.d = val; break;
-                case ' ': case 'Space': jumpRequestLocal = val; e.preventDefault(); break;
-            }
-        };
-        window.addEventListener('keydown', e=>handleKey(e,true));
-        window.addEventListener('keyup', e=>handleKey(e,false));
-
-        const joystickDiv = document.getElementById('joystick');
-        const jumpBtnDiv = document.getElementById('jumpBtn');
-        let joystickThumb = joystickDiv?.querySelector('.joystick-thumb');
-        if (joystickDiv) {
-            joystickDiv.style.display = 'block';
-            jumpBtnDiv.style.display = 'flex';
-            let joystickCenter = { x: 0, y: 0 };
-            let activeTouch = false;
-            const updateJoystick = (touch) => {
-                if (!activeTouch) return;
-                const dx = touch.clientX - joystickCenter.x;
-                const dy = touch.clientY - joystickCenter.y;
-                const maxDist = 40;
-                let dist = Math.hypot(dx, dy);
-                if (dist > maxDist) {
-                    const angle = Math.atan2(dy, dx);
-                    const nx = Math.cos(angle) * maxDist;
-                    const ny = Math.sin(angle) * maxDist;
-                    moveDirectionLocal.x = nx / maxDist;
-                    moveDirectionLocal.z = ny / maxDist;
-                    if (joystickThumb) joystickThumb.style.transform = `translate(${nx}px, ${ny}px)`;
-                } else {
-                    moveDirectionLocal.x = dx / maxDist;
-                    moveDirectionLocal.z = dy / maxDist;
-                    if (joystickThumb) joystickThumb.style.transform = `translate(${dx}px, ${dy}px)`;
-                }
-            };
-            joystickDiv.addEventListener('touchstart', (e) => {
-                e.preventDefault();
-                const rect = joystickDiv.getBoundingClientRect();
-                joystickCenter = { x: rect.left + rect.width/2, y: rect.top + rect.height/2 };
-                activeTouch = true;
-                updateJoystick(e.touches[0]);
-            });
-            joystickDiv.addEventListener('touchmove', (e) => {
-                e.preventDefault();
-                if (activeTouch) updateJoystick(e.touches[0]);
-            });
-            joystickDiv.addEventListener('touchend', () => {
-                activeTouch = false;
-                moveDirectionLocal = { x: 0, z: 0 };
-                if (joystickThumb) joystickThumb.style.transform = `translate(0px, 0px)`;
-            });
-            jumpBtnDiv.addEventListener('touchstart', (e) => { e.preventDefault(); jumpRequestLocal = true; });
-            jumpBtnDiv.addEventListener('touchend', () => { jumpRequestLocal = false; });
-            jumpBtnDiv.addEventListener('mousedown', () => { jumpRequestLocal = true; });
-            jumpBtnDiv.addEventListener('mouseup', () => { jumpRequestLocal = false; });
-        }
-
-        const controls = new OrbitControls(camera, renderer.domElement);
-        controls.enableDamping = true;
-        controls.dampingFactor = 0.05;
-        controls.rotateSpeed = 1.0;
-        controls.zoomSpeed = 1.2;
-        controls.enableZoom = true;
-        controls.enablePan = false;
-        controls.target.copy(player.position);
-
-        const zoomInBtn = document.getElementById('zoomIn');
-        const zoomOutBtn = document.getElementById('zoomOut');
-        if (zoomInBtn) zoomInBtn.onclick = () => { controls.object.zoom = Math.min(3, controls.object.zoom - 0.2); controls.update(); };
-        if (zoomOutBtn) zoomOutBtn.onclick = () => { controls.object.zoom = Math.max(0.5, controls.object.zoom + 0.2); controls.update(); };
-
-        const scoreDiv = document.querySelector('#customGameScreen .custom-game-ui:first-of-type');
-        if(scoreDiv) scoreDiv.innerText = 'Счёт: 0';
-
-        let playerVelocityY = 0;
-        const GRAVITY = 15;
-        const JUMP_FORCE = 7;
-        let isOnGround = false;
-        let lastTime = performance.now()/1000;
-        let localGameActive = true;
-
-        function updateLocal() {
-            if(!localGameActive) return;
-            const now = performance.now()/1000;
-            const delta = Math.min(0.033, now - lastTime);
-            lastTime = now;
-
-            let moveX = 0, moveZ = 0;
-            if (keyState.w) moveZ -= 1;
-            if (keyState.s) moveZ += 1;
-            if (keyState.a) moveX -= 1;
-            if (keyState.d) moveX += 1;
-            if (moveX !==0 || moveZ !==0) { const len = Math.hypot(moveX, moveZ); moveX/=len; moveZ/=len; }
-            if (moveDirectionLocal.x !== 0 || moveDirectionLocal.z !== 0) {
-                moveX = moveDirectionLocal.x;
-                moveZ = moveDirectionLocal.z;
-            }
-
-            if (moveX !== 0 || moveZ !== 0) {
-                const angle = Math.atan2(moveX, moveZ);
-                player.rotation.y = angle;
-            }
-
-            let speed = moveSpeed * delta;
-            let newPos = player.position.clone();
-            newPos.x += moveX * speed;
-            newPos.z += moveZ * speed;
-            playerVelocityY -= GRAVITY * delta;
-            newPos.y += playerVelocityY * delta;
-
-            const collisionResult = resolveCollision(newPos, playerVelocityY, blocks, delta);
-            newPos = collisionResult.pos;
-            playerVelocityY = collisionResult.velY;
-            isOnGround = collisionResult.onGround;
-
-            if (isOnGround && jumpRequestLocal) {
-                playerVelocityY = JUMP_FORCE;
-                jumpRequestLocal = false;
-            }
-
-            player.position.copy(newPos);
-
-            controls.target.copy(player.position);
-            controls.update();
-            pointLight.position.set(player.position.x, player.position.y + 2, player.position.z);
-            renderer.render(scene, camera);
-            requestAnimationFrame(updateLocal);
-        }
-        updateLocal();
-
-        const exitBtn = document.querySelector('#customGameScreen .exit-game');
-        exitBtn.onclick = () => {
-            localGameActive = false;
-            document.getElementById('customGameScreen').classList.add('hidden');
-            document.getElementById('mainMenuScreen').classList.remove('hidden');
-        };
-        attachMobileEvents();
-    }
-
-    function renderReports() {
-        const container = document.getElementById('reportsList');
-        if (!container) return;
-        container.innerHTML = '';
-        reports.slice().reverse().forEach(report => {
-            const div = document.createElement('div');
-            div.style.background = '#1e263a';
-            div.style.margin = '8px 0';
-            div.style.padding = '8px';
-            div.style.borderRadius = '12px';
-            div.innerHTML = `<b>${report.user}</b> (${report.time}): ${report.text}`;
-            container.appendChild(div);
-        });
-    }
-
-    function showReportDialog() {
-        const overlay = document.createElement('div');
-        overlay.className = 'overlay';
-        const dialog = document.createElement('div');
-        dialog.className = 'report-dialog';
-        dialog.innerHTML = `
-            <div style="display:flex; justify-content:space-between; margin-bottom:12px;">
-                <h3>Сообщить о проблеме</h3>
-                <button class="close-dialog" style="background:none; border:none; color:white; font-size:20px;">✖</button>
-            </div>
-            <textarea id="reportText" rows="4" style="width:100%; background:#1a1f2e; border:1px solid #ffaa44; border-radius:12px; padding:8px; color:white;"></textarea>
-            <button id="submitReportBtn" class="btn" style="margin-top:12px;">Отправить</button>
-        `;
-        document.body.appendChild(overlay);
-        document.body.appendChild(dialog);
-        const close = () => { overlay.remove(); dialog.remove(); };
-        dialog.querySelector('.close-dialog').onclick = close;
-        overlay.onclick = close;
-        dialog.querySelector('#submitReportBtn').onclick = () => {
-            const text = dialog.querySelector('#reportText').value.trim();
-            if (!text) return;
-            reports.push({ user: currentUser.username, text: text, time: new Date().toLocaleString() });
-            saveReports();
-            renderReports();
-            alert('Спасибо! Сообщение отправлено разработчикам.');
-            close();
-        };
-        attachMobileEvents();
-    }
-
-    function applySettings() { moveSpeed = parseFloat(document.getElementById('moveSpeed').value); }
-    document.getElementById('mouseSensitivity')?.addEventListener('input', applySettings);
-    document.getElementById('moveSpeed')?.addEventListener('input', applySettings);
-    document.getElementById('reportBugBtn')?.addEventListener('click', showReportDialog);
-    document.getElementById('connectToServerBtn')?.addEventListener('click', () => {
-        const serverId = document.getElementById('serverIdInput').value.trim();
-        if (!serverId) { alert('Введите ID сервера'); return; }
-        joinGame(serverId);
-    });
-
-    // ========== КОНСТРУКТОР ==========
-    let editorLoaded = false;
-    async function openEditor(gameToEdit = null) {
-        if (!editorLoaded) {
-            try {
-                const module = await import('./editor.js');
-                window.editorModule = module;
-                editorLoaded = true;
-            } catch (err) {
-                console.error('Ошибка загрузки редактора:', err);
-                alert('Не удалось загрузить конструктор. Убедитесь, что файл editor.js находится рядом с index.html');
-                return;
-            }
-        }
-        window.editorModule.openEditor(gameToEdit);
-    }
-
-    function attachMobileEvents() {
-        const selectors = '.btn, .nav-btn, .play-btn, .buy-btn, .tool-btn, .block-option, .close-dialog, .exit-game, .publish-btn, .exit-editor-btn, .play-btn-small, .edit-btn-small, .delete-btn-small, #createNewGameBtn, #refreshGamesBtn, #earnCoinsBtn, #addFriendBtn, #sendChatBtn, #reportBugBtn, #toggleToolsPanelBtn, #togglePropsPanelBtn, #toggleToolsBtn, #togglePropsBtn, #connectToServerBtn, .host-btn, .host-btn-small';
-        document.querySelectorAll(selectors).forEach(el => {
-            if (el.hasAttribute('data-touch-fixed')) return;
-            el.setAttribute('data-touch-fixed', 'true');
-            el.addEventListener('touchstart', (e) => { if (e.defaultPrevented) return; if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return; e.preventDefault(); el.click(); }, { passive: false });
-        });
-    }
-    setInterval(attachMobileEvents, 1500);
-    attachMobileEvents();
-
-    function showLogin() { document.getElementById('loginForm').style.display='block'; document.getElementById('registerForm').style.display='none'; document.getElementById('authMessage').innerText=''; }
-    function showRegister() { document.getElementById('loginForm').style.display='none'; document.getElementById('registerForm').style.display='block'; document.getElementById('authMessage').innerText=''; }
-    function registerUser() {
-        const u = document.getElementById('regUsername').value.trim(), p = document.getElementById('regPassword').value.trim();
-        if (!u||!p) { alert("Введите имя и пароль"); return; }
-        if (users.find(us=>us.username===u)) { alert("Пользователь уже существует"); return; }
-        users.push({ username:u, password:p, coins:500, inventory:[], isGuest:false, friends:[], friendRequests:[], customModel:null });
-        saveUsers();
-        alert("Аккаунт создан! Войдите.");
-        showLogin();
-    }
-    function loginUser() {
-        const u = document.getElementById('loginUsername').value.trim(), p = document.getElementById('loginPassword').value.trim();
-        const user = users.find(us=>us.username===u && us.password===p);
-        if (!user) { document.getElementById('authMessage').innerText = "Неверные данные"; return; }
-        currentUser = user;
-        initUserData(currentUser.username);
-        localStorage.setItem('blockverse_current_user', JSON.stringify({ username: currentUser.username, isGuest: currentUser.isGuest }));
-        document.getElementById('authScreen').classList.add('hidden');
-        document.getElementById('mainMenuScreen').classList.remove('hidden');
-        updateUIafterAuth();
-    }
-    function guestLogin() {
-        const guestName = "Guest_" + Math.floor(Math.random()*10000);
-        currentUser = { username:guestName, coins:300, inventory:[], isGuest:true, friends:[], friendRequests:[], customModel:null };
-        localStorage.setItem('blockverse_current_user', JSON.stringify({ username: guestName, isGuest: true }));
-        document.getElementById('authScreen').classList.add('hidden');
-        document.getElementById('mainMenuScreen').classList.remove('hidden');
-        updateUIafterAuth();
-        alert("Вы вошли как гость. Монеты и игры не сохранятся.");
-    }
-    function logout() {
-        if (gameActive) { gameActive = false; if (gameAnimationId) cancelAnimationFrame(gameAnimationId); }
-        if (ws) ws.close();
-        currentUser = null;
-        localStorage.removeItem('blockverse_current_user');
-        document.getElementById('mainMenuScreen').classList.add('hidden');
-        document.getElementById('editorScreen').classList.add('hidden');
-        document.getElementById('customGameScreen').classList.add('hidden');
-        document.getElementById('authScreen').classList.remove('hidden');
-        showLogin();
-        updateGlobalRefs();
-    }
-
-    const savedUser = localStorage.getItem('blockverse_current_user');
-    if (savedUser) {
-        const userData = JSON.parse(savedUser);
-        if (userData.isGuest) {
-            currentUser = { username: userData.username, coins:300, inventory:[], isGuest:true, friends:[], friendRequests:[], customModel:null };
-            document.getElementById('authScreen').classList.add('hidden');
-            document.getElementById('mainMenuScreen').classList.remove('hidden');
-            updateUIafterAuth();
-        } else {
-            const user = users.find(u => u.username === userData.username);
-            if (user) {
-                currentUser = user;
-                initUserData(currentUser.username);
-                document.getElementById('authScreen').classList.add('hidden');
-                document.getElementById('mainMenuScreen').classList.remove('hidden');
-                updateUIafterAuth();
-            } else {
-                showLogin();
-            }
-        }
-    } else {
-        showLogin();
-    }
-
-    document.getElementById('showLoginBtn').onclick = showLogin;
-    document.getElementById('showRegisterBtn').onclick = showRegister;
-    document.getElementById('doLoginBtn').onclick = loginUser;
-    document.getElementById('doRegisterBtn').onclick = registerUser;
-    document.getElementById('guestLoginBtn').onclick = guestLogin;
-    document.getElementById('guestRegisterBtn').onclick = guestLogin;
-    document.getElementById('logoutBtn').onclick = logout;
-    document.getElementById('showGamesBtn').onclick = () => { document.getElementById('gamesPanel').style.display='block'; document.getElementById('myProjectsPanel').style.display='none'; document.getElementById('shopPanel').style.display='none'; document.getElementById('socialPanel').style.display='none'; document.getElementById('settingsPanel').style.display='none'; requestGamesList(); };
-    document.getElementById('showMyProjectsBtn').onclick = () => { document.getElementById('gamesPanel').style.display='none'; document.getElementById('myProjectsPanel').style.display='block'; document.getElementById('shopPanel').style.display='none'; document.getElementById('socialPanel').style.display='none'; document.getElementById('settingsPanel').style.display='none'; renderMyProjects(); };
-    document.getElementById('showShopBtn').onclick = () => { document.getElementById('gamesPanel').style.display='none'; document.getElementById('myProjectsPanel').style.display='none'; document.getElementById('shopPanel').style.display='block'; document.getElementById('socialPanel').style.display='none'; document.getElementById('settingsPanel').style.display='none'; renderShop(); };
-    document.getElementById('showSocialBtn').onclick = () => { document.getElementById('gamesPanel').style.display='none'; document.getElementById('myProjectsPanel').style.display='none'; document.getElementById('shopPanel').style.display='none'; document.getElementById('socialPanel').style.display='block'; document.getElementById('settingsPanel').style.display='none'; renderFriendsList(); renderChat(); };
-    document.getElementById('showSettingsBtn').onclick = () => { document.getElementById('gamesPanel').style.display='none'; document.getElementById('myProjectsPanel').style.display='none'; document.getElementById('shopPanel').style.display='none'; document.getElementById('socialPanel').style.display='none'; document.getElementById('settingsPanel').style.display='block'; };
-    document.getElementById('createGameBtn').onclick = () => openEditor();
-    document.getElementById('earnCoinsBtn').onclick = () => addCoins(100);
-    document.getElementById('addFriendBtn').onclick = addFriend;
-    document.getElementById('sendChatBtn').onclick = sendChatMessage;
-    document.getElementById('chatInput').addEventListener('keypress', e=>{ if(e.key==='Enter') sendChatMessage(); });
-
-    if(users.length===0) { users.push({ username:"demo", password:"123", coins:800, inventory:[], isGuest:false, friends:[], friendRequests:[], customModel:null }); saveUsers(); }
-    if (!savedUser) showLogin();
-</script>
-</body>
-        </html>
+        leftPupil.position.set(-0.15

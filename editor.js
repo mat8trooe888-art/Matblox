@@ -52,10 +52,7 @@ function createStartPlatform() {
     platform.userData.color = '#6B8E23';
     editorScene.add(platform);
     editorBlocks.push(platform);
-    const spawn = createMeshEditor('cube', { x: 0.8, y: 0.4, z: 0.8 }, 0xff3333, 1, 'spawn');
-    spawn.position.set(0, 0.3, 0);
-    editorScene.add(spawn);
-    editorBlocks.push(spawn);
+    // Спавн-блок не добавляем
 }
 
 function addDefaultBlock() {
@@ -425,4 +422,4 @@ export function openEditor(gameToEdit = null) {
     document.getElementById('mainMenuScreen').classList.add('hidden');
     document.getElementById('editorScreen').classList.remove('hidden');
     initEditor();
-}
+            }

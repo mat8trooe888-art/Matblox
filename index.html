@@ -434,12 +434,13 @@
         attachMobileEvents();
     }
 
-    // ========== КОЛЛИЗИЯ (без спавн-блока) ==========
+    // ========== НОВАЯ КОЛЛИЗИЯ (без спавн-блока) ==========
     function checkCollisionAndAdjust(pos, velY, blocks) {
         let newPos = pos.clone();
         let newVelY = velY;
         let onGround = false;
 
+        // Функция для получения AABB игрока в текущей позиции
         function getPlayerBox(p) {
             return {
                 minX: p.x - PLAYER_HALF_WIDTH,
@@ -534,12 +535,14 @@
             if (playerBox.maxX > blockBox.minX && playerBox.minX < blockBox.maxX &&
                 playerBox.maxZ > blockBox.minZ && playerBox.minZ < blockBox.maxZ) {
                 if (newVelY <= 0 && playerBox.minY < blockBox.maxY && playerBox.minY > blockBox.minY - 0.1) {
+                    // Приземление
                     const newY = blockBox.maxY + PLAYER_HALF_HEIGHT;
                     newPos.y = newY;
                     newVelY = 0;
                     onGround = true;
                 }
                 else if (newVelY > 0 && playerBox.maxY > blockBox.minY && playerBox.maxY < blockBox.minY + 0.1) {
+                    // Удар головой
                     const newY = blockBox.minY - PLAYER_HALF_HEIGHT;
                     newPos.y = newY;
                     newVelY = 0;
@@ -549,13 +552,13 @@
         return { pos: newPos, velY: newVelY, onGround };
     }
 
-    // Размещение модели на блоке
-    function placeModelOnBlock(model, block) {
+    // Размещение модели на платформе
+    function placeModelOnPlatform(model, platform) {
         const bbox = new THREE.Box3().setFromObject(model);
         const modelMinY = bbox.min.y;
-        const blockTopY = block.position.y + (BLOCK_HALF_SIZE * block.scale.y);
-        const offsetY = blockTopY - modelMinY;
-        model.position.set(block.position.x, offsetY, block.position.z);
+        const platformTopY = platform.position.y + (BLOCK_HALF_SIZE * platform.scale.y);
+        const offsetY = platformTopY - modelMinY;
+        model.position.set(platform.position.x, offsetY, platform.position.z);
     }
 
     async function startGameSession(gameData, gameName) {
@@ -586,12 +589,13 @@
 
         collisionBlocks = [];
 
-        // Всегда добавляем платформу
+        // Базовая платформа (всегда)
         const platformMesh = createMesh('cube', { x: 20/0.9, y: 1/0.9, z: 20/0.9 }, 0x6B8E23);
         platformMesh.position.set(0, -0.5, 0);
         gameScene.add(platformMesh);
         collisionBlocks.push(platformMesh);
 
+        // Добавляем блоки из игры (если есть)
         if (gameData && gameData.blocks) {
             gameData.blocks.forEach(block => {
                 const mesh = createMesh(block.shape || 'cube', block.scale, block.color, block.opacity);
@@ -603,10 +607,9 @@
             });
         }
 
-        // Спавним на платформу
-        const standBlock = platformMesh;
+        // Создаём игрока и ставим на платформу
         const playerModel = createDefaultCharacter(0x3a86ff);
-        placeModelOnBlock(playerModel, standBlock);
+        placeModelOnPlatform(playerModel, platformMesh);
         gameScene.add(playerModel);
         gamePlayer = playerModel;
 
@@ -733,9 +736,9 @@
             playerVelocityY = collisionResult.velY;
             isOnGround = collisionResult.onGround;
 
+            // Защита от падения в бездну
             if (newPos.y < -5) {
-                // Возвращаем на платформу
-                placeModelOnBlock(gamePlayer, platformMesh);
+                placeModelOnPlatform(gamePlayer, platformMesh);
                 newPos.copy(gamePlayer.position);
                 playerVelocityY = 0;
                 isOnGround = true;
@@ -913,9 +916,8 @@
             });
         }
 
-        const standBlock = platformMesh;
         const player = createDefaultCharacter(0x3a86ff);
-        placeModelOnBlock(player, standBlock);
+        placeModelOnPlatform(player, platformMesh);
         scene.add(player);
 
         // Управление (копируем из мультиплеерной)
@@ -1042,7 +1044,7 @@
             isOnGround = collisionResult.onGround;
 
             if (newPos.y < -5) {
-                placeModelOnBlock(player, platformMesh);
+                placeModelOnPlatform(player, platformMesh);
                 newPos.copy(player.position);
                 playerVelocityY = 0;
                 isOnGround = true;

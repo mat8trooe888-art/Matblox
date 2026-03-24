@@ -434,18 +434,12 @@
         attachMobileEvents();
     }
 
-    function findSpawnBlock(blocks) {
-        for (let block of blocks) if (block.userData && block.userData.type === 'spawn') return block;
-        return null;
-    }
-
-    // ========== НОВАЯ КОЛЛИЗИЯ ==========
+    // ========== КОЛЛИЗИЯ (без спавн-блока) ==========
     function checkCollisionAndAdjust(pos, velY, blocks) {
         let newPos = pos.clone();
         let newVelY = velY;
         let onGround = false;
 
-        // Получаем AABB игрока
         function getPlayerBox(p) {
             return {
                 minX: p.x - PLAYER_HALF_WIDTH,
@@ -539,14 +533,12 @@
             };
             if (playerBox.maxX > blockBox.minX && playerBox.minX < blockBox.maxX &&
                 playerBox.maxZ > blockBox.minZ && playerBox.minZ < blockBox.maxZ) {
-                // Падение на блок сверху
                 if (newVelY <= 0 && playerBox.minY < blockBox.maxY && playerBox.minY > blockBox.minY - 0.1) {
                     const newY = blockBox.maxY + PLAYER_HALF_HEIGHT;
                     newPos.y = newY;
                     newVelY = 0;
                     onGround = true;
                 }
-                // Удар головой о потолок
                 else if (newVelY > 0 && playerBox.maxY > blockBox.minY && playerBox.maxY < blockBox.minY + 0.1) {
                     const newY = blockBox.minY - PLAYER_HALF_HEIGHT;
                     newPos.y = newY;
@@ -554,7 +546,6 @@
                 }
             }
         }
-
         return { pos: newPos, velY: newVelY, onGround };
     }
 
@@ -595,6 +586,7 @@
 
         collisionBlocks = [];
 
+        // Всегда добавляем платформу
         const platformMesh = createMesh('cube', { x: 20/0.9, y: 1/0.9, z: 20/0.9 }, 0x6B8E23);
         platformMesh.position.set(0, -0.5, 0);
         gameScene.add(platformMesh);
@@ -611,14 +603,8 @@
             });
         }
 
-        let standBlock = findSpawnBlock(collisionBlocks);
-        if (!standBlock) {
-            for (let block of collisionBlocks) {
-                if (block === platformMesh) { standBlock = block; break; }
-            }
-        }
-        if (!standBlock) standBlock = platformMesh;
-
+        // Спавним на платформу
+        const standBlock = platformMesh;
         const playerModel = createDefaultCharacter(0x3a86ff);
         placeModelOnBlock(playerModel, standBlock);
         gameScene.add(playerModel);
@@ -718,14 +704,12 @@
             const delta = Math.min(0.033, now - lastTime);
             lastTime = now;
 
-            // Движение: комбинируем клавиатуру и джойстик
             let moveX = 0, moveZ = 0;
             if (keyState.w) moveZ -= 1;
             if (keyState.s) moveZ += 1;
             if (keyState.a) moveX -= 1;
             if (keyState.d) moveX += 1;
             if (moveX !==0 || moveZ !==0) { const len = Math.hypot(moveX, moveZ); moveX/=len; moveZ/=len; }
-            // Если джойстик активен, приоритет у него
             if (moveDirection.x !== 0 || moveDirection.z !== 0) {
                 moveX = moveDirection.x;
                 moveZ = moveDirection.z;
@@ -749,16 +733,12 @@
             playerVelocityY = collisionResult.velY;
             isOnGround = collisionResult.onGround;
 
-            // Защита от падения в бездну
             if (newPos.y < -5) {
-                let respawnBlock = findSpawnBlock(collisionBlocks);
-                if (!respawnBlock) respawnBlock = platformMesh;
-                if (respawnBlock) {
-                    placeModelOnBlock(gamePlayer, respawnBlock);
-                    newPos.copy(gamePlayer.position);
-                    playerVelocityY = 0;
-                    isOnGround = true;
-                }
+                // Возвращаем на платформу
+                placeModelOnBlock(gamePlayer, platformMesh);
+                newPos.copy(gamePlayer.position);
+                playerVelocityY = 0;
+                isOnGround = true;
             }
 
             if (isOnGround && jumpRequest) {
@@ -933,14 +913,7 @@
             });
         }
 
-        let standBlock = findSpawnBlock(blocks);
-        if (!standBlock) {
-            for (let block of blocks) {
-                if (block === platformMesh) { standBlock = block; break; }
-            }
-        }
-        if (!standBlock) standBlock = platformMesh;
-
+        const standBlock = platformMesh;
         const player = createDefaultCharacter(0x3a86ff);
         placeModelOnBlock(player, standBlock);
         scene.add(player);
@@ -1069,14 +1042,10 @@
             isOnGround = collisionResult.onGround;
 
             if (newPos.y < -5) {
-                let respawnBlock = findSpawnBlock(blocks);
-                if (!respawnBlock) respawnBlock = platformMesh;
-                if (respawnBlock) {
-                    placeModelOnBlock(player, respawnBlock);
-                    newPos.copy(player.position);
-                    playerVelocityY = 0;
-                    isOnGround = true;
-                }
+                placeModelOnBlock(player, platformMesh);
+                newPos.copy(player.position);
+                playerVelocityY = 0;
+                isOnGround = true;
             }
 
             if (isOnGround && jumpRequestLocal) {
@@ -1276,4 +1245,4 @@
     if (!savedUser) showLogin();
 </script>
 </body>
-</html>
+                                                                   </html>

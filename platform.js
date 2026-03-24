@@ -150,6 +150,7 @@ const PLAYER_HALF_DEPTH = PLAYER_DEPTH / 2;
 
 // Размеры блока (0.9 x 0.9 x 0.9 после масштабирования)
 const BLOCK_HALF_SIZE = 0.45;
+const EPSILON = 0.01;
 
 function connectToServer() {
     const serverUrl = 'wss://blockverse-server.onrender.com';
@@ -216,7 +217,7 @@ function renderGamesList(games) {
     attachMobileEvents();
 }
 
-// ========== НОВАЯ КОЛЛИЗИЯ (без спавн-блока) ==========
+// ========== ИСПРАВЛЕННАЯ КОЛЛИЗИЯ ==========
 function checkCollisionAndAdjust(pos, velY, blocks) {
     let newPos = pos.clone();
     let newVelY = velY;
@@ -297,7 +298,7 @@ function checkCollisionAndAdjust(pos, velY, blocks) {
         }
     }
 
-    // Коррекция по Y с определением земли
+    // Коррекция по Y с определением земли (исправлено условие)
     playerBox = getPlayerBox(newPos);
     for (let block of blocks) {
         const bPos = block.position;
@@ -315,13 +316,15 @@ function checkCollisionAndAdjust(pos, velY, blocks) {
         };
         if (playerBox.maxX > blockBox.minX && playerBox.minX < blockBox.maxX &&
             playerBox.maxZ > blockBox.minZ && playerBox.minZ < blockBox.maxZ) {
-            if (newVelY <= 0 && playerBox.minY < blockBox.maxY && playerBox.minY > blockBox.minY - 0.1) {
+            // Приземление на блок сверху
+            if (newVelY <= 0 && playerBox.minY <= blockBox.maxY + EPSILON && playerBox.minY > blockBox.minY - 0.1) {
                 const newY = blockBox.maxY + PLAYER_HALF_HEIGHT;
                 newPos.y = newY;
                 newVelY = 0;
                 onGround = true;
             }
-            else if (newVelY > 0 && playerBox.maxY > blockBox.minY && playerBox.maxY < blockBox.minY + 0.1) {
+            // Удар головой о потолок
+            else if (newVelY > 0 && playerBox.maxY >= blockBox.minY - EPSILON && playerBox.maxY < blockBox.minY + 0.1) {
                 const newY = blockBox.minY - PLAYER_HALF_HEIGHT;
                 newPos.y = newY;
                 newVelY = 0;
@@ -1018,4 +1021,4 @@ if (savedUser) {
     }
 } else {
     showLogin();
-        }
+                          }

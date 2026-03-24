@@ -1,8 +1,6 @@
-// platform.js — полностью рабочий (коллизия, спавн, мультиплеер)
+// platform.js — без внешней модели, с рабочей коллизией
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 
 // Глобальные данные
 let currentUser = null;
@@ -202,12 +200,12 @@ function findSpawnBlock(blocks) {
     return null;
 }
 
-// Исправленная коллизия
+// ИСПРАВЛЕННАЯ КОЛЛИЗИЯ (с корректным определением земли)
 const raycaster = new THREE.Raycaster();
 function applyCollision(pos, blocks) {
     let newPos = pos.clone();
 
-    // X
+    // Коррекция по X
     for (let block of blocks) {
         const bPos = block.position;
         const bScale = block.scale;
@@ -224,7 +222,7 @@ function applyCollision(pos, blocks) {
         }
     }
 
-    // Z
+    // Коррекция по Z
     for (let block of blocks) {
         const bPos = block.position;
         const bScale = block.scale;
@@ -241,7 +239,7 @@ function applyCollision(pos, blocks) {
         }
     }
 
-    // Проверка земли (обновляем нижнюю точку)
+    // Определение земли (обновляем нижнюю точку)
     const bottomPoint = new THREE.Vector3(newPos.x, newPos.y - PLAYER_HALF_HEIGHT, newPos.z);
     let onGround = false;
     raycaster.set(bottomPoint, new THREE.Vector3(0, -1, 0));
@@ -254,7 +252,7 @@ function applyCollision(pos, blocks) {
         }
     }
 
-    // Выталкивание по Y
+    // Дополнительное выталкивание по Y (если застрял)
     for (let block of blocks) {
         const bPos = block.position;
         const bScale = block.scale;
@@ -298,7 +296,7 @@ function createMesh(shape, size = { x: 0.9, y: 0.9, z: 0.9 }, color = 0x8B5A2B, 
     return mesh;
 }
 
-// Создание модели игрока
+// Простой кубический персонаж (без внешней модели)
 function createDefaultCharacter(color = 0x3a86ff) {
     const group = new THREE.Group();
     const body = new THREE.Mesh(new THREE.BoxGeometry(0.6,0.8,0.4), new THREE.MeshStandardMaterial({ color }));
@@ -378,7 +376,7 @@ async function startGameSession(gameData, gameName) {
         });
     }
 
-    // Определяем блок для спавна
+    // Определяем блок для спавна (спавн-блок или платформа)
     let standBlock = findSpawnBlock(collisionBlocks);
     if (!standBlock) {
         for (let block of collisionBlocks) {
@@ -387,7 +385,7 @@ async function startGameSession(gameData, gameName) {
     }
     if (!standBlock) standBlock = platformMesh;
 
-    // Создаём модель игрока
+    // Создаём персонажа и ставим на блок
     const playerModel = createDefaultCharacter(0x3a86ff);
     placeModelOnBlock(playerModel, standBlock);
     gameScene.add(playerModel);
@@ -539,7 +537,7 @@ async function startGameSession(gameData, gameName) {
     attachMobileEvents();
 }
 
-// Локальная игровая сессия (без сервера)
+// Локальная игровая сессия (без сервера) — аналогично
 async function startLocalGameSession(gameData, gameName) {
     document.getElementById('mainMenuScreen').classList.add('hidden');
     document.getElementById('customGameScreen').classList.remove('hidden');
@@ -725,7 +723,7 @@ async function startLocalGameSession(gameData, gameName) {
 
         localControls.target.copy(player.position);
         localControls.update();
-        pointLight.position.set(player.position.x, player.position.y + 2, player.position.z);
+        pointLight.position.set(player.position.x, player.position.y + 2, player.position.y);
         renderer.render(scene, camera);
         requestAnimationFrame(updateLocal);
     }

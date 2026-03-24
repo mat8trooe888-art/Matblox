@@ -1,8 +1,7 @@
-// platform.js — без внешней модели, с рабочей коллизией
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-// Глобальные данные
+// ========== ГЛОБАЛЬНЫЕ ДАННЫЕ ==========
 let currentUser = null;
 let users = JSON.parse(localStorage.getItem('blockverse_users')) || [];
 let customGames = JSON.parse(localStorage.getItem('blockverse_games')) || [];
@@ -15,13 +14,27 @@ const shopItems = [
     { id: 'trail', name: 'Искрящийся след', price: 150 }
 ];
 
-// Сохранение
-function saveUsers() { localStorage.setItem('blockverse_users', JSON.stringify(users)); }
-function saveGames() { localStorage.setItem('blockverse_games', JSON.stringify(customGames)); }
+// Экспортируем нужные функции для редактора
+window.currentUser = currentUser;
+window.customGames = customGames;
+window.saveGames = saveGames;
+window.renderMyProjects = renderMyProjects;
+window.createGameOnServer = createGameOnServer;
+window.addCoins = addCoins;
+window.spendCoins = spendCoins;
+
+function updateGlobalRefs() {
+    window.currentUser = currentUser;
+    window.customGames = customGames;
+}
+
+// ========== СОХРАНЕНИЕ ==========
+function saveUsers() { localStorage.setItem('blockverse_users', JSON.stringify(users)); updateGlobalRefs(); }
+function saveGames() { localStorage.setItem('blockverse_games', JSON.stringify(customGames)); updateGlobalRefs(); }
 function saveChat() { localStorage.setItem('blockverse_chat', JSON.stringify(chatMessages.slice(-100))); }
 function saveReports() { localStorage.setItem('blockverse_reports', JSON.stringify(reports.slice(-50))); }
 
-// Авторизация
+// ========== АВТОРИЗАЦИЯ ==========
 function initUserData(username) {
     let user = users.find(u => u.username === username);
     if (!user) return null;
@@ -48,10 +61,10 @@ function updateUIafterAuth() {
     connectToServer();
 }
 
-function addCoins(amount) { if (!currentUser) return; currentUser.coins += amount; if (!currentUser.isGuest) saveUsers(); document.getElementById('userCoins').innerText = currentUser.coins; }
-function spendCoins(amount) { if (!currentUser) return false; if (currentUser.coins >= amount) { currentUser.coins -= amount; if (!currentUser.isGuest) saveUsers(); document.getElementById('userCoins').innerText = currentUser.coins; return true; } return false; }
+function addCoins(amount) { if (!currentUser) return; currentUser.coins += amount; if (!currentUser.isGuest) saveUsers(); document.getElementById('userCoins').innerText = currentUser.coins; updateGlobalRefs(); }
+function spendCoins(amount) { if (!currentUser) return false; if (currentUser.coins >= amount) { currentUser.coins -= amount; if (!currentUser.isGuest) saveUsers(); document.getElementById('userCoins').innerText = currentUser.coins; updateGlobalRefs(); return true; } return false; }
 
-// Магазин
+// ========== МАГАЗИН ==========
 function renderShop() {
     const container = document.getElementById('shopItemsList');
     if (!container) return;
@@ -66,7 +79,7 @@ function renderShop() {
     attachMobileEvents();
 }
 
-// Друзья
+// ========== ДРУЗЬЯ ==========
 function renderFriendsList() {
     const container = document.getElementById('friendsList');
     if (!container) return;
@@ -93,7 +106,7 @@ function addFriend() {
     document.getElementById('friendSearch').value = '';
 }
 
-// Чат
+// ========== ЧАТ ==========
 function renderChat() {
     const container = document.getElementById('chatMessages');
     if (!container) return;
@@ -113,7 +126,7 @@ function sendChatMessage() {
 }
 function startChatPolling() { setInterval(() => { const stored = JSON.parse(localStorage.getItem('blockverse_chat')) || []; if (JSON.stringify(stored) !== JSON.stringify(chatMessages)) { chatMessages = stored; renderChat(); } }, 2000); }
 
-// Мультиплеер
+// ========== МУЛЬТИПЛЕЕР (WebSocket) ==========
 let ws = null;
 let currentGameId = null;
 let myPlayerId = null;
@@ -122,11 +135,20 @@ let gameScene = null, gameCamera = null, gameRenderer = null, gamePlayer = null;
 let gameActive = false;
 let gameAnimationId = null;
 let collisionBlocks = [];
-let keyState = { w: false, s: false, a: false, d: false, space: false };
-let joystickVector = { x: 0, z: 0 }, joystickActive = false;
+let moveDirection = { x: 0, z: 0 };
+let jumpRequest = false;
 let moveSpeed = 4;
-const PLAYER_RADIUS = 0.4;
-const PLAYER_HALF_HEIGHT = 0.8;
+let controls = null;
+
+// Размеры игрока (куб 0.6 x 0.8)
+const PLAYER_WIDTH = 0.6;
+const PLAYER_HEIGHT = 0.8;
+const PLAYER_DEPTH = 0.4;
+const PLAYER_HALF_WIDTH = PLAYER_WIDTH / 2;
+const PLAYER_HALF_HEIGHT = PLAYER_HEIGHT / 2;
+const PLAYER_HALF_DEPTH = PLAYER_DEPTH / 2;
+
+// Размеры блока (0.9 x 0.9 x 0.9 после масштабирования)
 const BLOCK_HALF_SIZE = 0.45;
 
 function connectToServer() {
@@ -194,143 +216,136 @@ function renderGamesList(games) {
     attachMobileEvents();
 }
 
-// Поиск спавн-блока
+// Поиск спавн-блока (удалён – всегда платформа)
 function findSpawnBlock(blocks) {
-    for (let block of blocks) if (block.userData && block.userData.type === 'spawn') return block;
-    return null;
+    return null; // всегда null, чтобы использовать платформу
 }
 
-// ИСПРАВЛЕННАЯ КОЛЛИЗИЯ (с корректным определением земли)
-const raycaster = new THREE.Raycaster();
-function applyCollision(pos, blocks) {
+// ========== НОВАЯ КОЛЛИЗИЯ (без спавн-блока) ==========
+function checkCollisionAndAdjust(pos, velY, blocks) {
     let newPos = pos.clone();
+    let newVelY = velY;
+    let onGround = false;
+
+    function getPlayerBox(p) {
+        return {
+            minX: p.x - PLAYER_HALF_WIDTH,
+            maxX: p.x + PLAYER_HALF_WIDTH,
+            minY: p.y - PLAYER_HALF_HEIGHT,
+            maxY: p.y + PLAYER_HALF_HEIGHT,
+            minZ: p.z - PLAYER_HALF_DEPTH,
+            maxZ: p.z + PLAYER_HALF_DEPTH
+        };
+    }
 
     // Коррекция по X
+    let playerBox = getPlayerBox(newPos);
     for (let block of blocks) {
         const bPos = block.position;
         const bScale = block.scale;
-        const bHalf = BLOCK_HALF_SIZE * bScale.x;
-        const dx = newPos.x - bPos.x;
-        const overlapX = PLAYER_RADIUS + bHalf - Math.abs(dx);
-        if (overlapX > 0) {
-            const overlapY = PLAYER_HALF_HEIGHT + BLOCK_HALF_SIZE * bScale.y - Math.abs(newPos.y - bPos.y);
-            const overlapZ = PLAYER_RADIUS + BLOCK_HALF_SIZE * bScale.z - Math.abs(newPos.z - bPos.z);
-            if (overlapY > 0 && overlapZ > 0) {
-                if (dx > 0) newPos.x = bPos.x + PLAYER_RADIUS + bHalf;
-                else newPos.x = bPos.x - PLAYER_RADIUS - bHalf;
+        const halfX = BLOCK_HALF_SIZE * bScale.x;
+        const halfY = BLOCK_HALF_SIZE * bScale.y;
+        const halfZ = BLOCK_HALF_SIZE * bScale.z;
+        const blockBox = {
+            minX: bPos.x - halfX,
+            maxX: bPos.x + halfX,
+            minY: bPos.y - halfY,
+            maxY: bPos.y + halfY,
+            minZ: bPos.z - halfZ,
+            maxZ: bPos.z + halfZ
+        };
+        if (playerBox.maxX > blockBox.minX && playerBox.minX < blockBox.maxX &&
+            playerBox.maxY > blockBox.minY && playerBox.minY < blockBox.maxY &&
+            playerBox.maxZ > blockBox.minZ && playerBox.minZ < blockBox.maxZ) {
+            const overlapLeft = playerBox.maxX - blockBox.minX;
+            const overlapRight = blockBox.maxX - playerBox.minX;
+            if (overlapLeft > 0 && overlapRight > 0) {
+                if (overlapLeft < overlapRight) {
+                    newPos.x -= overlapLeft;
+                } else {
+                    newPos.x += overlapRight;
+                }
+                playerBox = getPlayerBox(newPos);
             }
         }
     }
 
     // Коррекция по Z
+    playerBox = getPlayerBox(newPos);
     for (let block of blocks) {
         const bPos = block.position;
         const bScale = block.scale;
-        const bHalf = BLOCK_HALF_SIZE * bScale.z;
-        const dz = newPos.z - bPos.z;
-        const overlapZ = PLAYER_RADIUS + bHalf - Math.abs(dz);
-        if (overlapZ > 0) {
-            const overlapX = PLAYER_RADIUS + BLOCK_HALF_SIZE * bScale.x - Math.abs(newPos.x - bPos.x);
-            const overlapY = PLAYER_HALF_HEIGHT + BLOCK_HALF_SIZE * bScale.y - Math.abs(newPos.y - bPos.y);
-            if (overlapX > 0 && overlapY > 0) {
-                if (dz > 0) newPos.z = bPos.z + PLAYER_RADIUS + bHalf;
-                else newPos.z = bPos.z - PLAYER_RADIUS - bHalf;
+        const halfX = BLOCK_HALF_SIZE * bScale.x;
+        const halfY = BLOCK_HALF_SIZE * bScale.y;
+        const halfZ = BLOCK_HALF_SIZE * bScale.z;
+        const blockBox = {
+            minX: bPos.x - halfX,
+            maxX: bPos.x + halfX,
+            minY: bPos.y - halfY,
+            maxY: bPos.y + halfY,
+            minZ: bPos.z - halfZ,
+            maxZ: bPos.z + halfZ
+        };
+        if (playerBox.maxX > blockBox.minX && playerBox.minX < blockBox.maxX &&
+            playerBox.maxY > blockBox.minY && playerBox.minY < blockBox.maxY &&
+            playerBox.maxZ > blockBox.minZ && playerBox.minZ < blockBox.maxZ) {
+            const overlapFront = playerBox.maxZ - blockBox.minZ;
+            const overlapBack = blockBox.maxZ - playerBox.minZ;
+            if (overlapFront > 0 && overlapBack > 0) {
+                if (overlapFront < overlapBack) {
+                    newPos.z -= overlapFront;
+                } else {
+                    newPos.z += overlapBack;
+                }
+                playerBox = getPlayerBox(newPos);
             }
         }
     }
 
-    // Определение земли (обновляем нижнюю точку)
-    const bottomPoint = new THREE.Vector3(newPos.x, newPos.y - PLAYER_HALF_HEIGHT, newPos.z);
-    let onGround = false;
-    raycaster.set(bottomPoint, new THREE.Vector3(0, -1, 0));
-    const intersects = raycaster.intersectObjects(blocks);
-    if (intersects.length > 0) {
-        const hit = intersects[0];
-        if (hit.distance < 0.3) {
-            onGround = true;
-            newPos.y = hit.point.y + PLAYER_HALF_HEIGHT;
-        }
-    }
-
-    // Дополнительное выталкивание по Y (если застрял)
+    // Коррекция по Y с определением земли
+    playerBox = getPlayerBox(newPos);
     for (let block of blocks) {
         const bPos = block.position;
         const bScale = block.scale;
-        const bHalfX = BLOCK_HALF_SIZE * bScale.x;
-        const bHalfY = BLOCK_HALF_SIZE * bScale.y;
-        const bHalfZ = BLOCK_HALF_SIZE * bScale.z;
-        if (Math.abs(newPos.x - bPos.x) < PLAYER_RADIUS + bHalfX &&
-            Math.abs(newPos.z - bPos.z) < PLAYER_RADIUS + bHalfZ &&
-            Math.abs(newPos.y - bPos.y) < PLAYER_HALF_HEIGHT + bHalfY) {
-            const dy = newPos.y - bPos.y;
-            if (dy > 0) newPos.y = bPos.y + bHalfY + PLAYER_HALF_HEIGHT;
-            else newPos.y = bPos.y - bHalfY - PLAYER_HALF_HEIGHT;
+        const halfX = BLOCK_HALF_SIZE * bScale.x;
+        const halfY = BLOCK_HALF_SIZE * bScale.y;
+        const halfZ = BLOCK_HALF_SIZE * bScale.z;
+        const blockBox = {
+            minX: bPos.x - halfX,
+            maxX: bPos.x + halfX,
+            minY: bPos.y - halfY,
+            maxY: bPos.y + halfY,
+            minZ: bPos.z - halfZ,
+            maxZ: bPos.z + halfZ
+        };
+        if (playerBox.maxX > blockBox.minX && playerBox.minX < blockBox.maxX &&
+            playerBox.maxZ > blockBox.minZ && playerBox.minZ < blockBox.maxZ) {
+            if (newVelY <= 0 && playerBox.minY < blockBox.maxY && playerBox.minY > blockBox.minY - 0.1) {
+                const newY = blockBox.maxY + PLAYER_HALF_HEIGHT;
+                newPos.y = newY;
+                newVelY = 0;
+                onGround = true;
+            }
+            else if (newVelY > 0 && playerBox.maxY > blockBox.minY && playerBox.maxY < blockBox.minY + 0.1) {
+                const newY = blockBox.minY - PLAYER_HALF_HEIGHT;
+                newPos.y = newY;
+                newVelY = 0;
+            }
         }
     }
-    return { pos: newPos, onGround };
+    return { pos: newPos, velY: newVelY, onGround };
 }
 
-// Размещение модели на блоке
-function placeModelOnBlock(model, block) {
+// Размещение модели на платформе
+function placeModelOnPlatform(model, platform) {
     const bbox = new THREE.Box3().setFromObject(model);
     const modelMinY = bbox.min.y;
-    const blockTopY = block.position.y + (BLOCK_HALF_SIZE * block.scale.y);
-    const offsetY = blockTopY - modelMinY;
-    model.position.set(block.position.x, offsetY, block.position.z);
+    const platformTopY = platform.position.y + (BLOCK_HALF_SIZE * platform.scale.y);
+    const offsetY = platformTopY - modelMinY;
+    model.position.set(platform.position.x, offsetY, platform.position.z);
 }
 
-// Создание меша
-function createMesh(shape, size = { x: 0.9, y: 0.9, z: 0.9 }, color = 0x8B5A2B, opacity = 1) {
-    let geometry;
-    switch(shape) {
-        case 'sphere': geometry = new THREE.SphereGeometry(0.45, 32, 32); break;
-        case 'cylinder': geometry = new THREE.CylinderGeometry(0.45, 0.45, 0.9, 32); break;
-        case 'cone': geometry = new THREE.ConeGeometry(0.45, 0.9, 32); break;
-        default: geometry = new THREE.BoxGeometry(0.9, 0.9, 0.9);
-    }
-    const material = new THREE.MeshStandardMaterial({ color });
-    material.transparent = opacity < 1;
-    material.opacity = opacity;
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.scale.set(size.x, size.y, size.z);
-    return mesh;
-}
-
-// Простой кубический персонаж (без внешней модели)
-function createDefaultCharacter(color = 0x3a86ff) {
-    const group = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.6,0.8,0.4), new THREE.MeshStandardMaterial({ color }));
-    body.position.y=0; body.castShadow=true; group.add(body);
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.4,32,32), new THREE.MeshStandardMaterial({ color:0xffccaa }));
-    head.position.y=0.6; head.castShadow=true; group.add(head);
-    const leftEye = new THREE.Mesh(new THREE.SphereGeometry(0.12,16,16), new THREE.MeshStandardMaterial({ color:0xffffff }));
-    leftEye.position.set(-0.15,0.75,0.4);
-    const rightEye = new THREE.Mesh(new THREE.SphereGeometry(0.12,16,16), new THREE.MeshStandardMaterial({ color:0xffffff }));
-    rightEye.position.set(0.15,0.75,0.4);
-    group.add(leftEye,rightEye);
-    const leftPupil = new THREE.Mesh(new THREE.SphereGeometry(0.07,16,16), new THREE.MeshStandardMaterial({ color:0x000000 }));
-    leftPupil.position.set(-0.15,0.73,0.52);
-    const rightPupil = new THREE.Mesh(new THREE.SphereGeometry(0.07,16,16), new THREE.MeshStandardMaterial({ color:0x000000 }));
-    rightPupil.position.set(0.15,0.73,0.52);
-    group.add(leftPupil,rightPupil);
-    const leftArm = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.6,0.3), new THREE.MeshStandardMaterial({ color }));
-    leftArm.position.set(-0.55,0.3,0);
-    const rightArm = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.6,0.3), new THREE.MeshStandardMaterial({ color }));
-    rightArm.position.set(0.55,0.3,0);
-    group.add(leftArm,rightArm);
-    const leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.6,0.3), new THREE.MeshStandardMaterial({ color:0x2c5f8a }));
-    leftLeg.position.set(-0.25,-0.5,0);
-    const rightLeg = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.6,0.3), new THREE.MeshStandardMaterial({ color:0x2c5f8a }));
-    rightLeg.position.set(0.25,-0.5,0);
-    group.add(leftLeg,rightLeg);
-    return group;
-}
-
-function createRemotePlayer() {
-    return createDefaultCharacter(0xffaa44);
-}
-
-// Игровая сессия (мультиплеер)
+// ========== ИГРОВАЯ СЕССИЯ (мультиплеер) ==========
 async function startGameSession(gameData, gameName) {
     document.getElementById('mainMenuScreen').classList.add('hidden');
     document.getElementById('customGameScreen').classList.remove('hidden');
@@ -359,7 +374,7 @@ async function startGameSession(gameData, gameName) {
 
     collisionBlocks = [];
 
-    // Базовая платформа
+    // Базовая платформа (всегда)
     const platformMesh = createMesh('cube', { x: 20/0.9, y: 1/0.9, z: 20/0.9 }, 0x6B8E23);
     platformMesh.position.set(0, -0.5, 0);
     gameScene.add(platformMesh);
@@ -376,41 +391,34 @@ async function startGameSession(gameData, gameName) {
         });
     }
 
-    // Определяем блок для спавна (спавн-блок или платформа)
-    let standBlock = findSpawnBlock(collisionBlocks);
-    if (!standBlock) {
-        for (let block of collisionBlocks) {
-            if (block === platformMesh) { standBlock = block; break; }
-        }
-    }
-    if (!standBlock) standBlock = platformMesh;
-
-    // Создаём персонажа и ставим на блок
+    // Создаём игрока и ставим на платформу
     const playerModel = createDefaultCharacter(0x3a86ff);
-    placeModelOnBlock(playerModel, standBlock);
+    placeModelOnPlatform(playerModel, platformMesh);
     gameScene.add(playerModel);
     gamePlayer = playerModel;
 
-    // Управление
+    // Управление с клавиатуры
+    const keyState = { w: false, s: false, a: false, d: false };
     const handleKey = (e, val) => {
         if(!gameActive) return;
-        if(e.key==='w') keyState.w=val;
-        if(e.key==='s') keyState.s=val;
-        if(e.key==='a') keyState.a=val;
-        if(e.key==='d') keyState.d=val;
-        if(e.key===' ' || e.key==='Space') { keyState.space=val; e.preventDefault(); }
+        switch(e.key) {
+            case 'w': keyState.w = val; break;
+            case 's': keyState.s = val; break;
+            case 'a': keyState.a = val; break;
+            case 'd': keyState.d = val; break;
+            case ' ': case 'Space': jumpRequest = val; e.preventDefault(); break;
+        }
     };
     window.addEventListener('keydown', e=>handleKey(e,true));
     window.addEventListener('keyup', e=>handleKey(e,false));
 
+    // Сенсорный джойстик
     const joystickDiv = document.getElementById('joystick');
     const jumpBtnDiv = document.getElementById('jumpBtn');
-    const zoomDiv = document.getElementById('cameraZoom');
     let joystickThumb = joystickDiv?.querySelector('.joystick-thumb');
     if (joystickDiv) {
         joystickDiv.style.display = 'block';
         jumpBtnDiv.style.display = 'flex';
-        zoomDiv.style.display = 'flex';
         let joystickCenter = { x: 0, y: 0 };
         let activeTouch = false;
         const updateJoystick = (touch) => {
@@ -423,10 +431,12 @@ async function startGameSession(gameData, gameName) {
                 const angle = Math.atan2(dy, dx);
                 const nx = Math.cos(angle) * maxDist;
                 const ny = Math.sin(angle) * maxDist;
-                joystickVector = { x: nx / maxDist, z: ny / maxDist };
+                moveDirection.x = nx / maxDist;
+                moveDirection.z = ny / maxDist;
                 if (joystickThumb) joystickThumb.style.transform = `translate(${nx}px, ${ny}px)`;
             } else {
-                joystickVector = { x: dx / maxDist, z: dy / maxDist };
+                moveDirection.x = dx / maxDist;
+                moveDirection.z = dy / maxDist;
                 if (joystickThumb) joystickThumb.style.transform = `translate(${dx}px, ${dy}px)`;
             }
         };
@@ -435,7 +445,6 @@ async function startGameSession(gameData, gameName) {
             const rect = joystickDiv.getBoundingClientRect();
             joystickCenter = { x: rect.left + rect.width/2, y: rect.top + rect.height/2 };
             activeTouch = true;
-            joystickActive = true;
             updateJoystick(e.touches[0]);
         });
         joystickDiv.addEventListener('touchmove', (e) => {
@@ -444,17 +453,16 @@ async function startGameSession(gameData, gameName) {
         });
         joystickDiv.addEventListener('touchend', () => {
             activeTouch = false;
-            joystickActive = false;
-            joystickVector = { x: 0, z: 0 };
+            moveDirection = { x: 0, z: 0 };
             if (joystickThumb) joystickThumb.style.transform = `translate(0px, 0px)`;
         });
-        jumpBtnDiv.addEventListener('touchstart', (e) => { e.preventDefault(); keyState.space = true; });
-        jumpBtnDiv.addEventListener('touchend', () => { keyState.space = false; });
-        jumpBtnDiv.addEventListener('mousedown', () => { keyState.space = true; });
-        jumpBtnDiv.addEventListener('mouseup', () => { keyState.space = false; });
+        jumpBtnDiv.addEventListener('touchstart', (e) => { e.preventDefault(); jumpRequest = true; });
+        jumpBtnDiv.addEventListener('touchend', () => { jumpRequest = false; });
+        jumpBtnDiv.addEventListener('mousedown', () => { jumpRequest = true; });
+        jumpBtnDiv.addEventListener('mouseup', () => { jumpRequest = false; });
     }
 
-    const controls = new OrbitControls(gameCamera, gameRenderer.domElement);
+    controls = new OrbitControls(gameCamera, gameRenderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
     controls.rotateSpeed = 1.0;
@@ -484,16 +492,16 @@ async function startGameSession(gameData, gameName) {
         lastTime = now;
 
         let moveX = 0, moveZ = 0;
-        if (joystickActive && (joystickVector.x !== 0 || joystickVector.z !== 0)) {
-            moveX = joystickVector.x;
-            moveZ = joystickVector.z;
-        } else {
-            if(keyState.w) moveZ -= 1;
-            if(keyState.s) moveZ += 1;
-            if(keyState.a) moveX -= 1;
-            if(keyState.d) moveX += 1;
-            if(moveX !==0 || moveZ !==0) { const len = Math.hypot(moveX, moveZ); moveX/=len; moveZ/=len; }
+        if (keyState.w) moveZ -= 1;
+        if (keyState.s) moveZ += 1;
+        if (keyState.a) moveX -= 1;
+        if (keyState.d) moveX += 1;
+        if (moveX !==0 || moveZ !==0) { const len = Math.hypot(moveX, moveZ); moveX/=len; moveZ/=len; }
+        if (moveDirection.x !== 0 || moveDirection.z !== 0) {
+            moveX = moveDirection.x;
+            moveZ = moveDirection.z;
         }
+
         if (moveX !== 0 || moveZ !== 0) {
             const angle = Math.atan2(moveX, moveZ);
             gamePlayer.rotation.y = angle;
@@ -503,23 +511,34 @@ async function startGameSession(gameData, gameName) {
         let newPos = gamePlayer.position.clone();
         newPos.x += moveX * speed;
         newPos.z += moveZ * speed;
+
         playerVelocityY -= GRAVITY * delta;
         newPos.y += playerVelocityY * delta;
-        const collisionResult = applyCollision(newPos, collisionBlocks);
-        newPos = collisionResult.pos;
-        isOnGround = collisionResult.onGround;
-        if (isOnGround && keyState.space) {
-            playerVelocityY = JUMP_FORCE;
-            isOnGround = false;
-            keyState.space = false;
-        }
-        gamePlayer.position.copy(newPos);
 
+        const collisionResult = checkCollisionAndAdjust(newPos, playerVelocityY, collisionBlocks);
+        newPos = collisionResult.pos;
+        playerVelocityY = collisionResult.velY;
+        isOnGround = collisionResult.onGround;
+
+        // Защита от падения в бездну
+        if (newPos.y < -5) {
+            placeModelOnPlatform(gamePlayer, platformMesh);
+            newPos.copy(gamePlayer.position);
+            playerVelocityY = 0;
+            isOnGround = true;
+        }
+
+        if (isOnGround && jumpRequest) {
+            playerVelocityY = JUMP_FORCE;
+            jumpRequest = false;
+        }
+
+        gamePlayer.position.copy(newPos);
         sendPosition({ x: gamePlayer.position.x, y: gamePlayer.position.y, z: gamePlayer.position.z });
 
         controls.target.copy(gamePlayer.position);
         controls.update();
-        pointLight.position.set(gamePlayer.position.x, gamePlayer.position.y + 2, gamePlayer.position.z);
+        pointLight.position.set(gamePlayer.position.x, gamePlayer.position.y + 1, gamePlayer.position.z);
     }
     function animate() { if(!gameActive) return; gameAnimationId = requestAnimationFrame(animate); update(); gameRenderer.render(gameScene, gameCamera); }
     gameActive = true;
@@ -537,7 +556,7 @@ async function startGameSession(gameData, gameName) {
     attachMobileEvents();
 }
 
-// Локальная игровая сессия (без сервера) — аналогично
+// ========== ЛОКАЛЬНАЯ ИГРОВАЯ СЕССИЯ ==========
 async function startLocalGameSession(gameData, gameName) {
     document.getElementById('mainMenuScreen').classList.add('hidden');
     document.getElementById('customGameScreen').classList.remove('hidden');
@@ -581,41 +600,32 @@ async function startLocalGameSession(gameData, gameName) {
         });
     }
 
-    let standBlock = findSpawnBlock(blocks);
-    if (!standBlock) {
-        for (let block of blocks) {
-            if (block === platformMesh) { standBlock = block; break; }
-        }
-    }
-    if (!standBlock) standBlock = platformMesh;
-
     const player = createDefaultCharacter(0x3a86ff);
-    placeModelOnBlock(player, standBlock);
+    placeModelOnPlatform(player, platformMesh);
     scene.add(player);
 
     // Управление
-    let localKeyState = { w: false, s: false, a: false, d: false, space: false };
-    let localJoystickVector = { x: 0, z: 0 }, localJoystickActive = false;
-    let localMoveSpeed = moveSpeed;
-
+    let localKeyState = { w: false, s: false, a: false, d: false };
+    let localMoveDirection = { x: 0, z: 0 };
+    let localJumpRequest = false;
     const handleKey = (e, val) => {
-        if(e.key==='w') localKeyState.w=val;
-        if(e.key==='s') localKeyState.s=val;
-        if(e.key==='a') localKeyState.a=val;
-        if(e.key==='d') localKeyState.d=val;
-        if(e.key===' ' || e.key==='Space') { localKeyState.space=val; e.preventDefault(); }
+        switch(e.key) {
+            case 'w': localKeyState.w = val; break;
+            case 's': localKeyState.s = val; break;
+            case 'a': localKeyState.a = val; break;
+            case 'd': localKeyState.d = val; break;
+            case ' ': case 'Space': localJumpRequest = val; e.preventDefault(); break;
+        }
     };
     window.addEventListener('keydown', e=>handleKey(e,true));
     window.addEventListener('keyup', e=>handleKey(e,false));
 
     const joystickDiv = document.getElementById('joystick');
     const jumpBtnDiv = document.getElementById('jumpBtn');
-    const zoomDiv = document.getElementById('cameraZoom');
     let joystickThumb = joystickDiv?.querySelector('.joystick-thumb');
     if (joystickDiv) {
         joystickDiv.style.display = 'block';
         jumpBtnDiv.style.display = 'flex';
-        zoomDiv.style.display = 'flex';
         let joystickCenter = { x: 0, y: 0 };
         let activeTouch = false;
         const updateJoystick = (touch) => {
@@ -628,10 +638,12 @@ async function startLocalGameSession(gameData, gameName) {
                 const angle = Math.atan2(dy, dx);
                 const nx = Math.cos(angle) * maxDist;
                 const ny = Math.sin(angle) * maxDist;
-                localJoystickVector = { x: nx / maxDist, z: ny / maxDist };
+                localMoveDirection.x = nx / maxDist;
+                localMoveDirection.z = ny / maxDist;
                 if (joystickThumb) joystickThumb.style.transform = `translate(${nx}px, ${ny}px)`;
             } else {
-                localJoystickVector = { x: dx / maxDist, z: dy / maxDist };
+                localMoveDirection.x = dx / maxDist;
+                localMoveDirection.z = dy / maxDist;
                 if (joystickThumb) joystickThumb.style.transform = `translate(${dx}px, ${dy}px)`;
             }
         };
@@ -640,7 +652,6 @@ async function startLocalGameSession(gameData, gameName) {
             const rect = joystickDiv.getBoundingClientRect();
             joystickCenter = { x: rect.left + rect.width/2, y: rect.top + rect.height/2 };
             activeTouch = true;
-            localJoystickActive = true;
             updateJoystick(e.touches[0]);
         });
         joystickDiv.addEventListener('touchmove', (e) => {
@@ -649,14 +660,13 @@ async function startLocalGameSession(gameData, gameName) {
         });
         joystickDiv.addEventListener('touchend', () => {
             activeTouch = false;
-            localJoystickActive = false;
-            localJoystickVector = { x: 0, z: 0 };
+            localMoveDirection = { x: 0, z: 0 };
             if (joystickThumb) joystickThumb.style.transform = `translate(0px, 0px)`;
         });
-        jumpBtnDiv.addEventListener('touchstart', (e) => { e.preventDefault(); localKeyState.space = true; });
-        jumpBtnDiv.addEventListener('touchend', () => { localKeyState.space = false; });
-        jumpBtnDiv.addEventListener('mousedown', () => { localKeyState.space = true; });
-        jumpBtnDiv.addEventListener('mouseup', () => { localKeyState.space = false; });
+        jumpBtnDiv.addEventListener('touchstart', (e) => { e.preventDefault(); localJumpRequest = true; });
+        jumpBtnDiv.addEventListener('touchend', () => { localJumpRequest = false; });
+        jumpBtnDiv.addEventListener('mousedown', () => { localJumpRequest = true; });
+        jumpBtnDiv.addEventListener('mouseup', () => { localJumpRequest = false; });
     }
 
     const localControls = new OrbitControls(camera, renderer.domElement);
@@ -690,40 +700,50 @@ async function startLocalGameSession(gameData, gameName) {
         lastTime = now;
 
         let moveX = 0, moveZ = 0;
-        if (localJoystickActive && (localJoystickVector.x !== 0 || localJoystickVector.z !== 0)) {
-            moveX = localJoystickVector.x;
-            moveZ = localJoystickVector.z;
-        } else {
-            if(localKeyState.w) moveZ -= 1;
-            if(localKeyState.s) moveZ += 1;
-            if(localKeyState.a) moveX -= 1;
-            if(localKeyState.d) moveX += 1;
-            if(moveX !==0 || moveZ !==0) { const len = Math.hypot(moveX, moveZ); moveX/=len; moveZ/=len; }
+        if (localKeyState.w) moveZ -= 1;
+        if (localKeyState.s) moveZ += 1;
+        if (localKeyState.a) moveX -= 1;
+        if (localKeyState.d) moveX += 1;
+        if (moveX !==0 || moveZ !==0) { const len = Math.hypot(moveX, moveZ); moveX/=len; moveZ/=len; }
+        if (localMoveDirection.x !== 0 || localMoveDirection.z !== 0) {
+            moveX = localMoveDirection.x;
+            moveZ = localMoveDirection.z;
         }
+
         if (moveX !== 0 || moveZ !== 0) {
             const angle = Math.atan2(moveX, moveZ);
             player.rotation.y = angle;
         }
 
-        let speed = localMoveSpeed * delta;
+        let speed = moveSpeed * delta;
         let newPos = player.position.clone();
         newPos.x += moveX * speed;
         newPos.z += moveZ * speed;
         playerVelocityY -= GRAVITY * delta;
         newPos.y += playerVelocityY * delta;
-        const collisionResult = applyCollision(newPos, blocks);
+
+        const collisionResult = checkCollisionAndAdjust(newPos, playerVelocityY, blocks);
         newPos = collisionResult.pos;
+        playerVelocityY = collisionResult.velY;
         isOnGround = collisionResult.onGround;
-        if (isOnGround && localKeyState.space) {
-            playerVelocityY = JUMP_FORCE;
-            isOnGround = false;
-            localKeyState.space = false;
+
+        if (newPos.y < -5) {
+            placeModelOnPlatform(player, platformMesh);
+            newPos.copy(player.position);
+            playerVelocityY = 0;
+            isOnGround = true;
         }
+
+        if (isOnGround && localJumpRequest) {
+            playerVelocityY = JUMP_FORCE;
+            localJumpRequest = false;
+        }
+
         player.position.copy(newPos);
 
         localControls.target.copy(player.position);
         localControls.update();
-        pointLight.position.set(player.position.x, player.position.y + 2, player.position.y);
+        pointLight.position.set(player.position.x, player.position.y + 1, player.position.z);
         renderer.render(scene, camera);
         requestAnimationFrame(updateLocal);
     }
@@ -738,7 +758,57 @@ async function startLocalGameSession(gameData, gameName) {
     attachMobileEvents();
 }
 
-// Мои проекты
+// ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
+function createDefaultCharacter(color = 0x3a86ff) {
+    const group = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.6,0.8,0.4), new THREE.MeshStandardMaterial({ color }));
+    body.position.y=0; body.castShadow=true; group.add(body);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.4,32,32), new THREE.MeshStandardMaterial({ color:0xffccaa }));
+    head.position.y=0.6; head.castShadow=true; group.add(head);
+    const leftEye = new THREE.Mesh(new THREE.SphereGeometry(0.12,16,16), new THREE.MeshStandardMaterial({ color:0xffffff }));
+    leftEye.position.set(-0.15,0.75,0.4);
+    const rightEye = new THREE.Mesh(new THREE.SphereGeometry(0.12,16,16), new THREE.MeshStandardMaterial({ color:0xffffff }));
+    rightEye.position.set(0.15,0.75,0.4);
+    group.add(leftEye,rightEye);
+    const leftPupil = new THREE.Mesh(new THREE.SphereGeometry(0.07,16,16), new THREE.MeshStandardMaterial({ color:0x000000 }));
+    leftPupil.position.set(-0.15,0.73,0.52);
+    const rightPupil = new THREE.Mesh(new THREE.SphereGeometry(0.07,16,16), new THREE.MeshStandardMaterial({ color:0x000000 }));
+    rightPupil.position.set(0.15,0.73,0.52);
+    group.add(leftPupil,rightPupil);
+    const leftArm = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.6,0.3), new THREE.MeshStandardMaterial({ color }));
+    leftArm.position.set(-0.55,0.3,0);
+    const rightArm = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.6,0.3), new THREE.MeshStandardMaterial({ color }));
+    rightArm.position.set(0.55,0.3,0);
+    group.add(leftArm,rightArm);
+    const leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.6,0.3), new THREE.MeshStandardMaterial({ color:0x2c5f8a }));
+    leftLeg.position.set(-0.25,-0.5,0);
+    const rightLeg = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.6,0.3), new THREE.MeshStandardMaterial({ color:0x2c5f8a }));
+    rightLeg.position.set(0.25,-0.5,0);
+    group.add(leftLeg,rightLeg);
+    return group;
+}
+
+function createRemotePlayer() {
+    return createDefaultCharacter(0xffaa44);
+}
+
+function createMesh(shape, size = { x: 0.9, y: 0.9, z: 0.9 }, color = 0x8B5A2B, opacity = 1) {
+    let geometry;
+    switch(shape) {
+        case 'sphere': geometry = new THREE.SphereGeometry(0.45, 32, 32); break;
+        case 'cylinder': geometry = new THREE.CylinderGeometry(0.45, 0.45, 0.9, 32); break;
+        case 'cone': geometry = new THREE.ConeGeometry(0.45, 0.9, 32); break;
+        default: geometry = new THREE.BoxGeometry(0.9, 0.9, 0.9);
+    }
+    const material = new THREE.MeshStandardMaterial({ color });
+    material.transparent = opacity < 1;
+    material.opacity = opacity;
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.scale.set(size.x, size.y, size.z);
+    return mesh;
+}
+
+// ========== МОИ ПРОЕКТЫ ==========
 function renderMyProjects() {
     const container = document.getElementById('myProjectsList');
     if (!container) return;
@@ -793,7 +863,7 @@ function renderMyProjects() {
     attachMobileEvents();
 }
 
-// Репорты
+// ========== РЕПОРТЫ ==========
 function renderReports() {
     const container = document.getElementById('reportsList');
     if (!container) return;
@@ -839,10 +909,8 @@ function showReportDialog() {
     attachMobileEvents();
 }
 
-// Настройки
-function applySettings() {
-    moveSpeed = parseFloat(document.getElementById('moveSpeed').value);
-}
+// ========== НАСТРОЙКИ ==========
+function applySettings() { moveSpeed = parseFloat(document.getElementById('moveSpeed').value); }
 document.getElementById('mouseSensitivity')?.addEventListener('input', applySettings);
 document.getElementById('moveSpeed')?.addEventListener('input', applySettings);
 document.getElementById('reportBugBtn')?.addEventListener('click', showReportDialog);
@@ -852,7 +920,7 @@ document.getElementById('connectToServerBtn')?.addEventListener('click', () => {
     joinGame(serverId);
 });
 
-// Мобильные события
+// ========== МОБИЛЬНЫЕ СОБЫТИЯ ==========
 function attachMobileEvents() {
     const selectors = '.btn, .nav-btn, .play-btn, .buy-btn, .tool-btn, .block-option, .close-dialog, .exit-game, .publish-btn, .exit-editor-btn, .play-btn-small, .edit-btn-small, .delete-btn-small, #createNewGameBtn, #refreshGamesBtn, #earnCoinsBtn, #addFriendBtn, #sendChatBtn, #reportBugBtn, #toggleToolsPanelBtn, #togglePropsPanelBtn, #toggleToolsBtn, #togglePropsBtn, #connectToServerBtn, .host-btn, .host-btn-small';
     document.querySelectorAll(selectors).forEach(el => {
@@ -864,7 +932,7 @@ function attachMobileEvents() {
 setInterval(attachMobileEvents, 1500);
 attachMobileEvents();
 
-// Авторизация
+// ========== АВТОРИЗАЦИЯ ==========
 function showLogin() { document.getElementById('loginForm').style.display='block'; document.getElementById('registerForm').style.display='none'; document.getElementById('authMessage').innerText=''; }
 function showRegister() { document.getElementById('loginForm').style.display='none'; document.getElementById('registerForm').style.display='block'; document.getElementById('authMessage').innerText=''; }
 function registerUser() {
@@ -906,9 +974,10 @@ function logout() {
     document.getElementById('customGameScreen').classList.add('hidden');
     document.getElementById('authScreen').classList.remove('hidden');
     showLogin();
+    updateGlobalRefs();
 }
 
-// Привязка элементов
+// ========== ПРИВЯЗКА ЭЛЕМЕНТОВ ==========
 document.getElementById('showLoginBtn').onclick = showLogin;
 document.getElementById('showRegisterBtn').onclick = showRegister;
 document.getElementById('doLoginBtn').onclick = loginUser;

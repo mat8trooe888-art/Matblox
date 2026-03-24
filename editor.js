@@ -1,12 +1,12 @@
-// editor.js — конструктор с полной функциональностью (без заглушек)
+// editor.js — конструктор с полной функциональностью
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 
-// Глобальные данные редактора (доступны из основного окна)
-const { currentUser, customGames, saveGames, createGameOnServer, renderMyProjects } = window;
+// Глобальные данные (доступны через window)
+const { currentUser, customGames, saveGames, renderMyProjects, createGameOnServer } = window;
 
 // Переменные редактора
 let editorScene, editorCamera, editorRenderer, editorControls, transformControls;
@@ -27,7 +27,6 @@ let editorAnimationId = null;
 let gameBeingEdited = null;
 let directionalLight = null;
 
-// Вспомогательные функции
 function createMeshEditor(shape, size = { x: 0.9, y: 0.9, z: 0.9 }, color = 0x8B5A2B, opacity = 1, type = 'block') {
     let geometry;
     switch(shape) {
@@ -426,4 +425,4 @@ export function openEditor(gameToEdit = null) {
     document.getElementById('mainMenuScreen').classList.add('hidden');
     document.getElementById('editorScreen').classList.remove('hidden');
     initEditor();
-        }
+}

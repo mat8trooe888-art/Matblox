@@ -14,7 +14,6 @@ const shopItems = [
     { id: 'trail', name: 'Искрящийся след', price: 150 }
 ];
 
-// Экспортируем нужные функции для редактора
 window.currentUser = currentUser;
 window.customGames = customGames;
 window.saveGames = saveGames;
@@ -28,13 +27,11 @@ function updateGlobalRefs() {
     window.customGames = customGames;
 }
 
-// ========== СОХРАНЕНИЕ ==========
 function saveUsers() { localStorage.setItem('blockverse_users', JSON.stringify(users)); updateGlobalRefs(); }
 function saveGames() { localStorage.setItem('blockverse_games', JSON.stringify(customGames)); updateGlobalRefs(); }
 function saveChat() { localStorage.setItem('blockverse_chat', JSON.stringify(chatMessages.slice(-100))); }
 function saveReports() { localStorage.setItem('blockverse_reports', JSON.stringify(reports.slice(-50))); }
 
-// ========== АВТОРИЗАЦИЯ ==========
 function initUserData(username) {
     let user = users.find(u => u.username === username);
     if (!user) return null;
@@ -126,7 +123,7 @@ function sendChatMessage() {
 }
 function startChatPolling() { setInterval(() => { const stored = JSON.parse(localStorage.getItem('blockverse_chat')) || []; if (JSON.stringify(stored) !== JSON.stringify(chatMessages)) { chatMessages = stored; renderChat(); } }, 2000); }
 
-// ========== МУЛЬТИПЛЕЕР (WebSocket) ==========
+// ========== МУЛЬТИПЛЕЕР ==========
 let ws = null;
 let currentGameId = null;
 let myPlayerId = null;
@@ -140,17 +137,13 @@ let jumpRequest = false;
 let moveSpeed = 4;
 let controls = null;
 
-// Размеры игрока (куб 0.6 x 0.8)
-const PLAYER_WIDTH = 0.6;
-const PLAYER_HEIGHT = 0.8;
-const PLAYER_DEPTH = 0.4;
-const PLAYER_HALF_WIDTH = PLAYER_WIDTH / 2;
-const PLAYER_HALF_HEIGHT = PLAYER_HEIGHT / 2;
-const PLAYER_HALF_DEPTH = PLAYER_DEPTH / 2;
+// Размеры игрока (0.6 x 0.8 x 0.4)
+const PLAYER_HALF_WIDTH = 0.3;
+const PLAYER_HALF_HEIGHT = 0.4;
+const PLAYER_HALF_DEPTH = 0.2;
 
 // Размеры блока (0.9 x 0.9 x 0.9 после масштабирования)
 const BLOCK_HALF_SIZE = 0.45;
-const EPSILON = 0.01;
 
 function connectToServer() {
     const serverUrl = 'wss://blockverse-server.onrender.com';
@@ -298,7 +291,7 @@ function checkCollisionAndAdjust(pos, velY, blocks) {
         }
     }
 
-    // Коррекция по Y с определением земли (исправлено условие)
+    // Коррекция по Y (гравитация и земля)
     playerBox = getPlayerBox(newPos);
     for (let block of blocks) {
         const bPos = block.position;
@@ -316,15 +309,15 @@ function checkCollisionAndAdjust(pos, velY, blocks) {
         };
         if (playerBox.maxX > blockBox.minX && playerBox.minX < blockBox.maxX &&
             playerBox.maxZ > blockBox.minZ && playerBox.minZ < blockBox.maxZ) {
-            // Приземление на блок сверху
-            if (newVelY <= 0 && playerBox.minY <= blockBox.maxY + EPSILON && playerBox.minY > blockBox.minY - 0.1) {
+            // Проверка приземления
+            if (newVelY <= 0 && playerBox.minY <= blockBox.maxY + 0.05 && playerBox.minY > blockBox.minY - 0.1) {
                 const newY = blockBox.maxY + PLAYER_HALF_HEIGHT;
                 newPos.y = newY;
                 newVelY = 0;
                 onGround = true;
             }
-            // Удар головой о потолок
-            else if (newVelY > 0 && playerBox.maxY >= blockBox.minY - EPSILON && playerBox.maxY < blockBox.minY + 0.1) {
+            // Проверка удара головой
+            else if (newVelY > 0 && playerBox.maxY >= blockBox.minY - 0.05 && playerBox.maxY < blockBox.minY + 0.1) {
                 const newY = blockBox.minY - PLAYER_HALF_HEIGHT;
                 newPos.y = newY;
                 newVelY = 0;
@@ -334,7 +327,6 @@ function checkCollisionAndAdjust(pos, velY, blocks) {
     return { pos: newPos, velY: newVelY, onGround };
 }
 
-// Размещение модели на платформе
 function placeModelOnPlatform(model, platform) {
     const bbox = new THREE.Box3().setFromObject(model);
     const modelMinY = bbox.min.y;
@@ -343,7 +335,7 @@ function placeModelOnPlatform(model, platform) {
     model.position.set(platform.position.x, offsetY, platform.position.z);
 }
 
-// ========== ИГРОВАЯ СЕССИЯ (мультиплеер) ==========
+// ========== ИГРОВАЯ СЕССИЯ ==========
 async function startGameSession(gameData, gameName) {
     document.getElementById('mainMenuScreen').classList.add('hidden');
     document.getElementById('customGameScreen').classList.remove('hidden');
@@ -372,7 +364,7 @@ async function startGameSession(gameData, gameName) {
 
     collisionBlocks = [];
 
-    // Базовая платформа (всегда)
+    // Базовая платформа
     const platformMesh = createMesh('cube', { x: 20/0.9, y: 1/0.9, z: 20/0.9 }, 0x6B8E23);
     platformMesh.position.set(0, -0.5, 0);
     gameScene.add(platformMesh);
@@ -389,13 +381,12 @@ async function startGameSession(gameData, gameName) {
         });
     }
 
-    // Простой кубический персонаж
     const playerModel = createDefaultCharacter(0x3a86ff);
     placeModelOnPlatform(playerModel, platformMesh);
     gameScene.add(playerModel);
     gamePlayer = playerModel;
 
-    // Управление с клавиатуры
+    // Управление
     const keyState = { w: false, s: false, a: false, d: false };
     const handleKey = (e, val) => {
         if(!gameActive) return;
@@ -474,9 +465,6 @@ async function startGameSession(gameData, gameName) {
     if (zoomInBtn) zoomInBtn.onclick = () => { controls.object.zoom = Math.min(3, controls.object.zoom - 0.2); controls.update(); };
     if (zoomOutBtn) zoomOutBtn.onclick = () => { controls.object.zoom = Math.max(0.5, controls.object.zoom + 0.2); controls.update(); };
 
-    const scoreDiv = document.querySelector('#customGameScreen .custom-game-ui:first-of-type');
-    if(scoreDiv) scoreDiv.innerText = 'Счёт: 0';
-
     let playerVelocityY = 0;
     const GRAVITY = 15;
     const JUMP_FORCE = 7;
@@ -518,7 +506,6 @@ async function startGameSession(gameData, gameName) {
         playerVelocityY = collisionResult.velY;
         isOnGround = collisionResult.onGround;
 
-        // Защита от падения в бездну
         if (newPos.y < -5) {
             placeModelOnPlatform(gamePlayer, platformMesh);
             newPos.copy(gamePlayer.position);
@@ -680,9 +667,6 @@ async function startLocalGameSession(gameData, gameName) {
     const zoomOutBtn = document.getElementById('zoomOut');
     if (zoomInBtn) zoomInBtn.onclick = () => { localControls.object.zoom = Math.min(3, localControls.object.zoom - 0.2); localControls.update(); };
     if (zoomOutBtn) zoomOutBtn.onclick = () => { localControls.object.zoom = Math.max(0.5, localControls.object.zoom + 0.2); localControls.update(); };
-
-    const scoreDiv = document.querySelector('#customGameScreen .custom-game-ui:first-of-type');
-    if(scoreDiv) scoreDiv.innerText = 'Счёт: 0';
 
     let playerVelocityY = 0;
     const GRAVITY = 15;
@@ -1021,4 +1005,4 @@ if (savedUser) {
     }
 } else {
     showLogin();
-                          }
+        }

@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>BlockVerse — мультиплеер + конструктор</title>
     <style>
-        /* стили без изменений (оставляем как в предыдущем ответе) */
         * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-tap-highlight-color:transparent; }
         body { font-family:'Segoe UI', 'Poppins', system-ui, sans-serif; background:linear-gradient(135deg,#0a0f1e,#0e1a2a); color:white; overflow:hidden; height:100vh; position:fixed; width:100%; touch-action:manipulation; }
         .screen { position:absolute; top:0; left:0; width:100%; height:100%; transition:opacity 0.3s ease; overflow-y:auto; padding:20px; -webkit-overflow-scrolling:touch; }
@@ -256,7 +255,6 @@
         { id: 'trail', name: 'Искрящийся след', price: 150 }
     ];
 
-    // ========== ДЕЛАЕМ ГЛОБАЛЬНЫЕ ДАННЫЕ И ФУНКЦИИ ДОСТУПНЫМИ ДЛЯ РЕДАКТОРА ==========
     window.currentUser = currentUser;
     window.customGames = customGames;
     window.saveGames = saveGames;
@@ -270,7 +268,6 @@
         window.customGames = customGames;
     }
 
-    // ========== МОДЕЛЬ ПЕРСОНАЖА ==========
     const PLAYER_MODEL_URL = 'https://raw.githubusercontent.com/mat8trooe888-art/Matblox/refs/heads/main/%D0%9D%D0%BE%D0%B2%D1%8B%D0%B9%20%D0%BF%D1%80%D0%BE%D0%B5%D0%BA%D1%82%201.gltf';
     let globalPlayerModel = null;
 
@@ -294,7 +291,6 @@
     function saveChat() { localStorage.setItem('blockverse_chat', JSON.stringify(chatMessages.slice(-100))); }
     function saveReports() { localStorage.setItem('blockverse_reports', JSON.stringify(reports.slice(-50))); }
 
-    // ========== АВТОРИЗАЦИЯ ==========
     function initUserData(username) {
         let user = users.find(u => u.username === username);
         if (!user) return null;
@@ -387,7 +383,7 @@
     }
     function startChatPolling() { setInterval(() => { const stored = JSON.parse(localStorage.getItem('blockverse_chat')) || []; if (JSON.stringify(stored) !== JSON.stringify(chatMessages)) { chatMessages = stored; renderChat(); } }, 2000); }
 
-    // ========== МУЛЬТИПЛЕЕР (WebSocket) ==========
+    // ========== МУЛЬТИПЛЕЕР ==========
     let ws = null;
     let currentGameId = null;
     let myPlayerId = null;
@@ -554,13 +550,12 @@
 
         collisionBlocks = [];
 
-        // ВСЕГДА добавляем платформу (большой пол)
+        // ВСЕГДА добавляем платформу
         const platformMesh = createMesh('cube', { x: 20/0.9, y: 1/0.9, z: 20/0.9 }, 0x6B8E23);
         platformMesh.position.set(0, -0.5, 0);
         gameScene.add(platformMesh);
         collisionBlocks.push(platformMesh);
 
-        // Загружаем блоки из сохранённой игры (если есть)
         if (gameData && gameData.blocks) {
             gameData.blocks.forEach(block => {
                 const mesh = createMesh(block.shape || 'cube', block.scale, block.color, block.opacity);
@@ -572,9 +567,7 @@
             });
         }
 
-        // Ищем спавн-блок (красный)
         let spawnBlock = findSpawnBlock(collisionBlocks);
-        // Ищем платформу (самый большой блок – это наша платформа)
         let platformBlock = null;
         for (let block of collisionBlocks) {
             if (block === platformMesh) {
@@ -583,7 +576,6 @@
             }
         }
 
-        // Вычисляем позицию спавна: по x,z спавн-блока (или 0,0), по y – верхняя грань платформы
         let spawnX = spawnBlock ? spawnBlock.position.x : 0;
         let spawnZ = spawnBlock ? spawnBlock.position.z : 0;
         let spawnY = 0;
@@ -591,15 +583,19 @@
             const bHalfY = BLOCK_HALF_SIZE * platformBlock.scale.y;
             spawnY = platformBlock.position.y + bHalfY + PLAYER_HALF_HEIGHT;
         } else {
-            spawnY = PLAYER_HALF_HEIGHT; // fallback
+            spawnY = PLAYER_HALF_HEIGHT;
         }
         const spawnPos = { x: spawnX, y: spawnY, z: spawnZ };
 
-        // Создаём модель игрока
+        // Создание модели с коррекцией позиции
         let playerModel = null;
         if (globalPlayerModel) {
             playerModel = globalPlayerModel.clone();
-            playerModel.position.set(spawnPos.x, spawnPos.y, spawnPos.z);
+            // Вычисляем смещение модели, чтобы она стояла на платформе
+            const box = new THREE.Box3().setFromObject(playerModel);
+            const minY = box.min.y;
+            const targetY = spawnPos.y - PLAYER_HALF_HEIGHT;
+            playerModel.position.set(spawnPos.x, targetY - minY, spawnPos.z);
             gameScene.add(playerModel);
             gamePlayer = playerModel;
         } else {
@@ -609,7 +605,6 @@
             gamePlayer = defaultChar;
         }
 
-        // Скрипты блоков (оставляем)
         const scriptedBlocks = [];
         for (let block of collisionBlocks) {
             if (block.userData.script && block.userData.script.trim() !== '') {
@@ -620,7 +615,6 @@
             }
         }
 
-        // Управление (клавиатура + джойстик) – без изменений
         const handleKey = (e, val) => {
             if(!gameActive) return;
             if(e.key==='w') keyState.w=val;
@@ -725,6 +719,12 @@
                 if(keyState.d) moveX += 1;
                 if(moveX !==0 || moveZ !==0) { const len = Math.hypot(moveX, moveZ); moveX/=len; moveZ/=len; }
             }
+            // Поворот модели в направлении движения
+            if (moveX !== 0 || moveZ !== 0) {
+                const angle = Math.atan2(moveX, moveZ);
+                gamePlayer.rotation.y = angle;
+            }
+
             let speed = moveSpeed * delta;
             let newPos = gamePlayer.position.clone();
             newPos.x += moveX * speed;
@@ -879,7 +879,7 @@
     }
 
     async function startLocalGameSession(gameData, gameName) {
-        // Используем ту же логику, что и в startGameSession, но без WebSocket
+        // аналогично startGameSession, но без WebSocket
         document.getElementById('mainMenuScreen').classList.add('hidden');
         document.getElementById('customGameScreen').classList.remove('hidden');
         const container = document.getElementById('customGameContainer');
@@ -907,7 +907,6 @@
 
         const blocks = [];
 
-        // ВСЕГДА добавляем платформу
         const platformMesh = createMesh('cube', { x: 20/0.9, y: 1/0.9, z: 20/0.9 }, 0x6B8E23);
         platformMesh.position.set(0, -0.5, 0);
         scene.add(platformMesh);
@@ -946,7 +945,10 @@
         let player;
         if (globalPlayerModel) {
             player = globalPlayerModel.clone();
-            player.position.set(spawnPos.x, spawnPos.y, spawnPos.z);
+            const box = new THREE.Box3().setFromObject(player);
+            const minY = box.min.y;
+            const targetY = spawnPos.y - PLAYER_HALF_HEIGHT;
+            player.position.set(spawnPos.x, targetY - minY, spawnPos.z);
             scene.add(player);
         } else {
             player = createDefaultCharacter();
@@ -1071,6 +1073,11 @@
                 if(localKeyState.d) moveX += 1;
                 if(moveX !==0 || moveZ !==0) { const len = Math.hypot(moveX, moveZ); moveX/=len; moveZ/=len; }
             }
+            if (moveX !== 0 || moveZ !== 0) {
+                const angle = Math.atan2(moveX, moveZ);
+                player.rotation.y = angle;
+            }
+
             let speed = localMoveSpeed * delta;
             let newPos = player.position.clone();
             newPos.x += moveX * speed;
@@ -1159,7 +1166,7 @@
         joinGame(serverId);
     });
 
-    // ========== КОНСТРУКТОР (динамическая загрузка) ==========
+    // ========== КОНСТРУКТОР ==========
     let editorLoaded = false;
     async function openEditor(gameToEdit = null) {
         if (!editorLoaded) {
@@ -1176,7 +1183,6 @@
         window.editorModule.openEditor(gameToEdit);
     }
 
-    // ========== МОБИЛЬНЫЕ СОБЫТИЯ ==========
     function attachMobileEvents() {
         const selectors = '.btn, .nav-btn, .play-btn, .buy-btn, .tool-btn, .block-option, .close-dialog, .exit-game, .publish-btn, .exit-editor-btn, .play-btn-small, .edit-btn-small, .delete-btn-small, #createNewGameBtn, #refreshGamesBtn, #earnCoinsBtn, #addFriendBtn, #sendChatBtn, #reportBugBtn, #toggleToolsPanelBtn, #togglePropsPanelBtn, #toggleToolsBtn, #togglePropsBtn, #connectToServerBtn, .host-btn, .host-btn-small';
         document.querySelectorAll(selectors).forEach(el => {
@@ -1188,7 +1194,6 @@
     setInterval(attachMobileEvents, 1500);
     attachMobileEvents();
 
-    // ========== АВТОРИЗАЦИЯ ==========
     function showLogin() { document.getElementById('loginForm').style.display='block'; document.getElementById('registerForm').style.display='none'; document.getElementById('authMessage').innerText=''; }
     function showRegister() { document.getElementById('loginForm').style.display='none'; document.getElementById('registerForm').style.display='block'; document.getElementById('authMessage').innerText=''; }
     function registerUser() {
@@ -1279,4 +1284,4 @@
     if (!savedUser) showLogin();
 </script>
 </body>
-            </html>
+                                                                                                  </html>

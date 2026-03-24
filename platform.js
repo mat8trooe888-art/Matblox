@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 // ========== ГЛОБАЛЬНЫЕ ДАННЫЕ ==========
 let currentUser = null;
@@ -151,6 +152,8 @@ const PLAYER_HALF_DEPTH = PLAYER_DEPTH / 2;
 // Размеры блока (0.9 x 0.9 x 0.9 после масштабирования)
 const BLOCK_HALF_SIZE = 0.45;
 
+let customPlayerModel = null; // загруженная модель персонажа
+
 function connectToServer() {
     const serverUrl = 'wss://blockverse-server.onrender.com';
     ws = new WebSocket(serverUrl);
@@ -216,9 +219,32 @@ function renderGamesList(games) {
     attachMobileEvents();
 }
 
-// Поиск спавн-блока (удалён – всегда платформа)
-function findSpawnBlock(blocks) {
-    return null; // всегда null, чтобы использовать платформу
+// ========== ЗАГРУЗКА МОДЕЛИ ПЕРСОНАЖА ==========
+async function loadCustomPlayerModel() {
+    const modelUrl = 'https://raw.githubusercontent.com/mat8trooe888-art/Matblox/refs/heads/main/%D0%9D%D0%BE%D0%B2%D1%8B%D0%B9%20%D0%BF%D1%80%D0%BE%D0%B5%D0%BA%D1%82%2011.gltf';
+    try {
+        const loader = new GLTFLoader();
+        const gltf = await loader.loadAsync(modelUrl);
+        const model = gltf.scene;
+        model.traverse(child => {
+            if (child.isMesh) {
+                child.castShadow = true;
+                child.receiveShadow = true;
+            }
+        });
+        // Масштабируем модель, чтобы она соответствовала размерам PLAYER_WIDTH, PLAYER_HEIGHT
+        const box = new THREE.Box3().setFromObject(model);
+        const size = box.getSize(new THREE.Vector3());
+        const scaleX = PLAYER_WIDTH / size.x;
+        const scaleY = PLAYER_HEIGHT / size.y;
+        const scaleZ = PLAYER_DEPTH / size.z;
+        model.scale.set(scaleX, scaleY, scaleZ);
+        console.log('Модель персонажа загружена');
+        return model;
+    } catch (err) {
+        console.error('Ошибка загрузки модели:', err);
+        return null;
+    }
 }
 
 // ========== НОВАЯ КОЛЛИЗИЯ (без спавн-блока) ==========
@@ -391,8 +417,18 @@ async function startGameSession(gameData, gameName) {
         });
     }
 
-    // Создаём игрока и ставим на платформу
-    const playerModel = createDefaultCharacter(0x3a86ff);
+    // Загружаем модель, если ещё не загружена
+    if (!customPlayerModel) {
+        customPlayerModel = await loadCustomPlayerModel();
+    }
+    let playerModel;
+    if (customPlayerModel) {
+        playerModel = customPlayerModel.clone();
+        // Корректируем масштаб, если нужно (уже сделано при загрузке)
+    } else {
+        // Резервный простой персонаж
+        playerModel = createDefaultCharacter(0x3a86ff);
+    }
     placeModelOnPlatform(playerModel, platformMesh);
     gameScene.add(playerModel);
     gamePlayer = playerModel;
@@ -600,7 +636,16 @@ async function startLocalGameSession(gameData, gameName) {
         });
     }
 
-    const player = createDefaultCharacter(0x3a86ff);
+    // Загружаем модель, если ещё не загружена
+    if (!customPlayerModel) {
+        customPlayerModel = await loadCustomPlayerModel();
+    }
+    let player;
+    if (customPlayerModel) {
+        player = customPlayerModel.clone();
+    } else {
+        player = createDefaultCharacter(0x3a86ff);
+    }
     placeModelOnPlatform(player, platformMesh);
     scene.add(player);
 
@@ -789,6 +834,7 @@ function createDefaultCharacter(color = 0x3a86ff) {
 }
 
 function createRemotePlayer() {
+    // Для удалённых игроков используем простую модель (или можно тоже пытаться загрузить ту же GLTF)
     return createDefaultCharacter(0xffaa44);
 }
 

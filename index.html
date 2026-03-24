@@ -239,10 +239,8 @@
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     import { TransformControls } from 'three/addons/controls/TransformControls.js';
-    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-    import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 
-    console.log("Скрипт запущен"); // Отладка
+    console.log("Скрипт запущен");
 
     // ========== ГЛОБАЛЬНЫЕ ДАННЫЕ ==========
     let currentUser = null;
@@ -268,24 +266,6 @@
     function updateGlobalRefs() {
         window.currentUser = currentUser;
         window.customGames = customGames;
-    }
-
-    const PLAYER_MODEL_URL = 'https://raw.githubusercontent.com/mat8trooe888-art/Matblox/refs/heads/main/%D0%9D%D0%BE%D0%B2%D1%8B%D0%B9%20%D0%BF%D1%80%D0%BE%D0%B5%D0%BA%D1%82%201.gltf';
-    let globalPlayerModel = null;
-
-    async function loadPlayerModel() {
-        if (globalPlayerModel) return globalPlayerModel;
-        try {
-            const model = await loadCustomModel(PLAYER_MODEL_URL);
-            model.scale.set(0.5, 0.5, 0.5);
-            model.traverse(child => { if (child.isMesh) { child.castShadow = true; child.receiveShadow = true; } });
-            globalPlayerModel = model;
-            console.log('Модель персонажа загружена');
-            return model;
-        } catch (err) {
-            console.error('Ошибка загрузки модели персонажа:', err);
-            return null;
-        }
     }
 
     function saveUsers() { localStorage.setItem('blockverse_users', JSON.stringify(users)); updateGlobalRefs(); }
@@ -315,7 +295,6 @@
         renderChat();
         renderReports();
         startChatPolling();
-        await loadPlayerModel();
         connectToWebSocket();
         updateGlobalRefs();
     }
@@ -460,11 +439,10 @@
     }
 
     const raycaster = new THREE.Raycaster();
-    // ИСПРАВЛЕННАЯ КОЛЛИЗИЯ
     function applyCollision(pos, blocks) {
         let newPos = pos.clone();
 
-        // Коррекция по X
+        // X
         for (let block of blocks) {
             const bPos = block.position;
             const bScale = block.scale;
@@ -481,7 +459,7 @@
             }
         }
 
-        // Коррекция по Z
+        // Z
         for (let block of blocks) {
             const bPos = block.position;
             const bScale = block.scale;
@@ -511,7 +489,7 @@
             }
         }
 
-        // Дополнительное выталкивание по Y
+        // Выталкивание по Y
         for (let block of blocks) {
             const bPos = block.position;
             const bScale = block.scale;
@@ -529,7 +507,6 @@
         return { pos: newPos, onGround };
     }
 
-    // Функция размещения модели на блоке
     function placeModelOnBlock(model, block) {
         const bbox = new THREE.Box3().setFromObject(model);
         const modelMinY = bbox.min.y;
@@ -582,31 +559,19 @@
             });
         }
 
-        // Определяем блок, на котором должен стоять игрок
         let standBlock = findSpawnBlock(collisionBlocks);
         if (!standBlock) {
             for (let block of collisionBlocks) {
-                if (block === platformMesh) {
-                    standBlock = block;
-                    break;
-                }
+                if (block === platformMesh) { standBlock = block; break; }
             }
         }
-        if (!standBlock) standBlock = platformMesh; // гарантия
+        if (!standBlock) standBlock = platformMesh;
 
-        // Создание модели с коррекцией позиции
-        let playerModel = null;
-        if (globalPlayerModel) {
-            playerModel = globalPlayerModel.clone();
-            placeModelOnBlock(playerModel, standBlock);
-            gameScene.add(playerModel);
-            gamePlayer = playerModel;
-        } else {
-            const defaultChar = createDefaultCharacter(0x3a86ff);
-            placeModelOnBlock(defaultChar, standBlock);
-            gameScene.add(defaultChar);
-            gamePlayer = defaultChar;
-        }
+        // Всегда используем простого кубического персонажа
+        const playerModel = createDefaultCharacter(0x3a86ff);
+        placeModelOnBlock(playerModel, standBlock);
+        gameScene.add(playerModel);
+        gamePlayer = playerModel;
 
         const scriptedBlocks = [];
         for (let block of collisionBlocks) {
@@ -795,13 +760,7 @@
     }
 
     function createRemotePlayer() {
-        if (globalPlayerModel) {
-            const clone = globalPlayerModel.clone();
-            clone.traverse(child => { if (child.isMesh) { child.castShadow = true; child.receiveShadow = true; } });
-            return clone;
-        } else {
-            return createDefaultCharacter(0xffaa44);
-        }
+        return createDefaultCharacter(0xffaa44);
     }
 
     function createMesh(shape, size = { x: 0.9, y: 0.9, z: 0.9 }, color = 0x8B5A2B, opacity = 1) {
@@ -818,14 +777,6 @@
         const mesh = new THREE.Mesh(geometry, material);
         mesh.scale.set(size.x, size.y, size.z);
         return mesh;
-    }
-
-    async function loadCustomModel(url) {
-        return new Promise((resolve, reject) => {
-            new GLTFLoader().load(url, gltf => { gltf.scene.traverse(c=>{if(c.isMesh){c.castShadow=true;c.receiveShadow=true;}}); resolve(gltf.scene); }, undefined, error => {
-                new OBJLoader().load(url, obj => { obj.traverse(c=>{if(c.isMesh){c.castShadow=true;c.receiveShadow=true;}}); resolve(obj); }, undefined, err2 => reject(new Error(`Не удалось загрузить: ${error.message||err2.message}`)));
-            });
-        });
     }
 
     // ========== МОИ ПРОЕКТЫ ==========
@@ -881,7 +832,6 @@
     }
 
     async function startLocalGameSession(gameData, gameName) {
-        // аналогично startGameSession, но без WebSocket
         document.getElementById('mainMenuScreen').classList.add('hidden');
         document.getElementById('customGameScreen').classList.remove('hidden');
         const container = document.getElementById('customGameContainer');
@@ -924,28 +874,17 @@
             });
         }
 
-        // Определяем блок, на котором должен стоять игрок
         let standBlock = findSpawnBlock(blocks);
         if (!standBlock) {
             for (let block of blocks) {
-                if (block === platformMesh) {
-                    standBlock = block;
-                    break;
-                }
+                if (block === platformMesh) { standBlock = block; break; }
             }
         }
         if (!standBlock) standBlock = platformMesh;
 
-        let player;
-        if (globalPlayerModel) {
-            player = globalPlayerModel.clone();
-            placeModelOnBlock(player, standBlock);
-            scene.add(player);
-        } else {
-            player = createDefaultCharacter();
-            placeModelOnBlock(player, standBlock);
-            scene.add(player);
-        }
+        const player = createDefaultCharacter(0x3a86ff);
+        placeModelOnBlock(player, standBlock);
+        scene.add(player);
 
         const scriptedBlocks = [];
         for (let block of blocks) {
@@ -1277,4 +1216,4 @@
     console.log("Скрипт завершил выполнение");
 </script>
 </body>
-                                                                                                                                                                                                                                                                  </html>
+</html>

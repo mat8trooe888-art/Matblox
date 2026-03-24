@@ -123,7 +123,7 @@ function sendChatMessage() {
 }
 function startChatPolling() { setInterval(() => { const stored = JSON.parse(localStorage.getItem('blockverse_chat')) || []; if (JSON.stringify(stored) !== JSON.stringify(chatMessages)) { chatMessages = stored; renderChat(); } }, 2000); }
 
-// ========== МУЛЬТИПЛЕЕР ==========
+// ========== МУЛЬТИПЛЕЕР (WebSocket) ==========
 let ws = null;
 let currentGameId = null;
 let myPlayerId = null;
@@ -137,54 +137,62 @@ let jumpRequest = false;
 let moveSpeed = 4;
 let controls = null;
 
-// Размеры игрока (0.6 x 0.8 x 0.4)
+// Размеры игрока (куб 0.6 x 0.8 x 0.4)
 const PLAYER_HALF_WIDTH = 0.3;
 const PLAYER_HALF_HEIGHT = 0.4;
 const PLAYER_HALF_DEPTH = 0.2;
-
-// Размеры блока (0.9 x 0.9 x 0.9 после масштабирования)
 const BLOCK_HALF_SIZE = 0.45;
 
 function connectToServer() {
     const serverUrl = 'wss://blockverse-server.onrender.com';
-    ws = new WebSocket(serverUrl);
-    ws.onopen = () => { console.log('Connected to game server'); requestGamesList(); };
-    ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        switch (data.type) {
-            case 'games_list': renderGamesList(data.games); break;
-            case 'game_created':
-                alert(`Игра "${data.gameName}" создана! ID: ${data.gameId}`);
-                requestGamesList();
-                break;
-            case 'joined':
-                myPlayerId = data.playerId;
-                startGameSession(data.gameData, data.gameName);
-                break;
-            case 'player_joined':
-                const newPlayer = createRemotePlayer();
-                newPlayer.position.set(data.position.x, data.position.y, data.position.z);
-                gameScene.add(newPlayer);
-                remotePlayers.set(data.playerId, newPlayer);
-                break;
-            case 'player_moved':
-                const movedPlayer = remotePlayers.get(data.playerId);
-                if (movedPlayer) movedPlayer.position.set(data.position.x, data.position.y, data.position.z);
-                break;
-            case 'player_left':
-                const leftPlayer = remotePlayers.get(data.playerId);
-                if (leftPlayer) gameScene.remove(leftPlayer);
-                remotePlayers.delete(data.playerId);
-                break;
-            case 'error': alert(data.message); break;
-        }
-    };
-    ws.onerror = (err) => console.error('WebSocket error:', err);
+    try {
+        ws = new WebSocket(serverUrl);
+        ws.onopen = () => { console.log('Connected to game server'); requestGamesList(); };
+        ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                switch (data.type) {
+                    case 'games_list': renderGamesList(data.games); break;
+                    case 'game_created':
+                        alert(`Игра "${data.gameName}" создана! ID: ${data.gameId}`);
+                        requestGamesList();
+                        break;
+                    case 'joined':
+                        myPlayerId = data.playerId;
+                        startGameSession(data.gameData, data.gameName);
+                        break;
+                    case 'player_joined':
+                        const newPlayer = createRemotePlayer();
+                        newPlayer.position.set(data.position.x, data.position.y, data.position.z);
+                        gameScene.add(newPlayer);
+                        remotePlayers.set(data.playerId, newPlayer);
+                        break;
+                    case 'player_moved':
+                        const movedPlayer = remotePlayers.get(data.playerId);
+                        if (movedPlayer) movedPlayer.position.set(data.position.x, data.position.y, data.position.z);
+                        break;
+                    case 'player_left':
+                        const leftPlayer = remotePlayers.get(data.playerId);
+                        if (leftPlayer) gameScene.remove(leftPlayer);
+                        remotePlayers.delete(data.playerId);
+                        break;
+                    case 'error': alert(data.message); break;
+                }
+            } catch (e) { console.warn('WebSocket message parse error', e); }
+        };
+        ws.onerror = (err) => {
+            console.warn('WebSocket error (ignored):', err);
+            // Игнорируем ошибку, чтобы не мешала локальной игре
+        };
+        ws.onclose = () => console.log('WebSocket closed');
+    } catch (e) {
+        console.warn('WebSocket connection failed, proceeding without multiplayer', e);
+    }
 }
 
 function requestGamesList() { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'get_games_list' })); }
-function createGameOnServer(gameName, gameData) { if (!ws || ws.readyState !== WebSocket.OPEN) return; ws.send(JSON.stringify({ type: 'create_game', gameName, author: currentUser.username, gameData })); }
-function joinGame(gameId) { if (!ws || ws.readyState !== WebSocket.OPEN) return; currentGameId = gameId; ws.send(JSON.stringify({ type: 'join_game', gameId })); }
+function createGameOnServer(gameName, gameData) { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'create_game', gameName, author: currentUser.username, gameData })); }
+function joinGame(gameId) { if (ws && ws.readyState === WebSocket.OPEN) { currentGameId = gameId; ws.send(JSON.stringify({ type: 'join_game', gameId })); } else { alert('Сервер мультиплеера недоступен, игра будет локальной'); startLocalGameSession(null, 'Локальная игра'); } }
 function sendPosition(pos) { if (ws && ws.readyState === WebSocket.OPEN && currentGameId) ws.send(JSON.stringify({ type: 'update_position', position: pos })); }
 function leaveGame() { if (ws && ws.readyState === WebSocket.OPEN && currentGameId) ws.send(JSON.stringify({ type: 'leave_game' })); currentGameId = null; }
 
@@ -210,7 +218,7 @@ function renderGamesList(games) {
     attachMobileEvents();
 }
 
-// ========== ИСПРАВЛЕННАЯ КОЛЛИЗИЯ ==========
+// ========== ПРОСТАЯ И НАДЁЖНАЯ КОЛЛИЗИЯ ==========
 function checkCollisionAndAdjust(pos, velY, blocks) {
     let newPos = pos.clone();
     let newVelY = velY;
@@ -249,11 +257,8 @@ function checkCollisionAndAdjust(pos, velY, blocks) {
             const overlapLeft = playerBox.maxX - blockBox.minX;
             const overlapRight = blockBox.maxX - playerBox.minX;
             if (overlapLeft > 0 && overlapRight > 0) {
-                if (overlapLeft < overlapRight) {
-                    newPos.x -= overlapLeft;
-                } else {
-                    newPos.x += overlapRight;
-                }
+                if (overlapLeft < overlapRight) newPos.x -= overlapLeft;
+                else newPos.x += overlapRight;
                 playerBox = getPlayerBox(newPos);
             }
         }
@@ -281,17 +286,14 @@ function checkCollisionAndAdjust(pos, velY, blocks) {
             const overlapFront = playerBox.maxZ - blockBox.minZ;
             const overlapBack = blockBox.maxZ - playerBox.minZ;
             if (overlapFront > 0 && overlapBack > 0) {
-                if (overlapFront < overlapBack) {
-                    newPos.z -= overlapFront;
-                } else {
-                    newPos.z += overlapBack;
-                }
+                if (overlapFront < overlapBack) newPos.z -= overlapFront;
+                else newPos.z += overlapBack;
                 playerBox = getPlayerBox(newPos);
             }
         }
     }
 
-    // Коррекция по Y (гравитация и земля)
+    // Коррекция по Y
     playerBox = getPlayerBox(newPos);
     for (let block of blocks) {
         const bPos = block.position;
@@ -309,14 +311,14 @@ function checkCollisionAndAdjust(pos, velY, blocks) {
         };
         if (playerBox.maxX > blockBox.minX && playerBox.minX < blockBox.maxX &&
             playerBox.maxZ > blockBox.minZ && playerBox.minZ < blockBox.maxZ) {
-            // Проверка приземления
+            // Приземление сверху
             if (newVelY <= 0 && playerBox.minY <= blockBox.maxY + 0.05 && playerBox.minY > blockBox.minY - 0.1) {
                 const newY = blockBox.maxY + PLAYER_HALF_HEIGHT;
                 newPos.y = newY;
                 newVelY = 0;
                 onGround = true;
             }
-            // Проверка удара головой
+            // Удар головой
             else if (newVelY > 0 && playerBox.maxY >= blockBox.minY - 0.05 && playerBox.maxY < blockBox.minY + 0.1) {
                 const newY = blockBox.minY - PLAYER_HALF_HEIGHT;
                 newPos.y = newY;
@@ -335,7 +337,6 @@ function placeModelOnPlatform(model, platform) {
     model.position.set(platform.position.x, offsetY, platform.position.z);
 }
 
-// ========== ИГРОВАЯ СЕССИЯ ==========
 async function startGameSession(gameData, gameName) {
     document.getElementById('mainMenuScreen').classList.add('hidden');
     document.getElementById('customGameScreen').classList.remove('hidden');
@@ -364,7 +365,6 @@ async function startGameSession(gameData, gameName) {
 
     collisionBlocks = [];
 
-    // Базовая платформа
     const platformMesh = createMesh('cube', { x: 20/0.9, y: 1/0.9, z: 20/0.9 }, 0x6B8E23);
     platformMesh.position.set(0, -0.5, 0);
     gameScene.add(platformMesh);
@@ -386,7 +386,6 @@ async function startGameSession(gameData, gameName) {
     gameScene.add(playerModel);
     gamePlayer = playerModel;
 
-    // Управление
     const keyState = { w: false, s: false, a: false, d: false };
     const handleKey = (e, val) => {
         if(!gameActive) return;
@@ -401,7 +400,6 @@ async function startGameSession(gameData, gameName) {
     window.addEventListener('keydown', e=>handleKey(e,true));
     window.addEventListener('keyup', e=>handleKey(e,false));
 
-    // Сенсорный джойстик
     const joystickDiv = document.getElementById('joystick');
     const jumpBtnDiv = document.getElementById('jumpBtn');
     let joystickThumb = joystickDiv?.querySelector('.joystick-thumb');
@@ -541,7 +539,7 @@ async function startGameSession(gameData, gameName) {
     attachMobileEvents();
 }
 
-// ========== ЛОКАЛЬНАЯ ИГРОВАЯ СЕССИЯ ==========
+// Локальная игра (без сервера)
 async function startLocalGameSession(gameData, gameName) {
     document.getElementById('mainMenuScreen').classList.add('hidden');
     document.getElementById('customGameScreen').classList.remove('hidden');
@@ -1005,4 +1003,4 @@ if (savedUser) {
     }
 } else {
     showLogin();
-        }
+}

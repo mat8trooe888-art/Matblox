@@ -192,6 +192,36 @@
             width: 100%;
             height: 100%;
             display: flex;
+            flex-direction: column;
+        }
+        /* Верхняя панель с вкладками */
+        .editor-top-bar {
+            background: #2c2f36;
+            border-bottom: 1px solid #4a4e55;
+            padding: 4px 12px;
+            display: flex;
+            gap: 8px;
+            z-index: 60;
+        }
+        .editor-tab {
+            padding: 8px 16px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            border-radius: 6px;
+            background: #3a3e47;
+            color: #ddd;
+            transition: 0.1s;
+        }
+        .editor-tab.active {
+            background: #ff5722;
+            color: white;
+        }
+        /* Основная область: 3D-вид + правая панель */
+        .editor-main {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
         }
         .viewport-area {
             flex: 1;
@@ -326,37 +356,12 @@
         .toolbar button.active {
             background: #ff5722;
         }
-        /* Вкладки снизу */
-        .tabs {
-            position: absolute;
-            bottom: 20px;
-            right: 20px;
-            display: flex;
-            gap: 8px;
-            background: #2c2f36;
-            border-radius: 40px;
-            padding: 4px 8px;
-            z-index: 60;
-            backdrop-filter: blur(8px);
-            border: 1px solid #4a4e55;
-        }
-        .tab {
-            padding: 6px 16px;
-            cursor: pointer;
-            font-size: 13px;
-            font-weight: bold;
-            border-radius: 30px;
-            background: #3a3e47;
-        }
-        .tab.active {
-            background: #ff5722;
-            color: white;
-        }
-        .tab-content {
+        /* Панели под вкладками (содержимое) */
+        .tab-content-panel {
             position: absolute;
             bottom: 80px;
-            right: 20px;
             left: 20px;
+            right: 340px; /* чтобы не перекрывать правую панель */
             background: rgba(0,0,0,0.7);
             backdrop-filter: blur(12px);
             border-radius: 12px;
@@ -366,7 +371,7 @@
             overflow-y: auto;
             display: none;
         }
-        .tab-content.active {
+        .tab-content-panel.active {
             display: block;
         }
         .block-palette {
@@ -384,6 +389,21 @@
         .block-option.selected {
             border-color: #ffaa44;
             transform: scale(1.05);
+        }
+        .vfx-controls, .animation-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+        .vfx-controls button, .animation-controls button {
+            background: #ff5722;
+            border: none;
+            border-radius: 20px;
+            padding: 6px 12px;
+            color: white;
+            cursor: pointer;
+            font-size: 12px;
         }
         .exit-editor-btn {
             position: absolute;
@@ -552,56 +572,72 @@
 <!-- НОВЫЙ КОНСТРУКТОР с компоновкой Roblox -->
 <div id="editorScreen" class="screen hidden">
     <div class="editor-layout">
-        <!-- 3D-вид -->
-        <div class="viewport-area">
-            <div id="editorCanvasContainer" class="editor-canvas"></div>
-            <div class="toolbar">
-                <button id="modeMoveBtn" class="active">📦 Переместить</button>
-                <button id="modeRotateBtn">🔄 Вращать</button>
-                <button id="modeScaleBtn">📏 Масштаб</button>
-                <button id="shapeCubeBtn" class="active">🔲 Куб</button>
-                <button id="shapeSphereBtn">⚪ Сфера</button>
-                <button id="shapeCylinderBtn">🧴 Цилиндр</button>
-                <button id="shapeConeBtn">🔺 Конус</button>
-                <button id="addCubeBtn">➕ Блок</button>
-                <button id="groupBtn">📁 Группа</button>
-                <button id="saveGameBtn">💾 Сохранить</button>
-                <button id="publishGameBtn">🚀 Опубликовать</button>
+        <div class="editor-top-bar">
+            <div class="editor-tab active" data-tab="blocks">Блоки</div>
+            <div class="editor-tab" data-tab="vfx">VFX</div>
+            <div class="editor-tab" data-tab="animations">Анимации</div>
+        </div>
+        <div class="editor-main">
+            <div class="viewport-area">
+                <div id="editorCanvasContainer" class="editor-canvas"></div>
+                <div class="toolbar">
+                    <button id="modeMoveBtn" class="active">📦 Переместить</button>
+                    <button id="modeRotateBtn">🔄 Вращать</button>
+                    <button id="modeScaleBtn">📏 Масштаб</button>
+                    <button id="shapeCubeBtn" class="active">🔲 Куб</button>
+                    <button id="shapeSphereBtn">⚪ Сфера</button>
+                    <button id="shapeCylinderBtn">🧴 Цилиндр</button>
+                    <button id="shapeConeBtn">🔺 Конус</button>
+                    <button id="addCubeBtn">➕ Блок</button>
+                    <button id="groupBtn">📁 Группа</button>
+                    <button id="saveGameBtn">💾 Сохранить</button>
+                    <button id="publishGameBtn">🚀 Опубликовать</button>
+                </div>
+                <button class="exit-editor-btn" id="exitEditorBtn">✖ Выйти</button>
+                <div class="status-bar" id="editorStatus">Готово</div>
             </div>
-            <div class="tabs">
-                <div class="tab active" data-tab="blocks">Блоки</div>
-                <div class="tab" data-tab="vfx">VFX</div>
-                <div class="tab" data-tab="animations">Анимации</div>
-            </div>
-            <div class="tab-content active" id="blocksTab">
-                <div class="block-palette">
-                    <div class="block-option" data-type="wood" style="background:#8B5A2B;"></div>
-                    <div class="block-option" data-type="stone" style="background:#808080;"></div>
-                    <div class="block-option" data-type="concrete" style="background:#B0B0B0;"></div>
-                    <div class="block-option" data-type="dirt" style="background:#6B4C3B;"></div>
+            <div class="right-panel">
+                <div class="explorer-panel">
+                    <div class="panel-header">📁 Проводник</div>
+                    <div id="explorerTree" class="explorer-tree"></div>
+                </div>
+                <div class="properties-panel">
+                    <div class="panel-header">⚙️ Свойства</div>
+                    <div id="propertiesContent" class="properties-content"></div>
                 </div>
             </div>
-            <div class="tab-content" id="vfxTab">
-                <div style="color: white;">Раздел VFX – скоро</div>
-                <button id="addParticleBtn" style="background:#ff5722; border:none; border-radius:20px; padding:6px 12px; margin-top:8px;">➕ Добавить частицы</button>
-            </div>
-            <div class="tab-content" id="animationsTab">
-                <div style="color: white;">Раздел анимаций – скоро</div>
-                <button id="addAnimationBtn" style="background:#ff5722; border:none; border-radius:20px; padding:6px 12px; margin-top:8px;">➕ Создать анимацию</button>
-            </div>
-            <button class="exit-editor-btn" id="exitEditorBtn">✖ Выйти</button>
-            <div class="status-bar" id="editorStatus">Готово</div>
         </div>
-        <!-- Правая панель: проводник (сверху) + свойства (снизу) -->
-        <div class="right-panel">
-            <div class="explorer-panel">
-                <div class="panel-header">📁 Проводник</div>
-                <div id="explorerTree" class="explorer-tree"></div>
-            </div>
-            <div class="properties-panel">
-                <div class="panel-header">⚙️ Свойства</div>
-                <div id="propertiesContent" class="properties-content"></div>
-            </div>
+    </div>
+    <!-- Панели содержимого для вкладок (расположены поверх 3D-вида, слева) -->
+    <div id="blocksTabContent" class="tab-content-panel active">
+        <div class="block-palette">
+            <div class="block-option" data-type="wood" style="background:#8B5A2B;"></div>
+            <div class="block-option" data-type="stone" style="background:#808080;"></div>
+            <div class="block-option" data-type="concrete" style="background:#B0B0B0;"></div>
+            <div class="block-option" data-type="dirt" style="background:#6B4C3B;"></div>
+        </div>
+    </div>
+    <div id="vfxTabContent" class="tab-content-panel">
+        <div class="vfx-controls">
+            <button id="addParticleBtn">✨ Добавить систему частиц</button>
+            <button id="editParticleBtn" disabled>✎ Редактировать</button>
+        </div>
+        <div style="margin-top: 8px; font-size: 12px; color: #ccc;">
+            Система частиц появится в проводнике. Выделите её для настройки свойств.
+        </div>
+    </div>
+    <div id="animationsTabContent" class="tab-content-panel">
+        <div class="animation-controls">
+            <button id="newAnimationBtn">➕ Новая анимация</button>
+            <select id="animationSelect" style="background:#1a1f2e; border:1px solid #ffaa44; border-radius:20px; padding:4px 8px; color:white;">
+                <option value="">-- Выберите анимацию --</option>
+            </select>
+            <button id="recordAnimationBtn">🔴 Запись</button>
+            <button id="playAnimationBtn">▶ Воспроизвести</button>
+            <button id="stopAnimationBtn">⏹ Стоп</button>
+        </div>
+        <div style="margin-top: 8px; font-size: 12px; color: #ccc;">
+            Для записи выберите объект, нажмите Запись и двигайте его.
         </div>
     </div>
 </div>

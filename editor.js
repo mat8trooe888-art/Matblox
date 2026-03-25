@@ -409,7 +409,6 @@ function deserializeBlock(data) {
         });
         return group;
     } else {
-        // Исправление: если color пришёл как число, преобразуем в строку
         let colorStr = data.color;
         if (typeof colorStr === 'number') {
             colorStr = '#' + colorStr.toString(16).padStart(6, '0');
@@ -430,4 +429,4 @@ export function openEditor(gameToEdit = null) {
     document.getElementById('mainMenuScreen').classList.add('hidden');
     document.getElementById('editorScreen').classList.remove('hidden');
     initEditor();
-        }
+    }

@@ -178,7 +178,7 @@ function renderGamesList(games) {
     attachMobileEvents();
 }
 
-// ========== КОЛЛИЗИЯ (проверенная) ==========
+// ========== КОЛЛИЗИЯ ==========
 function checkCollisionAndAdjust(pos, velY, blocks) {
     let newPos = pos.clone();
     let newVelY = velY;
@@ -455,7 +455,6 @@ async function startGameSession(gameData, gameName) {
         gamePlayer.position.copy(newPos);
         sendPosition({x:gamePlayer.position.x, y:gamePlayer.position.y, z:gamePlayer.position.z});
 
-        // Камера следует за игроком
         const targetPos = gamePlayer.position.clone();
         gameCamera.position.x = targetPos.x;
         gameCamera.position.z = targetPos.z + cameraDistance;

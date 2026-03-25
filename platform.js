@@ -128,15 +128,15 @@ let gameScene = null, gameCamera = null, gameRenderer = null, gamePlayer = null;
 let gameActive = false;
 let gameAnimationId = null;
 let collisionBlocks = [];
-let moveDirection = { x: 0, z: 0 };
-let jumpRequest = false;
 let moveSpeed = 4;
 let cameraDistance = 5;
 
-const PLAYER_HALF_WIDTH = 0.3;
-const PLAYER_HALF_HEIGHT = 0.4;
-const PLAYER_HALF_DEPTH = 0.2;
-const BLOCK_HALF_SIZE = 0.45;
+// Размеры игрока (простой куб)
+const PLAYER_SIZE = 0.6;          // ширина и глубина
+const PLAYER_HEIGHT = 0.8;
+const PLAYER_HALF_SIZE = PLAYER_SIZE / 2;
+const PLAYER_HALF_HEIGHT = PLAYER_HEIGHT / 2;
+const BLOCK_HALF_SIZE = 0.45;      // стандартный блок 0.9x0.9x0.9
 
 function connectToServer() {
     try {
@@ -178,7 +178,7 @@ function renderGamesList(games) {
     attachMobileEvents();
 }
 
-// ========== КОЛЛИЗИЯ ==========
+// ========== КОЛЛИЗИЯ (новая) ==========
 function checkCollisionAndAdjust(pos, velY, blocks) {
     let newPos = pos.clone();
     let newVelY = velY;
@@ -186,16 +186,16 @@ function checkCollisionAndAdjust(pos, velY, blocks) {
 
     function getPlayerBox(p) {
         return {
-            minX: p.x - PLAYER_HALF_WIDTH,
-            maxX: p.x + PLAYER_HALF_WIDTH,
+            minX: p.x - PLAYER_HALF_SIZE,
+            maxX: p.x + PLAYER_HALF_SIZE,
             minY: p.y - PLAYER_HALF_HEIGHT,
             maxY: p.y + PLAYER_HALF_HEIGHT,
-            minZ: p.z - PLAYER_HALF_DEPTH,
-            maxZ: p.z + PLAYER_HALF_DEPTH
+            minZ: p.z - PLAYER_HALF_SIZE,
+            maxZ: p.z + PLAYER_HALF_SIZE
         };
     }
 
-    // X
+    // Коррекция по X
     let playerBox = getPlayerBox(newPos);
     for (let block of blocks) {
         const bPos = block.position;
@@ -224,7 +224,7 @@ function checkCollisionAndAdjust(pos, velY, blocks) {
         }
     }
 
-    // Z
+    // Коррекция по Z
     playerBox = getPlayerBox(newPos);
     for (let block of blocks) {
         const bPos = block.position;
@@ -253,7 +253,7 @@ function checkCollisionAndAdjust(pos, velY, blocks) {
         }
     }
 
-    // Y
+    // Коррекция по Y (гравитация и земля)
     playerBox = getPlayerBox(newPos);
     for (let block of blocks) {
         const bPos = block.position;
@@ -271,12 +271,14 @@ function checkCollisionAndAdjust(pos, velY, blocks) {
         };
         if (playerBox.maxX > blockBox.minX && playerBox.minX < blockBox.maxX &&
             playerBox.maxZ > blockBox.minZ && playerBox.minZ < blockBox.maxZ) {
+            // Приземление
             if (newVelY <= 0 && playerBox.minY <= blockBox.maxY + 0.05 && playerBox.minY > blockBox.minY - 0.1) {
                 const newY = blockBox.maxY + PLAYER_HALF_HEIGHT;
                 newPos.y = newY;
                 newVelY = 0;
                 onGround = true;
             }
+            // Удар головой
             else if (newVelY > 0 && playerBox.maxY >= blockBox.minY - 0.05 && playerBox.maxY < blockBox.minY + 0.1) {
                 const newY = blockBox.minY - PLAYER_HALF_HEIGHT;
                 newPos.y = newY;
@@ -337,12 +339,18 @@ async function startGameSession(gameData, gameName) {
         });
     }
 
-    const player = createDefaultCharacter(0x3a86ff);
-    placeOnPlatform(player, platformMesh);
-    gameScene.add(player);
-    gamePlayer = player;
+    // Создаём простой куб
+    const playerMat = new THREE.MeshStandardMaterial({ color: 0x3a86ff });
+    const playerMesh = new THREE.Mesh(new THREE.BoxGeometry(PLAYER_SIZE, PLAYER_HEIGHT, PLAYER_SIZE), playerMat);
+    playerMesh.castShadow = true;
+    playerMesh.receiveShadow = true;
+    placeOnPlatform(playerMesh, platformMesh);
+    gameScene.add(playerMesh);
+    gamePlayer = playerMesh;
 
+    // Управление клавиатурой
     const keyState = { w: false, s: false, a: false, d: false };
+    let jumpRequest = false;
     const handleKey = (e, val) => {
         if(!gameActive) return;
         switch(e.key) {
@@ -355,48 +363,6 @@ async function startGameSession(gameData, gameName) {
     };
     window.addEventListener('keydown', e=>handleKey(e,true));
     window.addEventListener('keyup', e=>handleKey(e,false));
-
-    const joystickDiv = document.getElementById('joystick');
-    const jumpBtnDiv = document.getElementById('jumpBtn');
-    let joystickThumb = joystickDiv?.querySelector('.joystick-thumb');
-    if (joystickDiv) {
-        joystickDiv.style.display = 'block';
-        jumpBtnDiv.style.display = 'flex';
-        let center = {x:0,y:0};
-        let active = false;
-        const update = (t) => {
-            if(!active) return;
-            const dx = t.clientX - center.x;
-            const dy = t.clientY - center.y;
-            const maxD = 40;
-            let d = Math.hypot(dx,dy);
-            if(d>maxD) {
-                const a = Math.atan2(dy,dx);
-                const nx = Math.cos(a)*maxD;
-                const ny = Math.sin(a)*maxD;
-                moveDirection.x = nx/maxD;
-                moveDirection.z = ny/maxD;
-                if(joystickThumb) joystickThumb.style.transform = `translate(${nx}px,${ny}px)`;
-            } else {
-                moveDirection.x = dx/maxD;
-                moveDirection.z = dy/maxD;
-                if(joystickThumb) joystickThumb.style.transform = `translate(${dx}px,${dy}px)`;
-            }
-        };
-        joystickDiv.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            const rect = joystickDiv.getBoundingClientRect();
-            center = {x:rect.left+rect.width/2, y:rect.top+rect.height/2};
-            active = true;
-            update(e.touches[0]);
-        });
-        joystickDiv.addEventListener('touchmove', (e) => { e.preventDefault(); if(active) update(e.touches[0]); });
-        joystickDiv.addEventListener('touchend', () => { active=false; moveDirection={x:0,z:0}; if(joystickThumb) joystickThumb.style.transform='translate(0px,0px)'; });
-        jumpBtnDiv.addEventListener('touchstart', (e) => { e.preventDefault(); jumpRequest=true; });
-        jumpBtnDiv.addEventListener('touchend', () => { jumpRequest=false; });
-        jumpBtnDiv.addEventListener('mousedown', () => { jumpRequest=true; });
-        jumpBtnDiv.addEventListener('mouseup', () => { jumpRequest=false; });
-    }
 
     const zoomIn = document.getElementById('zoomIn');
     const zoomOut = document.getElementById('zoomOut');
@@ -420,8 +386,11 @@ async function startGameSession(gameData, gameName) {
         if(keyState.s) mz+=1;
         if(keyState.a) mx-=1;
         if(keyState.d) mx+=1;
-        if(mx!==0 || mz!==0) { const len = Math.hypot(mx,mz); mx/=len; mz/=len; }
-        if(moveDirection.x!==0 || moveDirection.z!==0) { mx=moveDirection.x; mz=moveDirection.z; }
+        if(mx!==0 || mz!==0) {
+            const len = Math.hypot(mx,mz);
+            mx /= len;
+            mz /= len;
+        }
 
         if(mx!==0 || mz!==0) {
             const angle = Math.atan2(mx, mz);
@@ -522,64 +491,24 @@ async function startLocalGameSession(gameData, gameName) {
         });
     }
 
-    const player = createDefaultCharacter(0x3a86ff);
+    const playerMat = new THREE.MeshStandardMaterial({ color: 0x3a86ff });
+    const player = new THREE.Mesh(new THREE.BoxGeometry(PLAYER_SIZE, PLAYER_HEIGHT, PLAYER_SIZE), playerMat);
+    player.castShadow = true;
+    player.receiveShadow = true;
     placeOnPlatform(player, platformMesh);
     scene.add(player);
 
     const keyState = { w: false, s: false, a: false, d: false };
-    let localMove = { x:0, z:0 };
-    let localJump = false;
+    let jumpRequest = false;
     const handleKey = (e, val) => {
         if(e.key==='w') keyState.w=val;
         if(e.key==='s') keyState.s=val;
         if(e.key==='a') keyState.a=val;
         if(e.key==='d') keyState.d=val;
-        if(e.key===' '||e.key==='Space') { localJump=val; e.preventDefault(); }
+        if(e.key===' '||e.key==='Space') { jumpRequest=val; e.preventDefault(); }
     };
     window.addEventListener('keydown', e=>handleKey(e,true));
     window.addEventListener('keyup', e=>handleKey(e,false));
-
-    const joystickDiv = document.getElementById('joystick');
-    const jumpBtnDiv = document.getElementById('jumpBtn');
-    let joystickThumb = joystickDiv?.querySelector('.joystick-thumb');
-    if (joystickDiv) {
-        joystickDiv.style.display = 'block';
-        jumpBtnDiv.style.display = 'flex';
-        let center = {x:0,y:0};
-        let active = false;
-        const update = (t) => {
-            if(!active) return;
-            const dx = t.clientX - center.x;
-            const dy = t.clientY - center.y;
-            const maxD = 40;
-            let d = Math.hypot(dx,dy);
-            if(d>maxD) {
-                const a = Math.atan2(dy,dx);
-                const nx = Math.cos(a)*maxD;
-                const ny = Math.sin(a)*maxD;
-                localMove.x = nx/maxD;
-                localMove.z = ny/maxD;
-                if(joystickThumb) joystickThumb.style.transform = `translate(${nx}px,${ny}px)`;
-            } else {
-                localMove.x = dx/maxD;
-                localMove.z = dy/maxD;
-                if(joystickThumb) joystickThumb.style.transform = `translate(${dx}px,${dy}px)`;
-            }
-        };
-        joystickDiv.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            const rect = joystickDiv.getBoundingClientRect();
-            center = {x:rect.left+rect.width/2, y:rect.top+rect.height/2};
-            active = true;
-            update(e.touches[0]);
-        });
-        joystickDiv.addEventListener('touchmove', (e) => { e.preventDefault(); if(active) update(e.touches[0]); });
-        joystickDiv.addEventListener('touchend', () => { active=false; localMove={x:0,z:0}; if(joystickThumb) joystickThumb.style.transform='translate(0px,0px)'; });
-        jumpBtnDiv.addEventListener('touchstart', (e) => { e.preventDefault(); localJump=true; });
-        jumpBtnDiv.addEventListener('touchend', () => { localJump=false; });
-        jumpBtnDiv.addEventListener('mousedown', () => { localJump=true; });
-        jumpBtnDiv.addEventListener('mouseup', () => { localJump=false; });
-    }
 
     const zoomIn = document.getElementById('zoomIn');
     const zoomOut = document.getElementById('zoomOut');
@@ -605,8 +534,11 @@ async function startLocalGameSession(gameData, gameName) {
         if(keyState.s) mz+=1;
         if(keyState.a) mx-=1;
         if(keyState.d) mx+=1;
-        if(mx!==0 || mz!==0) { const len = Math.hypot(mx,mz); mx/=len; mz/=len; }
-        if(localMove.x!==0 || localMove.z!==0) { mx=localMove.x; mz=localMove.z; }
+        if(mx!==0 || mz!==0) {
+            const len = Math.hypot(mx,mz);
+            mx /= len;
+            mz /= len;
+        }
 
         if(mx!==0 || mz!==0) {
             const angle = Math.atan2(mx, mz);
@@ -632,9 +564,9 @@ async function startLocalGameSession(gameData, gameName) {
             onGround = true;
         }
 
-        if(onGround && localJump) {
+        if(onGround && jumpRequest) {
             velY = JUMP_FORCE;
-            localJump = false;
+            jumpRequest = false;
         }
 
         player.position.copy(newPos);
@@ -659,37 +591,13 @@ async function startLocalGameSession(gameData, gameName) {
     attachMobileEvents();
 }
 
-function createDefaultCharacter(color=0x3a86ff) {
-    const group = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.6,0.8,0.4), new THREE.MeshStandardMaterial({color}));
-    body.position.y=0; body.castShadow=true; group.add(body);
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.4,32,32), new THREE.MeshStandardMaterial({color:0xffccaa}));
-    head.position.y=0.6; head.castShadow=true; group.add(head);
-    const leftEye = new THREE.Mesh(new THREE.SphereGeometry(0.12,16,16), new THREE.MeshStandardMaterial({color:0xffffff}));
-    leftEye.position.set(-0.15,0.75,0.4);
-    const rightEye = new THREE.Mesh(new THREE.SphereGeometry(0.12,16,16), new THREE.MeshStandardMaterial({color:0xffffff}));
-    rightEye.position.set(0.15,0.75,0.4);
-    group.add(leftEye,rightEye);
-    const leftPupil = new THREE.Mesh(new THREE.SphereGeometry(0.07,16,16), new THREE.MeshStandardMaterial({color:0x000000}));
-    leftPupil.position.set(-0.15,0.73,0.52);
-    const rightPupil = new THREE.Mesh(new THREE.SphereGeometry(0.07,16,16), new THREE.MeshStandardMaterial({color:0x000000}));
-    rightPupil.position.set(0.15,0.73,0.52);
-    group.add(leftPupil,rightPupil);
-    const leftArm = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.6,0.3), new THREE.MeshStandardMaterial({color}));
-    leftArm.position.set(-0.55,0.3,0);
-    const rightArm = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.6,0.3), new THREE.MeshStandardMaterial({color}));
-    rightArm.position.set(0.55,0.3,0);
-    group.add(leftArm,rightArm);
-    const leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.6,0.3), new THREE.MeshStandardMaterial({color:0x2c5f8a}));
-    leftLeg.position.set(-0.25,-0.5,0);
-    const rightLeg = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.6,0.3), new THREE.MeshStandardMaterial({color:0x2c5f8a}));
-    rightLeg.position.set(0.25,-0.5,0);
-    group.add(leftLeg,rightLeg);
-    return group;
-}
-
 function createRemotePlayer() {
-    return createDefaultCharacter(0xffaa44);
+    // Простой куб для удалённых игроков
+    const mat = new THREE.MeshStandardMaterial({ color: 0xffaa44 });
+    const cube = new THREE.Mesh(new THREE.BoxGeometry(PLAYER_SIZE, PLAYER_HEIGHT, PLAYER_SIZE), mat);
+    cube.castShadow = true;
+    cube.receiveShadow = true;
+    return cube;
 }
 
 function createMesh(shape, size, color, opacity) {

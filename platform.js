@@ -180,7 +180,7 @@ function renderGamesList(games) {
     attachMobileEvents();
 }
 
-// ========== КОЛЛИЗИЯ ==========
+// ========== КОЛЛИЗИЯ (ПРОВЕРЕННАЯ) ==========
 function checkCollisionAndAdjust(pos, velY, blocks) {
     let newPos = pos.clone();
     let newVelY = velY;
@@ -273,14 +273,12 @@ function checkCollisionAndAdjust(pos, velY, blocks) {
         };
         if (playerBox.maxX > blockBox.minX && playerBox.minX < blockBox.maxX &&
             playerBox.maxZ > blockBox.minZ && playerBox.minZ < blockBox.maxZ) {
-            // Приземление
             if (newVelY <= 0 && playerBox.minY <= blockBox.maxY + 0.05 && playerBox.minY > blockBox.minY - 0.1) {
                 const newY = blockBox.maxY + PLAYER_HALF_HEIGHT;
                 newPos.y = newY;
                 newVelY = 0;
                 onGround = true;
             }
-            // Удар головой
             else if (newVelY > 0 && playerBox.maxY >= blockBox.minY - 0.05 && playerBox.maxY < blockBox.minY + 0.1) {
                 const newY = blockBox.minY - PLAYER_HALF_HEIGHT;
                 newPos.y = newY;
@@ -291,15 +289,11 @@ function checkCollisionAndAdjust(pos, velY, blocks) {
     return { pos: newPos, velY: newVelY, onGround };
 }
 
-// ========== УПРОЩЁННАЯ ФУНКЦИЯ РАЗМЕЩЕНИЯ НА ПЛАТФОРМЕ ==========
 function placeOnPlatform(model, platform) {
-    // Верх платформы
     const platformTop = platform.position.y + (BLOCK_HALF_SIZE * platform.scale.y);
-    // Ставим модель так, чтобы её центр был на высоте platformTop + половина высоты модели
     model.position.set(platform.position.x, platformTop + PLAYER_HALF_HEIGHT, platform.position.z);
 }
 
-// ========== ИГРОВАЯ СЕССИЯ ==========
 async function startGameSession(gameData, gameName) {
     document.getElementById('mainMenuScreen').classList.add('hidden');
     document.getElementById('customGameScreen').classList.remove('hidden');
@@ -328,7 +322,6 @@ async function startGameSession(gameData, gameName) {
 
     collisionBlocks = [];
 
-    // Базовая платформа
     const platformMesh = createMesh('cube', {x:20/0.9, y:1/0.9, z:20/0.9}, 0x6B8E23);
     platformMesh.position.set(0, -0.5, 0);
     gameScene.add(platformMesh);
@@ -345,13 +338,11 @@ async function startGameSession(gameData, gameName) {
         });
     }
 
-    // Создаём игрока и ставим на платформу
     const player = createDefaultCharacter(0x3a86ff);
     placeOnPlatform(player, platformMesh);
     gameScene.add(player);
     gamePlayer = player;
 
-    // Управление (клавиатура + джойстик)
     const keyState = { w: false, s: false, a: false, d: false };
     const handleKey = (e, val) => {
         if(!gameActive) return;
@@ -494,7 +485,6 @@ async function startGameSession(gameData, gameName) {
     attachMobileEvents();
 }
 
-// ========== ЛОКАЛЬНАЯ ИГРОВАЯ СЕССИЯ ==========
 async function startLocalGameSession(gameData, gameName) {
     document.getElementById('mainMenuScreen').classList.add('hidden');
     document.getElementById('customGameScreen').classList.remove('hidden');
@@ -542,18 +532,15 @@ async function startLocalGameSession(gameData, gameName) {
     placeOnPlatform(player, platformMesh);
     scene.add(player);
 
-    // Управление
-    let localKeyState = { w: false, s: false, a: false, d: false };
-    let localMoveDirection = { x: 0, z: 0 };
-    let localJumpRequest = false;
+    const keyState = { w: false, s: false, a: false, d: false };
+    let localMove = { x:0, z:0 };
+    let localJump = false;
     const handleKey = (e, val) => {
-        switch(e.key) {
-            case 'w': localKeyState.w = val; break;
-            case 's': localKeyState.s = val; break;
-            case 'a': localKeyState.a = val; break;
-            case 'd': localKeyState.d = val; break;
-            case ' ': case 'Space': localJumpRequest = val; e.preventDefault(); break;
-        }
+        if(e.key==='w') keyState.w=val;
+        if(e.key==='s') keyState.s=val;
+        if(e.key==='a') keyState.a=val;
+        if(e.key==='d') keyState.d=val;
+        if(e.key===' '||e.key==='Space') { localJump=val; e.preventDefault(); }
     };
     window.addEventListener('keydown', e=>handleKey(e,true));
     window.addEventListener('keyup', e=>handleKey(e,false));
@@ -576,12 +563,12 @@ async function startLocalGameSession(gameData, gameName) {
                 const a = Math.atan2(dy,dx);
                 const nx = Math.cos(a)*maxD;
                 const ny = Math.sin(a)*maxD;
-                localMoveDirection.x = nx/maxD;
-                localMoveDirection.z = ny/maxD;
+                localMove.x = nx/maxD;
+                localMove.z = ny/maxD;
                 if(joystickThumb) joystickThumb.style.transform = `translate(${nx}px,${ny}px)`;
             } else {
-                localMoveDirection.x = dx/maxD;
-                localMoveDirection.z = dy/maxD;
+                localMove.x = dx/maxD;
+                localMove.z = dy/maxD;
                 if(joystickThumb) joystickThumb.style.transform = `translate(${dx}px,${dy}px)`;
             }
         };
@@ -593,26 +580,26 @@ async function startLocalGameSession(gameData, gameName) {
             update(e.touches[0]);
         });
         joystickDiv.addEventListener('touchmove', (e) => { e.preventDefault(); if(active) update(e.touches[0]); });
-        joystickDiv.addEventListener('touchend', () => { active=false; localMoveDirection={x:0,z:0}; if(joystickThumb) joystickThumb.style.transform='translate(0px,0px)'; });
-        jumpBtnDiv.addEventListener('touchstart', (e) => { e.preventDefault(); localJumpRequest=true; });
-        jumpBtnDiv.addEventListener('touchend', () => { localJumpRequest=false; });
-        jumpBtnDiv.addEventListener('mousedown', () => { localJumpRequest=true; });
-        jumpBtnDiv.addEventListener('mouseup', () => { localJumpRequest=false; });
+        joystickDiv.addEventListener('touchend', () => { active=false; localMove={x:0,z:0}; if(joystickThumb) joystickThumb.style.transform='translate(0px,0px)'; });
+        jumpBtnDiv.addEventListener('touchstart', (e) => { e.preventDefault(); localJump=true; });
+        jumpBtnDiv.addEventListener('touchend', () => { localJump=false; });
+        jumpBtnDiv.addEventListener('mousedown', () => { localJump=true; });
+        jumpBtnDiv.addEventListener('mouseup', () => { localJump=false; });
     }
 
-    const localControls = new OrbitControls(camera, renderer.domElement);
-    localControls.enableDamping = true;
-    localControls.dampingFactor = 0.05;
-    localControls.rotateSpeed = 1.0;
-    localControls.zoomSpeed = 1.2;
-    localControls.enableZoom = true;
-    localControls.enablePan = false;
-    localControls.target.copy(player.position);
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.rotateSpeed = 1.0;
+    controls.zoomSpeed = 1.2;
+    controls.enableZoom = true;
+    controls.enablePan = false;
+    controls.target.copy(player.position);
 
     const zoomIn = document.getElementById('zoomIn');
     const zoomOut = document.getElementById('zoomOut');
-    if(zoomIn) zoomIn.onclick = () => { localControls.object.zoom = Math.min(3, localControls.object.zoom-0.2); localControls.update(); };
-    if(zoomOut) zoomOut.onclick = () => { localControls.object.zoom = Math.max(0.5, localControls.object.zoom+0.2); localControls.update(); };
+    if(zoomIn) zoomIn.onclick = () => { controls.object.zoom = Math.min(3, controls.object.zoom-0.2); controls.update(); };
+    if(zoomOut) zoomOut.onclick = () => { controls.object.zoom = Math.max(0.5, controls.object.zoom+0.2); controls.update(); };
 
     let velY = 0;
     const GRAVITY = 15;
@@ -628,12 +615,12 @@ async function startLocalGameSession(gameData, gameName) {
         lastTime = now;
 
         let mx=0, mz=0;
-        if(localKeyState.w) mz-=1;
-        if(localKeyState.s) mz+=1;
-        if(localKeyState.a) mx-=1;
-        if(localKeyState.d) mx+=1;
+        if(keyState.w) mz-=1;
+        if(keyState.s) mz+=1;
+        if(keyState.a) mx-=1;
+        if(keyState.d) mx+=1;
         if(mx!==0 || mz!==0) { const len = Math.hypot(mx,mz); mx/=len; mz/=len; }
-        if(localMoveDirection.x!==0 || localMoveDirection.z!==0) { mx=localMoveDirection.x; mz=localMoveDirection.z; }
+        if(localMove.x!==0 || localMove.z!==0) { mx=localMove.x; mz=localMove.z; }
 
         if(mx!==0 || mz!==0) {
             const angle = Math.atan2(mx, mz);
@@ -659,15 +646,15 @@ async function startLocalGameSession(gameData, gameName) {
             onGround = true;
         }
 
-        if(onGround && localJumpRequest) {
+        if(onGround && localJump) {
             velY = JUMP_FORCE;
-            localJumpRequest = false;
+            localJump = false;
         }
 
         player.position.copy(newPos);
 
-        localControls.target.copy(player.position);
-        localControls.update();
+        controls.target.copy(player.position);
+        controls.update();
         pointLight.position.set(player.position.x, player.position.y+1, player.position.z);
         renderer.render(scene, camera);
         requestAnimationFrame(updateLocal);
@@ -683,7 +670,6 @@ async function startLocalGameSession(gameData, gameName) {
     attachMobileEvents();
 }
 
-// ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
 function createDefaultCharacter(color=0x3a86ff) {
     const group = new THREE.Group();
     const body = new THREE.Mesh(new THREE.BoxGeometry(0.6,0.8,0.4), new THREE.MeshStandardMaterial({color}));

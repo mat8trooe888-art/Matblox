@@ -13,6 +13,7 @@ let editorObjects = []; // массив объектов с иерархией
 let selectedObjects = [];
 let currentTransformMode = 'translate';
 let currentBlockType = 'wood';
+let currentShape = 'cube';
 let currentColor = '#8B5A2B';
 let currentOpacity = 1;
 let editorActive = false;
@@ -25,7 +26,7 @@ function generateId() {
     return Date.now() + '-' + Math.random().toString(36).substr(2, 8);
 }
 
-// Создание меша блока
+// Создание меша блока с учётом формы
 function createBlockMesh(shape, size = { x: 0.9, y: 0.9, z: 0.9 }, color = 0x8B5A2B, opacity = 1, type = 'block') {
     let geometry;
     switch(shape) {
@@ -101,19 +102,19 @@ function renameObject(obj) {
     }
 }
 
-// Создание блока
+// Создание блока с текущими настройками
 function addDefaultBlock() {
     const color = parseInt(currentColor.slice(1), 16);
-    const mesh = createBlockMesh('cube', { x:0.9, y:0.9, z:0.9 }, color, currentOpacity, 'block');
+    const mesh = createBlockMesh(currentShape, { x:0.9, y:0.9, z:0.9 }, color, currentOpacity, 'block');
     mesh.position.set(0, 1, 0);
     const obj = {
         id: generateId(),
-        name: 'Блок',
+        name: `Блок (${currentShape})`,
         type: 'block',
         parentId: null,
         childrenIds: [],
         threeObject: mesh,
-        userData: { type: 'block', shape: 'cube', color: currentColor, opacity: currentOpacity }
+        userData: { type: 'block', shape: currentShape, color: currentColor, opacity: currentOpacity }
     };
     addObject(obj);
     selectObject(obj);
@@ -371,9 +372,9 @@ function serializeObject(obj) {
                 const child = editorObjects.find(o => o.id === childId);
                 return child ? serializeObject(child) : null;
             }).filter(c => c),
-            position: obj.threeObject.position,
-            rotation: obj.threeObject.rotation,
-            scale: obj.threeObject.scale
+            position: { x: obj.threeObject.position.x, y: obj.threeObject.position.y, z: obj.threeObject.position.z },
+            rotation: { x: obj.threeObject.rotation.x, y: obj.threeObject.rotation.y, z: obj.threeObject.rotation.z },
+            scale: { x: obj.threeObject.scale.x, y: obj.threeObject.scale.y, z: obj.threeObject.scale.z }
         };
     } else {
         return {
@@ -425,7 +426,12 @@ function deserializeObject(data) {
         });
         return groupObj;
     } else {
-        const colorNum = parseInt(data.color.slice(1), 16);
+        // Исправление: если color пришёл как число, преобразуем в строку
+        let colorStr = data.color;
+        if (typeof colorStr === 'number') {
+            colorStr = '#' + colorStr.toString(16).padStart(6, '0');
+        }
+        const colorNum = parseInt(colorStr.slice(1), 16);
         const mesh = createBlockMesh(data.shape, data.scale, colorNum, data.opacity, 'block');
         mesh.position.copy(data.position);
         mesh.rotation.copy(data.rotation);
@@ -437,7 +443,7 @@ function deserializeObject(data) {
             parentId: null,
             childrenIds: [],
             threeObject: mesh,
-            userData: { type: 'block', shape: data.shape, color: data.color, opacity: data.opacity }
+            userData: { type: 'block', shape: data.shape, color: colorStr, opacity: data.opacity }
         };
     }
 }
@@ -516,10 +522,30 @@ function initEditor() {
     addObject(spawnObj);
     addDefaultBlock();
 
-    // Привязка кнопок
-    document.getElementById('modeMoveBtn').onclick = () => { transformControls.setMode('translate'); currentTransformMode = 'translate'; };
-    document.getElementById('modeRotateBtn').onclick = () => { transformControls.setMode('rotate'); currentTransformMode = 'rotate'; };
-    document.getElementById('modeScaleBtn').onclick = () => { transformControls.setMode('scale'); currentTransformMode = 'scale'; };
+    // Привязка кнопок тулбара
+    document.getElementById('modeMoveBtn').onclick = () => {
+        transformControls.setMode('translate');
+        currentTransformMode = 'translate';
+        document.querySelectorAll('.toolbar button').forEach(btn => btn.classList.remove('active'));
+        document.getElementById('modeMoveBtn').classList.add('active');
+    };
+    document.getElementById('modeRotateBtn').onclick = () => {
+        transformControls.setMode('rotate');
+        currentTransformMode = 'rotate';
+        document.querySelectorAll('.toolbar button').forEach(btn => btn.classList.remove('active'));
+        document.getElementById('modeRotateBtn').classList.add('active');
+    };
+    document.getElementById('modeScaleBtn').onclick = () => {
+        transformControls.setMode('scale');
+        currentTransformMode = 'scale';
+        document.querySelectorAll('.toolbar button').forEach(btn => btn.classList.remove('active'));
+        document.getElementById('modeScaleBtn').classList.add('active');
+    };
+    // Кнопки форм
+    document.getElementById('shapeCubeBtn')?.addEventListener('click', () => { currentShape = 'cube'; document.getElementById('shapeCubeBtn').classList.add('active'); document.getElementById('shapeSphereBtn')?.classList.remove('active'); document.getElementById('shapeCylinderBtn')?.classList.remove('active'); document.getElementById('shapeConeBtn')?.classList.remove('active'); });
+    document.getElementById('shapeSphereBtn')?.addEventListener('click', () => { currentShape = 'sphere'; document.getElementById('shapeSphereBtn').classList.add('active'); document.getElementById('shapeCubeBtn')?.classList.remove('active'); document.getElementById('shapeCylinderBtn')?.classList.remove('active'); document.getElementById('shapeConeBtn')?.classList.remove('active'); });
+    document.getElementById('shapeCylinderBtn')?.addEventListener('click', () => { currentShape = 'cylinder'; document.getElementById('shapeCylinderBtn').classList.add('active'); document.getElementById('shapeCubeBtn')?.classList.remove('active'); document.getElementById('shapeSphereBtn')?.classList.remove('active'); document.getElementById('shapeConeBtn')?.classList.remove('active'); });
+    document.getElementById('shapeConeBtn')?.addEventListener('click', () => { currentShape = 'cone'; document.getElementById('shapeConeBtn').classList.add('active'); document.getElementById('shapeCubeBtn')?.classList.remove('active'); document.getElementById('shapeSphereBtn')?.classList.remove('active'); document.getElementById('shapeCylinderBtn')?.classList.remove('active'); });
     document.getElementById('addCubeBtn').onclick = addDefaultBlock;
     document.getElementById('groupBtn').onclick = groupSelected;
     document.getElementById('saveGameBtn').onclick = saveGameLocal;
@@ -541,7 +567,7 @@ function initEditor() {
         });
     });
     document.querySelector('.block-option').classList.add('selected');
-    document.getElementById('explorerAddBtn').onclick = () => addDefaultBlock();
+    document.getElementById('explorerAddBtn')?.addEventListener('click', () => addDefaultBlock());
 
     // Вкладки
     document.querySelectorAll('.tab').forEach(tab => {
@@ -552,6 +578,14 @@ function initEditor() {
             const tabId = tab.dataset.tab;
             document.getElementById(tabId + 'Tab').classList.add('active');
         });
+    });
+
+    // Заглушки для VFX и анимаций
+    document.getElementById('addParticleBtn')?.addEventListener('click', () => {
+        alert('Добавление частиц будет в следующей версии');
+    });
+    document.getElementById('addAnimationBtn')?.addEventListener('click', () => {
+        alert('Создание анимаций будет в следующей версии');
     });
 
     if (gameBeingEdited) loadGameForEditing(gameBeingEdited);
@@ -565,4 +599,4 @@ export function openEditor(gameToEdit = null) {
     document.getElementById('mainMenuScreen').classList.add('hidden');
     document.getElementById('editorScreen').classList.remove('hidden');
     initEditor();
-                                                               }
+        }

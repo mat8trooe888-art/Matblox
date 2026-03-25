@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>BlockVerse — конструктор и игра</title>
+    <title>BlockVerse — мультиплеер + конструктор</title>
     <style>
         * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-tap-highlight-color:transparent; }
         body { font-family:'Segoe UI', system-ui, sans-serif; background:linear-gradient(135deg,#0a0f1e,#0e1a2a); color:white; overflow:hidden; height:100vh; position:fixed; width:100%; touch-action:manipulation; }
@@ -79,11 +79,6 @@
             .panel-toggle.right { left:auto; right:10px; }
         }
         .exit-game { z-index:100; cursor:pointer; }
-        .mobile-joystick { position:absolute; bottom:30px; left:30px; width:120px; height:120px; background:rgba(0,0,0,0.5); border-radius:60px; backdrop-filter:blur(8px); touch-action:none; z-index:30; }
-        .joystick-thumb { position:absolute; width:50px; height:50px; background:rgba(255,255,255,0.8); border-radius:25px; top:35px; left:35px; pointer-events:none; }
-        .jump-button { position:absolute; bottom:30px; right:30px; width:70px; height:70px; background:rgba(0,0,0,0.6); border-radius:35px; backdrop-filter:blur(8px); border:2px solid #ffaa44; display:flex; align-items:center; justify-content:center; font-size:24px; font-weight:bold; color:white; touch-action:manipulation; z-index:30; }
-        .camera-zoom { position:absolute; bottom:30px; right:120px; background:rgba(0,0,0,0.6); border-radius:20px; padding:5px; display:flex; gap:5px; z-index:30; }
-        .camera-zoom button { background:#2c3e66; border:none; padding:5px 10px; border-radius:20px; color:white; cursor:pointer; }
         .server-join { margin:20px 0; display:flex; gap:12px; align-items:center; background:rgba(0,0,0,0.5); padding:8px 16px; border-radius:40px; }
         .server-join input { flex:1; background:#1a1f2e; border:1px solid #ffaa44; border-radius:40px; padding:8px 16px; color:white; }
     </style>
@@ -222,14 +217,7 @@
     <div id="customGameContainer" style="width:100%; height:100%;"></div>
     <div class="exit-game" style="position: absolute; top:20px; right:20px; background:#ff3333; padding:10px 20px; border-radius:40px; cursor:pointer; z-index:20;">✖ Выйти</div>
     <div class="custom-game-ui" style="position: absolute; bottom:20px; left:20px; background:rgba(0,0,0,0.6); padding:8px 16px; border-radius:20px; z-index:20;">Счёт: 0</div>
-    <div id="joystick" class="mobile-joystick">
-        <div class="joystick-thumb"></div>
-    </div>
-    <div id="jumpBtn" class="jump-button">Прыжок</div>
-    <div class="camera-zoom" id="cameraZoom">
-        <button id="zoomIn">+</button>
-        <button id="zoomOut">-</button>
-    </div>
+    <!-- Сенсорные элементы удалены -->
 </div>
 
 <script type="importmap">
@@ -237,4 +225,4 @@
 </script>
 <script type="module" src="./platform.js"></script>
 </body>
-                </html>
+            </html>

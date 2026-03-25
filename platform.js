@@ -129,14 +129,13 @@ let gameActive = false;
 let gameAnimationId = null;
 let collisionBlocks = [];
 let moveSpeed = 4;
-let cameraDistance = 5;
 
 // Размеры игрока (простой куб)
 const PLAYER_SIZE = 0.6;
 const PLAYER_HEIGHT = 0.8;
 const PLAYER_HALF_SIZE = PLAYER_SIZE / 2;
 const PLAYER_HALF_HEIGHT = PLAYER_HEIGHT / 2;
-const BLOCK_HALF_SIZE = 0.45; // для обычных блоков
+const BLOCK_HALF_SIZE = 0.45;
 
 function connectToServer() {
     try {
@@ -178,9 +177,8 @@ function renderGamesList(games) {
     attachMobileEvents();
 }
 
-// ========== НАДЁЖНАЯ КОЛЛИЗИЯ ==========
+// ========== КОЛЛИЗИЯ ==========
 function getBlockBox(block) {
-    // Если блок создан через createMesh (с масштабом), используем его scale
     if (block.scale) {
         const halfX = BLOCK_HALF_SIZE * block.scale.x;
         const halfY = BLOCK_HALF_SIZE * block.scale.y;
@@ -194,7 +192,6 @@ function getBlockBox(block) {
             maxZ: block.position.z + halfZ
         };
     }
-    // Для обычных кубов (например, платформа) берём размеры из геометрии
     const geom = block.geometry;
     const width = geom.parameters.width;
     const height = geom.parameters.height;
@@ -225,7 +222,7 @@ function resolveCollision(pos, velY, blocks) {
         };
     }
 
-    // Коррекция по X
+    // X
     let playerBox = getPlayerBox(newPos);
     for (let block of blocks) {
         const blockBox = getBlockBox(block);
@@ -243,7 +240,7 @@ function resolveCollision(pos, velY, blocks) {
         }
     }
 
-    // Коррекция по Z
+    // Z
     playerBox = getPlayerBox(newPos);
     for (let block of blocks) {
         const blockBox = getBlockBox(block);
@@ -261,20 +258,18 @@ function resolveCollision(pos, velY, blocks) {
         }
     }
 
-    // Коррекция по Y
+    // Y
     playerBox = getPlayerBox(newPos);
     for (let block of blocks) {
         const blockBox = getBlockBox(block);
         if (playerBox.maxX > blockBox.minX && playerBox.minX < blockBox.maxX &&
             playerBox.maxZ > blockBox.minZ && playerBox.minZ < blockBox.maxZ) {
-            // Приземление сверху
             if (newVelY <= 0 && playerBox.minY <= blockBox.maxY + 0.05 && playerBox.minY > blockBox.minY - 0.1) {
                 const newY = blockBox.maxY + PLAYER_HALF_HEIGHT;
                 newPos.y = newY;
                 newVelY = 0;
                 onGround = true;
             }
-            // Удар головой
             else if (newVelY > 0 && playerBox.maxY >= blockBox.minY - 0.05 && playerBox.maxY < blockBox.minY + 0.1) {
                 const newY = blockBox.minY - PLAYER_HALF_HEIGHT;
                 newPos.y = newY;
@@ -319,7 +314,6 @@ async function startGameSession(gameData, gameName) {
 
     collisionBlocks = [];
 
-    // Платформа – простой куб 20x1x20, без масштаба
     const platformGeometry = new THREE.BoxGeometry(20, 1, 20);
     const platformMaterial = new THREE.MeshStandardMaterial({ color: 0x6B8E23 });
     const platformMesh = new THREE.Mesh(platformGeometry, platformMaterial);
@@ -362,11 +356,6 @@ async function startGameSession(gameData, gameName) {
     };
     window.addEventListener('keydown', e=>handleKey(e,true));
     window.addEventListener('keyup', e=>handleKey(e,false));
-
-    const zoomIn = document.getElementById('zoomIn');
-    const zoomOut = document.getElementById('zoomOut');
-    if (zoomIn) zoomIn.onclick = () => { cameraDistance = Math.max(3, cameraDistance - 0.5); };
-    if (zoomOut) zoomOut.onclick = () => { cameraDistance = Math.min(8, cameraDistance + 0.5); };
 
     let velY = 0;
     const GRAVITY = 15;
@@ -423,9 +412,10 @@ async function startGameSession(gameData, gameName) {
         gamePlayer.position.copy(newPos);
         sendPosition({x:gamePlayer.position.x, y:gamePlayer.position.y, z:gamePlayer.position.z});
 
+        // Фиксированная камера: всегда позади игрока на расстоянии 5 по Z и выше на 2 по Y
         const targetPos = gamePlayer.position.clone();
         gameCamera.position.x = targetPos.x;
-        gameCamera.position.z = targetPos.z + cameraDistance;
+        gameCamera.position.z = targetPos.z + 5;
         gameCamera.position.y = targetPos.y + 2;
         gameCamera.lookAt(targetPos);
         pointLight.position.set(gamePlayer.position.x, gamePlayer.position.y+1, gamePlayer.position.z);
@@ -513,12 +503,6 @@ async function startLocalGameSession(gameData, gameName) {
     window.addEventListener('keydown', e=>handleKey(e,true));
     window.addEventListener('keyup', e=>handleKey(e,false));
 
-    const zoomIn = document.getElementById('zoomIn');
-    const zoomOut = document.getElementById('zoomOut');
-    let cameraDistanceLocal = 5;
-    if (zoomIn) zoomIn.onclick = () => { cameraDistanceLocal = Math.max(3, cameraDistanceLocal - 0.5); };
-    if (zoomOut) zoomOut.onclick = () => { cameraDistanceLocal = Math.min(8, cameraDistanceLocal + 0.5); };
-
     let velY = 0;
     const GRAVITY = 15;
     const JUMP_FORCE = 7;
@@ -576,7 +560,7 @@ async function startLocalGameSession(gameData, gameName) {
 
         const targetPos = player.position.clone();
         camera.position.x = targetPos.x;
-        camera.position.z = targetPos.z + cameraDistanceLocal;
+        camera.position.z = targetPos.z + 5;
         camera.position.y = targetPos.y + 2;
         camera.lookAt(targetPos);
         pointLight.position.set(player.position.x, player.position.y+1, player.position.z);

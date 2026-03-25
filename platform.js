@@ -132,11 +132,11 @@ let moveSpeed = 4;
 let cameraDistance = 5;
 
 // Размеры игрока (простой куб)
-const PLAYER_SIZE = 0.6;          // ширина и глубина
+const PLAYER_SIZE = 0.6;
 const PLAYER_HEIGHT = 0.8;
 const PLAYER_HALF_SIZE = PLAYER_SIZE / 2;
 const PLAYER_HALF_HEIGHT = PLAYER_HEIGHT / 2;
-const BLOCK_HALF_SIZE = 0.45;      // стандартный блок 0.9x0.9x0.9
+const BLOCK_HALF_SIZE = 0.45;
 
 function connectToServer() {
     try {
@@ -178,8 +178,8 @@ function renderGamesList(games) {
     attachMobileEvents();
 }
 
-// ========== КОЛЛИЗИЯ (новая) ==========
-function checkCollisionAndAdjust(pos, velY, blocks) {
+// ========== НАДЁЖНАЯ КОЛЛИЗИЯ ==========
+function resolveCollision(pos, velY, blocks) {
     let newPos = pos.clone();
     let newVelY = velY;
     let onGround = false;
@@ -216,11 +216,12 @@ function checkCollisionAndAdjust(pos, velY, blocks) {
             playerBox.maxZ > blockBox.minZ && playerBox.minZ < blockBox.maxZ) {
             const overlapLeft = playerBox.maxX - blockBox.minX;
             const overlapRight = blockBox.maxX - playerBox.minX;
-            if (overlapLeft > 0 && overlapRight > 0) {
-                if (overlapLeft < overlapRight) newPos.x -= overlapLeft;
-                else newPos.x += overlapRight;
-                playerBox = getPlayerBox(newPos);
+            if (overlapLeft < overlapRight) {
+                newPos.x -= overlapLeft;
+            } else {
+                newPos.x += overlapRight;
             }
+            playerBox = getPlayerBox(newPos);
         }
     }
 
@@ -245,15 +246,16 @@ function checkCollisionAndAdjust(pos, velY, blocks) {
             playerBox.maxZ > blockBox.minZ && playerBox.minZ < blockBox.maxZ) {
             const overlapFront = playerBox.maxZ - blockBox.minZ;
             const overlapBack = blockBox.maxZ - playerBox.minZ;
-            if (overlapFront > 0 && overlapBack > 0) {
-                if (overlapFront < overlapBack) newPos.z -= overlapFront;
-                else newPos.z += overlapBack;
-                playerBox = getPlayerBox(newPos);
+            if (overlapFront < overlapBack) {
+                newPos.z -= overlapFront;
+            } else {
+                newPos.z += overlapBack;
             }
+            playerBox = getPlayerBox(newPos);
         }
     }
 
-    // Коррекция по Y (гравитация и земля)
+    // Коррекция по Y
     playerBox = getPlayerBox(newPos);
     for (let block of blocks) {
         const bPos = block.position;
@@ -271,7 +273,7 @@ function checkCollisionAndAdjust(pos, velY, blocks) {
         };
         if (playerBox.maxX > blockBox.minX && playerBox.minX < blockBox.maxX &&
             playerBox.maxZ > blockBox.minZ && playerBox.minZ < blockBox.maxZ) {
-            // Приземление
+            // Падение сверху
             if (newVelY <= 0 && playerBox.minY <= blockBox.maxY + 0.05 && playerBox.minY > blockBox.minY - 0.1) {
                 const newY = blockBox.maxY + PLAYER_HALF_HEIGHT;
                 newPos.y = newY;
@@ -339,7 +341,6 @@ async function startGameSession(gameData, gameName) {
         });
     }
 
-    // Создаём простой куб
     const playerMat = new THREE.MeshStandardMaterial({ color: 0x3a86ff });
     const playerMesh = new THREE.Mesh(new THREE.BoxGeometry(PLAYER_SIZE, PLAYER_HEIGHT, PLAYER_SIZE), playerMat);
     playerMesh.castShadow = true;
@@ -348,7 +349,6 @@ async function startGameSession(gameData, gameName) {
     gameScene.add(playerMesh);
     gamePlayer = playerMesh;
 
-    // Управление клавиатурой
     const keyState = { w: false, s: false, a: false, d: false };
     let jumpRequest = false;
     const handleKey = (e, val) => {
@@ -404,7 +404,7 @@ async function startGameSession(gameData, gameName) {
         velY -= GRAVITY * dt;
         newPos.y += velY * dt;
 
-        const col = checkCollisionAndAdjust(newPos, velY, collisionBlocks);
+        const col = resolveCollision(newPos, velY, collisionBlocks);
         newPos = col.pos;
         velY = col.velY;
         onGround = col.onGround;
@@ -552,7 +552,7 @@ async function startLocalGameSession(gameData, gameName) {
         velY -= GRAVITY * dt;
         newPos.y += velY * dt;
 
-        const col = checkCollisionAndAdjust(newPos, velY, blocks);
+        const col = resolveCollision(newPos, velY, blocks);
         newPos = col.pos;
         velY = col.velY;
         onGround = col.onGround;
@@ -592,7 +592,6 @@ async function startLocalGameSession(gameData, gameName) {
 }
 
 function createRemotePlayer() {
-    // Простой куб для удалённых игроков
     const mat = new THREE.MeshStandardMaterial({ color: 0xffaa44 });
     const cube = new THREE.Mesh(new THREE.BoxGeometry(PLAYER_SIZE, PLAYER_HEIGHT, PLAYER_SIZE), mat);
     cube.castShadow = true;

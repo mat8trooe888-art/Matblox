@@ -52,7 +52,10 @@ function createStartPlatform() {
     platform.userData.color = '#6B8E23';
     editorScene.add(platform);
     editorBlocks.push(platform);
-    // Спавн-блок не добавляем
+    const spawn = createMeshEditor('cube', { x: 0.8, y: 0.4, z: 0.8 }, 0xff3333, 1, 'spawn');
+    spawn.position.set(0, 0.3, 0);
+    editorScene.add(spawn);
+    editorBlocks.push(spawn);
 }
 
 function addDefaultBlock() {
@@ -308,9 +311,9 @@ function initEditor() {
     editorRenderer.domElement.addEventListener('mousedown', (e) => { if (e.button === 0 && !e.ctrlKey && !e.shiftKey) startDragSelection(e); });
     editorRenderer.domElement.addEventListener('mousemove', (e) => { if (isDraggingSelection) updateDragSelection(e); });
     editorRenderer.domElement.addEventListener('mouseup', (e) => { if (isDraggingSelection) endDragSelection(); });
-    editorRenderer.domElement.addEventListener('touchstart', (e) => { if (e.touches.length === 1) { e.preventDefault(); startDragSelection(e.touches[0]); } });
-    editorRenderer.domElement.addEventListener('touchmove', (e) => { if (isDraggingSelection && e.touches.length === 1) { e.preventDefault(); updateDragSelection(e.touches[0]); } });
-    editorRenderer.domElement.addEventListener('touchend', (e) => { if (isDraggingSelection) endDragSelection(); });
+    editorRenderer.domElement.addEventListener('touchstart', (e) => { if (e.touches.length === 1) { e.preventDefault(); e.stopPropagation(); startDragSelection(e.touches[0]); } });
+    editorRenderer.domElement.addEventListener('touchmove', (e) => { if (isDraggingSelection && e.touches.length === 1) { e.preventDefault(); e.stopPropagation(); updateDragSelection(e.touches[0]); } });
+    editorRenderer.domElement.addEventListener('touchend', (e) => { if (isDraggingSelection) { e.preventDefault(); e.stopPropagation(); endDragSelection(); } });
 
     document.getElementById('modeMove').onclick = () => { transformControls.setMode('translate'); currentTransformMode = 'move'; };
     document.getElementById('modeRotate').onclick = () => { transformControls.setMode('rotate'); currentTransformMode = 'rotate'; };
@@ -406,7 +409,12 @@ function deserializeBlock(data) {
         });
         return group;
     } else {
-        const colorNum = parseInt(data.color.slice(1), 16);
+        // Исправление: если color пришёл как число, преобразуем в строку
+        let colorStr = data.color;
+        if (typeof colorStr === 'number') {
+            colorStr = '#' + colorStr.toString(16).padStart(6, '0');
+        }
+        const colorNum = parseInt(colorStr.slice(1), 16);
         const block = createMeshEditor(data.shape, data.scale, colorNum, data.opacity, data.userData?.type || 'block');
         block.position.set(data.x, data.y, data.z);
         block.rotation.set(data.rotation.x, data.rotation.y, data.rotation.z);
@@ -422,4 +430,4 @@ export function openEditor(gameToEdit = null) {
     document.getElementById('mainMenuScreen').classList.add('hidden');
     document.getElementById('editorScreen').classList.remove('hidden');
     initEditor();
-            }
+        }

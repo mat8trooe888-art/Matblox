@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 // ========== ГЛОБАЛЬНЫЕ ДАННЫЕ ==========
 let currentUser = null;
@@ -132,9 +131,9 @@ let collisionBlocks = [];
 let moveDirection = { x: 0, z: 0 };
 let jumpRequest = false;
 let moveSpeed = 4;
-let controls = null;
+let cameraDistance = 5;
+let cameraAngle = { theta: 0, phi: 0.5 }; // для плавного вращения, но пока не используем
 
-// Размеры игрока (куб 0.6 x 0.8 x 0.4)
 const PLAYER_HALF_WIDTH = 0.3;
 const PLAYER_HALF_HEIGHT = 0.4;
 const PLAYER_HALF_DEPTH = 0.2;
@@ -180,7 +179,7 @@ function renderGamesList(games) {
     attachMobileEvents();
 }
 
-// ========== КОЛЛИЗИЯ (ПРОВЕРЕННАЯ) ==========
+// ========== КОЛЛИЗИЯ ==========
 function checkCollisionAndAdjust(pos, velY, blocks) {
     let newPos = pos.clone();
     let newVelY = velY;
@@ -304,6 +303,8 @@ async function startGameSession(gameData, gameName) {
     gameScene.background = new THREE.Color(0x87CEEB);
     gameScene.fog = new THREE.Fog(0x87CEEB, 30, 60);
     gameCamera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+    gameCamera.position.set(5, 5, 8);
+    gameCamera.lookAt(0, 1, 0);
     gameRenderer = new THREE.WebGLRenderer({ antialias: true });
     gameRenderer.setSize(window.innerWidth, window.innerHeight);
     gameRenderer.shadowMap.enabled = true;
@@ -399,19 +400,11 @@ async function startGameSession(gameData, gameName) {
         jumpBtnDiv.addEventListener('mouseup', () => { jumpRequest=false; });
     }
 
-    controls = new OrbitControls(gameCamera, gameRenderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
-    controls.rotateSpeed = 1.0;
-    controls.zoomSpeed = 1.2;
-    controls.enableZoom = true;
-    controls.enablePan = false;
-    controls.target.copy(gamePlayer.position);
-
+    // Простое управление камерой: фиксированный угол и расстояние
     const zoomIn = document.getElementById('zoomIn');
     const zoomOut = document.getElementById('zoomOut');
-    if(zoomIn) zoomIn.onclick = () => { controls.object.zoom = Math.min(3, controls.object.zoom-0.2); controls.update(); };
-    if(zoomOut) zoomOut.onclick = () => { controls.object.zoom = Math.max(0.5, controls.object.zoom+0.2); controls.update(); };
+    if (zoomIn) zoomIn.onclick = () => { cameraDistance = Math.max(3, cameraDistance - 0.5); };
+    if (zoomOut) zoomOut.onclick = () => { cameraDistance = Math.min(8, cameraDistance + 0.5); };
 
     let velY = 0;
     const GRAVITY = 15;
@@ -465,8 +458,11 @@ async function startGameSession(gameData, gameName) {
         gamePlayer.position.copy(newPos);
         sendPosition({x:gamePlayer.position.x, y:gamePlayer.position.y, z:gamePlayer.position.z});
 
-        controls.target.copy(gamePlayer.position);
-        controls.update();
+        // Обновление камеры: сзади и сверху от игрока
+        const targetPos = gamePlayer.position.clone();
+        const cameraOffset = new THREE.Vector3(0, 2, cameraDistance);
+        gameCamera.position.copy(targetPos.clone().add(cameraOffset));
+        gameCamera.lookAt(targetPos);
         pointLight.position.set(gamePlayer.position.x, gamePlayer.position.y+1, gamePlayer.position.z);
     }
     function animate() { if(!gameActive) return; gameAnimationId = requestAnimationFrame(animate); update(); gameRenderer.render(gameScene, gameCamera); }
@@ -495,6 +491,8 @@ async function startLocalGameSession(gameData, gameName) {
     scene.background = new THREE.Color(0x87CEEB);
     scene.fog = new THREE.Fog(0x87CEEB,30,60);
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+    camera.position.set(5,5,8);
+    camera.lookAt(0,1,0);
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
@@ -587,19 +585,11 @@ async function startLocalGameSession(gameData, gameName) {
         jumpBtnDiv.addEventListener('mouseup', () => { localJump=false; });
     }
 
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
-    controls.rotateSpeed = 1.0;
-    controls.zoomSpeed = 1.2;
-    controls.enableZoom = true;
-    controls.enablePan = false;
-    controls.target.copy(player.position);
-
     const zoomIn = document.getElementById('zoomIn');
     const zoomOut = document.getElementById('zoomOut');
-    if(zoomIn) zoomIn.onclick = () => { controls.object.zoom = Math.min(3, controls.object.zoom-0.2); controls.update(); };
-    if(zoomOut) zoomOut.onclick = () => { controls.object.zoom = Math.max(0.5, controls.object.zoom+0.2); controls.update(); };
+    let cameraDistanceLocal = 5;
+    if (zoomIn) zoomIn.onclick = () => { cameraDistanceLocal = Math.max(3, cameraDistanceLocal - 0.5); };
+    if (zoomOut) zoomOut.onclick = () => { cameraDistanceLocal = Math.min(8, cameraDistanceLocal + 0.5); };
 
     let velY = 0;
     const GRAVITY = 15;
@@ -653,8 +643,11 @@ async function startLocalGameSession(gameData, gameName) {
 
         player.position.copy(newPos);
 
-        controls.target.copy(player.position);
-        controls.update();
+        // Обновление камеры
+        const targetPos = player.position.clone();
+        const cameraOffset = new THREE.Vector3(0, 2, cameraDistanceLocal);
+        camera.position.copy(targetPos.clone().add(cameraOffset));
+        camera.lookAt(targetPos);
         pointLight.position.set(player.position.x, player.position.y+1, player.position.z);
         renderer.render(scene, camera);
         requestAnimationFrame(updateLocal);

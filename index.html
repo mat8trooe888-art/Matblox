@@ -4,10 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>BlockVerse — мультиплеер + конструктор</title>
+    <!-- Eruda для отладки на телефоне (можно убрать после исправления) -->
+    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+    <script>eruda.init();</script>
     <style>
-        /* все стили остаются без изменений (как в предыдущем ответе) */
         * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-tap-highlight-color:transparent; }
-        body { font-family:'Segoe UI', 'Poppins', system-ui, sans-serif; background:linear-gradient(135deg,#0a0f1e,#0e1a2a); color:white; overflow:hidden; height:100vh; position:fixed; width:100%; touch-action:manipulation; }
+        body { font-family:'Segoe UI', system-ui, sans-serif; background:linear-gradient(135deg,#0a0f1e,#0e1a2a); color:white; overflow:hidden; height:100vh; position:fixed; width:100%; touch-action:manipulation; }
         .screen { position:absolute; top:0; left:0; width:100%; height:100%; transition:opacity 0.3s ease; overflow-y:auto; padding:20px; -webkit-overflow-scrolling:touch; }
         .hidden { display:none; }
         .auth-container { max-width:400px; margin:10vh auto; background:rgba(20,25,40,0.9); backdrop-filter:blur(12px); border-radius:28px; padding:32px; box-shadow:0 20px 35px rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); }
@@ -22,7 +24,7 @@
         .nav-buttons { display:flex; gap:12px; flex-wrap:wrap; }
         .nav-btn { background:#2c3e66; padding:8px 20px; border-radius:40px; cursor:pointer; font-weight:500; }
         .games-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:24px; margin-top:20px; }
-        .game-card { background:rgba(30,35,55,0.8); backdrop-filter:blur(8px); border-radius:24px; overflow:hidden; transition:0.2s; cursor:pointer; border:1px solid rgba(255,255,255,0.15); position:relative; }
+        .game-card { background:rgba(30,35,55,0.8); backdrop-filter:blur(8px); border-radius:24px; overflow:hidden; transition:0.2s; cursor:pointer; border:1px solid rgba(255,255,255,0.15); }
         .game-card:hover { transform:translateY(-5px); border-color:#ffaa44; }
         .game-image { height:140px; background:#2a3a5a; display:flex; align-items:center; justify-content:center; font-size:48px; }
         .game-info { padding:16px; }
@@ -45,13 +47,13 @@
         .buy-btn { background:#2a6f3f; margin-top:12px; }
         .editor-container { position:relative; width:100%; height:100%; }
         .editor-canvas { width:100%; height:100%; }
-        .tools-panel, .properties-panel { position:absolute; background:rgba(20,25,40,0.95); backdrop-filter:blur(16px); border-radius:28px; padding:16px; z-index:40; border:1px solid rgba(255,255,255,0.2); overflow-y:auto; transition:all 0.2s; }
+        .tools-panel, .properties-panel { position:absolute; background:rgba(20,25,40,0.95); backdrop-filter:blur(16px); border-radius:28px; padding:16px; z-index:40; border:1px solid rgba(255,255,255,0.2); overflow-y:auto; }
         .tools-panel { left:20px; top:20px; bottom:20px; width:320px; display:flex; flex-direction:column; gap:20px; }
         .properties-panel { right:20px; top:20px; bottom:20px; width:280px; font-size:13px; }
         .tool-section { background:rgba(0,0,0,0.5); border-radius:20px; padding:14px; }
         .tool-section h4 { margin-bottom:12px; font-size:16px; color:#ffaa44; }
         .tool-buttons { display:flex; flex-wrap:wrap; gap:12px; }
-        .tool-btn { background:#2c3e66; border:none; padding:10px 14px; border-radius:40px; color:white; cursor:pointer; font-weight:bold; font-size:13px; transition:0.1s; flex:1; text-align:center; min-height:40px; }
+        .tool-btn { background:#2c3e66; border:none; padding:10px 14px; border-radius:40px; color:white; cursor:pointer; font-weight:bold; font-size:13px; flex:1; text-align:center; min-height:40px; }
         .tool-btn.active { background:#ff5722; box-shadow:0 0 8px #ff5722; }
         .tool-btn.special { background:#4a6e8a; }
         .block-palette { display:flex; gap:10px; flex-wrap:wrap; }
@@ -90,337 +92,152 @@
     </style>
 </head>
 <body>
-<!-- HTML-разметка та же, что и в предыдущем ответе (без изменений) -->
-<div id="authScreen" class="screen">...</div>
-<div id="mainMenuScreen" class="screen hidden">...</div>
-<div id="editorScreen" class="screen hidden">...</div>
-<div id="customGameScreen" class="screen hidden">...</div>
+<div id="authScreen" class="screen">
+    <div class="auth-container">
+        <h2>🎮 BlockVerse</h2>
+        <div id="authTabs" style="display: flex; gap: 12px; margin-bottom: 20px;">
+            <button id="showLoginBtn" class="btn" style="background:#ff5722;">Вход</button>
+            <button id="showRegisterBtn" class="btn btn-secondary">Регистрация</button>
+        </div>
+        <div id="loginForm">
+            <input type="text" id="loginUsername" class="auth-input" placeholder="Имя пользователя">
+            <input type="password" id="loginPassword" class="auth-input" placeholder="Пароль">
+            <button id="doLoginBtn" class="btn">Войти</button>
+            <button id="guestLoginBtn" class="btn btn-guest">Продолжить как гость</button>
+            <div id="authMessage" style="margin-top: 12px; text-align:center; color:#ffaa44;"></div>
+        </div>
+        <div id="registerForm" style="display: none;">
+            <input type="text" id="regUsername" class="auth-input" placeholder="Имя пользователя">
+            <input type="password" id="regPassword" class="auth-input" placeholder="Пароль">
+            <button id="doRegisterBtn" class="btn">Создать аккаунт</button>
+            <button id="guestRegisterBtn" class="btn btn-guest">Продолжить как гость</button>
+        </div>
+    </div>
+</div>
+
+<div id="mainMenuScreen" class="screen hidden">
+    <div class="header">
+        <div style="font-size: 28px; font-weight: bold;">🌟 BlockVerse</div>
+        <div class="user-info">
+            <div class="coin-badge">🪙 <span id="userCoins">0</span> монет</div>
+            <div id="usernameDisplay" style="font-weight:500;"></div>
+            <div class="nav-buttons">
+                <div class="nav-btn" id="showGamesBtn">🎮 Игры</div>
+                <div class="nav-btn" id="showMyProjectsBtn">📁 Мои проекты</div>
+                <div class="nav-btn" id="showShopBtn">🛒 Магазин</div>
+                <div class="nav-btn" id="showSocialBtn">👥 Социальное</div>
+                <div class="nav-btn" id="showSettingsBtn">⚙️ Настройки</div>
+                <div class="nav-btn" id="createGameBtn">🛠️ Конструктор</div>
+                <div class="nav-btn" id="logoutBtn">🚪 Выйти</div>
+            </div>
+        </div>
+    </div>
+    <div id="gamesPanel">
+        <h2 style="margin: 20px 0 10px;">🔥 Игровые серверы</h2>
+        <div class="server-join">
+            <input type="text" id="serverIdInput" placeholder="ID сервера">
+            <button id="connectToServerBtn" class="btn" style="width:auto; padding:8px 20px;">🔗 Подключиться</button>
+        </div>
+        <div class="games-grid" id="gamesList"></div>
+    </div>
+    <div id="myProjectsPanel" style="display: none;">
+        <h2 style="margin: 20px 0 10px;">📁 Мои проекты</h2>
+        <div id="myProjectsList" class="my-projects-grid"></div>
+    </div>
+    <div id="shopPanel" style="display: none;">
+        <h2 style="margin: 20px 0 10px;">✨ Магазин предметов</h2>
+        <div class="shop-grid" id="shopItemsList"></div>
+        <div style="margin-top: 30px; text-align: center;">
+            <button id="earnCoinsBtn" class="btn" style="width: auto; padding: 10px 30px;">➕ Получить 100 монет</button>
+        </div>
+    </div>
+    <div id="socialPanel" style="display: none;">
+        <h2 style="margin: 20px 0 10px;">👥 Социальная сеть</h2>
+        <div class="social-panels">
+            <div class="panel">
+                <h3>Мои друзья</h3>
+                <div id="friendsList" class="friend-list"></div>
+                <div class="chat-input">
+                    <input type="text" id="friendSearch" placeholder="Имя пользователя">
+                    <button id="addFriendBtn">➕ Добавить друга</button>
+                </div>
+            </div>
+            <div class="panel">
+                <h3>Глобальный чат</h3>
+                <div id="chatMessages" class="chat-messages"></div>
+                <div class="chat-input">
+                    <input type="text" id="chatInput" placeholder="Написать сообщение...">
+                    <button id="sendChatBtn">📨 Отправить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="settingsPanel" style="display: none;">
+        <h2 style="margin: 20px 0 10px;">⚙️ Настройки</h2>
+        <div class="settings-panel">
+            <h3>Камера</h3>
+            <label>Чувствительность мыши:</label>
+            <input type="range" id="mouseSensitivity" min="0.001" max="0.01" step="0.0005" value="0.005">
+            <label>Скорость движения:</label>
+            <input type="range" id="moveSpeed" min="2" max="6" step="0.5" value="4">
+            <h3>Графика</h3>
+            <label>Качество теней:</label>
+            <select id="shadowQuality">
+                <option value="low">Низкое</option>
+                <option value="medium">Среднее</option>
+                <option value="high" selected>Высокое</option>
+            </select>
+            <h3>Система репортов</h3>
+            <button id="reportBugBtn" class="btn" style="width: auto; padding: 8px 20px;">📝 Сообщить о проблеме</button>
+            <div id="reportsList" style="margin-top: 20px; max-height: 200px; overflow-y: auto;"></div>
+        </div>
+    </div>
+</div>
+
+<div id="editorScreen" class="screen hidden">
+    <div class="editor-container">
+        <div id="editorCanvasContainer" class="editor-canvas"></div>
+        <button class="publish-btn" id="publishGameBtn">🚀 Опубликовать</button>
+        <button class="exit-editor-btn" id="exitEditorBtn">✖ Выйти</button>
+        <div class="status-bar" id="editorStatus">Выберите блок (Ctrl+клик / рамка)</div>
+        <div class="tools-panel" id="toolsPanel">
+            <div class="tool-section"><h4>🎨 Блоки</h4><div class="block-palette" id="blockPalette"><div class="block-option" data-type="wood" style="background:#8B5A2B;"></div><div class="block-option" data-type="stone" style="background:#808080;"></div><div class="block-option" data-type="concrete" style="background:#B0B0B0;"></div><div class="block-option" data-type="dirt" style="background:#6B4C3B;"></div></div></div>
+            <div class="tool-section"><h4>🔧 Режим трансформации</h4><div class="tool-buttons"><button id="modeMove" class="tool-btn active">📦 Переместить</button><button id="modeRotate" class="tool-btn">🔄 Вращать</button><button id="modeScale" class="tool-btn">📏 Масштаб</button></div></div>
+            <div class="tool-section"><h4>🔄 Форма блока</h4><div class="tool-buttons"><button id="shapeCube" class="tool-btn active">Куб</button><button id="shapeSphere" class="tool-btn">Сфера</button><button id="shapeCylinder" class="tool-btn">Цилиндр</button><button id="shapeCone" class="tool-btn">Конус</button><button id="shapeWedge" class="tool-btn">Клин</button></div></div>
+            <div class="tool-section"><h4>💡 Свет</h4>
+                <div class="coord-group"><label>Интенсивность:</label><input type="range" id="lightIntensity" min="0" max="2" step="0.01" value="1"><span id="lightIntensityVal">1.00</span></div>
+                <div class="coord-group"><label>Цвет:</label><input type="color" id="lightColor" value="#ffaa66"></div>
+                <div class="coord-group"><label>Высота:</label><input type="range" id="lightHeight" min="1" max="10" step="0.5" value="5"><span id="lightHeightVal">5.0</span></div>
+                <div class="coord-group"><label>Угол X:</label><input type="range" id="lightAngleX" min="-90" max="90" step="5" value="45"><span id="lightAngleXVal">45</span></div>
+                <div class="coord-group"><label>Угол Y:</label><input type="range" id="lightAngleY" min="-180" max="180" step="5" value="135"><span id="lightAngleYVal">135</span></div>
+                <button id="applyLightBtn" class="tool-btn" style="margin-top:8px;">💡 Применить свет</button>
+            </div>
+            <div class="tool-section"><h4>✨ Действия</h4><div class="tool-buttons"><button class="tool-btn special" id="duplicateBtn">📋 Дублировать</button><button class="tool-btn special" id="addCubeBtn">➕ Добавить куб</button><button class="tool-btn special" id="groupBtn">📦 Группировать</button></div></div>
+            <div class="tool-section"><h4>⚙️ Панели</h4><div class="tool-buttons"><button class="tool-btn" id="toggleToolsBtn">🔧 Скрыть инструменты</button><button class="tool-btn" id="togglePropsBtn">📄 Скрыть свойства</button></div></div>
+        </div>
+        <div id="propertiesPanel" class="properties-panel"></div>
+        <button class="panel-toggle" id="toggleToolsPanelBtn">🔧</button>
+        <button class="panel-toggle right" id="togglePropsPanelBtn">📄</button>
+    </div>
+</div>
+
+<div id="customGameScreen" class="screen hidden">
+    <div id="customGameContainer" style="width:100%; height:100%;"></div>
+    <div class="exit-game" style="position: absolute; top:20px; right:20px; background:#ff3333; padding:10px 20px; border-radius:40px; cursor:pointer; z-index:20;">✖ Выйти</div>
+    <div class="custom-game-ui" style="position: absolute; bottom:20px; left:20px; background:rgba(0,0,0,0.6); padding:8px 16px; border-radius:20px; z-index:20;">Счёт: 0</div>
+    <div id="joystick" class="mobile-joystick">
+        <div class="joystick-thumb"></div>
+    </div>
+    <div id="jumpBtn" class="jump-button">Прыжок</div>
+    <div class="camera-zoom" id="cameraZoom">
+        <button id="zoomIn">+</button>
+        <button id="zoomOut">-</button>
+    </div>
+</div>
 
 <script type="importmap">
     { "imports": { "three": "https://unpkg.com/three@0.128.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.128.0/examples/jsm/" } }
 </script>
-<script type="module">
-    import * as THREE from 'three';
-    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-    import { TransformControls } from 'three/addons/controls/TransformControls.js';
-    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-    import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
-
-    // ========== ГЛОБАЛЬНЫЕ ДАННЫЕ ==========
-    let currentUser = null;
-    let users = JSON.parse(localStorage.getItem('blockverse_users')) || [];
-    let customGames = JSON.parse(localStorage.getItem('blockverse_games')) || [];
-    let chatMessages = JSON.parse(localStorage.getItem('blockverse_chat')) || [];
-    let reports = JSON.parse(localStorage.getItem('blockverse_reports')) || [];
-
-    const shopItems = [
-        { id: 'skin_gold', name: 'Золотой скин', price: 250 },
-        { id: 'pickaxe', name: 'Алмазная кирка', price: 500 },
-        { id: 'trail', name: 'Искрящийся след', price: 150 }
-    ];
-
-    // ========== ДЕЛАЕМ ГЛОБАЛЬНЫЕ ДАННЫЕ И ФУНКЦИИ ДОСТУПНЫМИ ДЛЯ РЕДАКТОРА ==========
-    window.currentUser = currentUser;
-    window.customGames = customGames;
-    window.saveGames = saveGames;
-    window.renderMyProjects = renderMyProjects;
-    window.createGameOnServer = createGameOnServer;
-    window.addCoins = addCoins;
-    window.spendCoins = spendCoins;
-
-    function updateGlobalRefs() {
-        window.currentUser = currentUser;
-        window.customGames = customGames;
-    }
-
-    // ========== МОДЕЛЬ ПЕРСОНАЖА ==========
-    const PLAYER_MODEL_URL = 'https://raw.githubusercontent.com/mat8trooe888-art/Matblox/refs/heads/main/%D0%9D%D0%BE%D0%B2%D1%8B%D0%B9%20%D0%BF%D1%80%D0%BE%D0%B5%D0%BA%D1%82%201.gltf';
-    let globalPlayerModel = null;
-
-    async function loadPlayerModel() {
-        if (globalPlayerModel) return globalPlayerModel;
-        try {
-            const model = await loadCustomModel(PLAYER_MODEL_URL);
-            model.scale.set(0.5, 0.5, 0.5);
-            model.traverse(child => { if (child.isMesh) { child.castShadow = true; child.receiveShadow = true; } });
-            globalPlayerModel = model;
-            console.log('Модель персонажа загружена');
-            return model;
-        } catch (err) {
-            console.error('Ошибка загрузки модели персонажа:', err);
-            return null;
-        }
-    }
-
-    function saveUsers() { localStorage.setItem('blockverse_users', JSON.stringify(users)); updateGlobalRefs(); }
-    function saveGames() { localStorage.setItem('blockverse_games', JSON.stringify(customGames)); updateGlobalRefs(); }
-    function saveChat() { localStorage.setItem('blockverse_chat', JSON.stringify(chatMessages.slice(-100))); }
-    function saveReports() { localStorage.setItem('blockverse_reports', JSON.stringify(reports.slice(-50))); }
-
-    // ========== АВТОРИЗАЦИЯ ==========
-    function initUserData(username) {
-        let user = users.find(u => u.username === username);
-        if (!user) return null;
-        if (user.coins === undefined) user.coins = 500;
-        if (user.inventory === undefined) user.inventory = [];
-        if (user.friends === undefined) user.friends = [];
-        if (user.friendRequests === undefined) user.friendRequests = [];
-        if (user.customModel === undefined) user.customModel = null;
-        saveUsers();
-        return user;
-    }
-
-    async function updateUIafterAuth() {
-        if (!currentUser) return;
-        document.getElementById('usernameDisplay').innerText = currentUser.username + (currentUser.isGuest ? ' (гость)' : '');
-        document.getElementById('userCoins').innerText = currentUser.coins;
-        renderMyProjects();
-        renderShop();
-        renderFriendsList();
-        renderChat();
-        renderReports();
-        startChatPolling();
-        await loadPlayerModel();
-        connectToWebSocket();
-        updateGlobalRefs();
-    }
-
-    function addCoins(amount) { if (!currentUser) return; currentUser.coins += amount; if (!currentUser.isGuest) saveUsers(); document.getElementById('userCoins').innerText = currentUser.coins; updateGlobalRefs(); }
-    function spendCoins(amount) { if (!currentUser) return false; if (currentUser.coins >= amount) { currentUser.coins -= amount; if (!currentUser.isGuest) saveUsers(); document.getElementById('userCoins').innerText = currentUser.coins; updateGlobalRefs(); return true; } return false; }
-
-    // ========== МАГАЗИН ==========
-    function renderShop() { /* ... (как в предыдущем ответе) */ }
-    // ========== ДРУЗЬЯ ==========
-    function renderFriendsList() { /* ... */ }
-    function addFriend() { /* ... */ }
-    // ========== ЧАТ ==========
-    function renderChat() { /* ... */ }
-    function sendChatMessage() { /* ... */ }
-    function startChatPolling() { setInterval(() => { const stored = JSON.parse(localStorage.getItem('blockverse_chat')) || []; if (JSON.stringify(stored) !== JSON.stringify(chatMessages)) { chatMessages = stored; renderChat(); } }, 2000); }
-
-    // ========== МУЛЬТИПЛЕЕР (WebSocket) ==========
-    let ws = null;
-    let currentGameId = null;
-    let myPlayerId = null;
-    let remotePlayers = new Map();
-    let gameScene = null, gameCamera = null, gameRenderer = null, gamePlayer = null;
-    let gameActive = false;
-    let gameAnimationId = null;
-    let collisionBlocks = [];
-    let keyState = { w: false, s: false, a: false, d: false, space: false };
-    let joystickVector = { x: 0, z: 0 }, joystickActive = false;
-    let moveSpeed = 4;
-    let controls = null;
-    const PLAYER_HALF_SIZE = { x: 0.4, y: 0.8, z: 0.4 };
-    const BLOCK_HALF_SIZE = { x: 0.45, y: 0.45, z: 0.45 };
-
-    function connectToWebSocket() {
-        if (ws && ws.readyState === WebSocket.OPEN) return;
-        ws = new WebSocket('wss://matrix-5uvi.onrender.com');
-        ws.onopen = () => { console.log('WebSocket connected'); requestGamesList(); };
-        ws.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            switch (data.type) {
-                case 'games_list': renderGamesList(data.games); break;
-                case 'game_created':
-                    alert(`Игра "${data.gameName}" создана! ID: ${data.gameId}`);
-                    navigator.clipboard.writeText(data.gameId).then(() => alert(`ID скопирован в буфер обмена: ${data.gameId}`)).catch(() => alert(`ID сервера: ${data.gameId}`));
-                    requestGamesList();
-                    break;
-                case 'joined': myPlayerId = data.playerId; startGameSession(data.gameData, data.gameName); break;
-                case 'player_joined': const newPlayer = createRemotePlayer(); newPlayer.position.set(data.position.x, data.position.y, data.position.z); gameScene.add(newPlayer); remotePlayers.set(data.playerId, newPlayer); break;
-                case 'player_moved': const movedPlayer = remotePlayers.get(data.playerId); if (movedPlayer) movedPlayer.position.set(data.position.x, data.position.y, data.position.z); break;
-                case 'player_left': const leftPlayer = remotePlayers.get(data.playerId); if (leftPlayer) gameScene.remove(leftPlayer); remotePlayers.delete(data.playerId); break;
-                case 'error': alert(data.message); break;
-            }
-        };
-        ws.onerror = (err) => console.error('WebSocket error:', err);
-        ws.onclose = () => console.log('WebSocket closed');
-    }
-
-    function requestGamesList() { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'get_games_list' })); }
-    function createGameOnServer(gameName, gameData) { if (!ws || ws.readyState !== WebSocket.OPEN) { alert('Нет соединения с сервером'); return; } ws.send(JSON.stringify({ type: 'create_game', gameName, author: currentUser.username, gameData })); }
-    function joinGame(gameId) { if (!ws || ws.readyState !== WebSocket.OPEN) { alert('Нет соединения с сервером'); return; } currentGameId = gameId; ws.send(JSON.stringify({ type: 'join_game', gameId })); }
-    function sendPosition(pos) { if (ws && ws.readyState === WebSocket.OPEN && currentGameId) ws.send(JSON.stringify({ type: 'update_position', position: pos })); }
-    function leaveGame() { if (ws && ws.readyState === WebSocket.OPEN && currentGameId) ws.send(JSON.stringify({ type: 'leave_game' })); currentGameId = null; }
-
-    function renderGamesList(games) { /* ... (как в предыдущем ответе) */ }
-    function findSpawnBlock(blocks) { for (let block of blocks) if (block.userData && block.userData.type === 'spawn') return block; return null; }
-
-    function applyCollision(pos, blocks) {
-        let newPos = pos.clone();
-        for (let block of blocks) {
-            const bPos = block.position;
-            const bHalf = BLOCK_HALF_SIZE;
-            const dx = newPos.x - bPos.x;
-            const overlapX = PLAYER_HALF_SIZE.x + bHalf.x - Math.abs(dx);
-            if (overlapX > 0) {
-                const overlapY = PLAYER_HALF_SIZE.y + bHalf.y - Math.abs(newPos.y - bPos.y);
-                const overlapZ = PLAYER_HALF_SIZE.z + bHalf.z - Math.abs(newPos.z - bPos.z);
-                if (overlapY > 0 && overlapZ > 0) {
-                    if (dx > 0) newPos.x = bPos.x + PLAYER_HALF_SIZE.x + bHalf.x;
-                    else newPos.x = bPos.x - PLAYER_HALF_SIZE.x - bHalf.x;
-                }
-            }
-        }
-        for (let block of blocks) {
-            const bPos = block.position;
-            const bHalf = BLOCK_HALF_SIZE;
-            const dz = newPos.z - bPos.z;
-            const overlapZ = PLAYER_HALF_SIZE.z + bHalf.z - Math.abs(dz);
-            if (overlapZ > 0) {
-                const overlapX = PLAYER_HALF_SIZE.x + bHalf.x - Math.abs(newPos.x - bPos.x);
-                const overlapY = PLAYER_HALF_SIZE.y + bHalf.y - Math.abs(newPos.y - bPos.y);
-                if (overlapX > 0 && overlapY > 0) {
-                    if (dz > 0) newPos.z = bPos.z + PLAYER_HALF_SIZE.z + bHalf.z;
-                    else newPos.z = bPos.z - PLAYER_HALF_SIZE.z - bHalf.z;
-                }
-            }
-        }
-        let onGround = false;
-        for (let block of blocks) {
-            const bPos = block.position;
-            const bHalf = BLOCK_HALF_SIZE;
-            const dy = newPos.y - bPos.y;
-            const overlapY = PLAYER_HALF_SIZE.y + bHalf.y - Math.abs(dy);
-            if (overlapY > 0) {
-                const overlapX = PLAYER_HALF_SIZE.x + bHalf.x - Math.abs(newPos.x - bPos.x);
-                const overlapZ = PLAYER_HALF_SIZE.z + bHalf.z - Math.abs(newPos.z - bPos.z);
-                if (overlapX > 0 && overlapZ > 0) {
-                    if (dy > 0 && (newPos.y - PLAYER_HALF_SIZE.y) - (bPos.y + bHalf.y) < 0.3) {
-                        onGround = true;
-                        newPos.y = bPos.y + bHalf.y + PLAYER_HALF_SIZE.y;
-                    } else if (dy < 0) {
-                        newPos.y = bPos.y - bHalf.y - PLAYER_HALF_SIZE.y;
-                    }
-                }
-            }
-        }
-        return { pos: newPos, onGround };
-    }
-
-    async function startGameSession(gameData, gameName) { /* ... (код из предыдущего ответа) */ }
-    function createDefaultCharacter(color = 0x3a86ff) { /* ... */ }
-    function createRemotePlayer() { /* ... */ }
-    function createMesh(shape, size, color, opacity) { /* ... */ }
-    async function loadCustomModel(url) { /* ... */ }
-
-    // ========== МОИ ПРОЕКТЫ ==========
-    function renderMyProjects() { /* ... */ }
-    async function startLocalGameSession(gameData, gameName) { /* ... */ }
-
-    function renderReports() { /* ... */ }
-    function showReportDialog() { /* ... */ }
-    function applySettings() { moveSpeed = parseFloat(document.getElementById('moveSpeed').value); }
-
-    document.getElementById('mouseSensitivity')?.addEventListener('input', applySettings);
-    document.getElementById('moveSpeed')?.addEventListener('input', applySettings);
-    document.getElementById('reportBugBtn')?.addEventListener('click', showReportDialog);
-    document.getElementById('connectToServerBtn')?.addEventListener('click', () => { const serverId = document.getElementById('serverIdInput').value.trim(); if (!serverId) { alert('Введите ID сервера'); return; } joinGame(serverId); });
-
-    // ========== КОНСТРУКТОР (динамическая загрузка) ==========
-    let editorLoaded = false;
-    async function openEditor(gameToEdit = null) {
-        if (!editorLoaded) {
-            try {
-                const module = await import('./editor.js');
-                window.editorModule = module;
-                editorLoaded = true;
-            } catch (err) {
-                console.error('Ошибка загрузки редактора:', err);
-                alert('Не удалось загрузить конструктор. Проверьте наличие файла editor.js');
-                return;
-            }
-        }
-        window.editorModule.openEditor(gameToEdit);
-    }
-
-    // ========== МОБИЛЬНЫЕ СОБЫТИЯ ==========
-    function attachMobileEvents() { /* ... */ }
-    setInterval(attachMobileEvents, 1500);
-    attachMobileEvents();
-
-    // ========== АВТОРИЗАЦИЯ ==========
-    function showLogin() { document.getElementById('loginForm').style.display='block'; document.getElementById('registerForm').style.display='none'; document.getElementById('authMessage').innerText=''; }
-    function showRegister() { document.getElementById('loginForm').style.display='none'; document.getElementById('registerForm').style.display='block'; document.getElementById('authMessage').innerText=''; }
-    function registerUser() { /* ... */ }
-    function loginUser() {
-        const u = document.getElementById('loginUsername').value.trim(), p = document.getElementById('loginPassword').value.trim();
-        const user = users.find(us=>us.username===u && us.password===p);
-        if (!user) { document.getElementById('authMessage').innerText = "Неверные данные"; return; }
-        currentUser = user;
-        initUserData(currentUser.username);
-        localStorage.setItem('blockverse_current_user', JSON.stringify({ username: currentUser.username, isGuest: currentUser.isGuest }));
-        document.getElementById('authScreen').classList.add('hidden');
-        document.getElementById('mainMenuScreen').classList.remove('hidden');
-        updateUIafterAuth();
-    }
-    function guestLogin() {
-        const guestName = "Guest_" + Math.floor(Math.random()*10000);
-        currentUser = { username:guestName, coins:300, inventory:[], isGuest:true, friends:[], friendRequests:[], customModel:null };
-        localStorage.setItem('blockverse_current_user', JSON.stringify({ username: guestName, isGuest: true }));
-        document.getElementById('authScreen').classList.add('hidden');
-        document.getElementById('mainMenuScreen').classList.remove('hidden');
-        updateUIafterAuth();
-        alert("Вы вошли как гость. Монеты и игры не сохранятся.");
-    }
-    function logout() {
-        if (gameActive) { gameActive = false; if (gameAnimationId) cancelAnimationFrame(gameAnimationId); }
-        if (ws) ws.close();
-        currentUser = null;
-        localStorage.removeItem('blockverse_current_user');
-        document.getElementById('mainMenuScreen').classList.add('hidden');
-        document.getElementById('editorScreen').classList.add('hidden');
-        document.getElementById('customGameScreen').classList.add('hidden');
-        document.getElementById('authScreen').classList.remove('hidden');
-        showLogin();
-        updateGlobalRefs();
-    }
-
-    const savedUser = localStorage.getItem('blockverse_current_user');
-    if (savedUser) {
-        const userData = JSON.parse(savedUser);
-        if (userData.isGuest) {
-            currentUser = { username: userData.username, coins:300, inventory:[], isGuest:true, friends:[], friendRequests:[], customModel:null };
-            document.getElementById('authScreen').classList.add('hidden');
-            document.getElementById('mainMenuScreen').classList.remove('hidden');
-            updateUIafterAuth();
-        } else {
-            const user = users.find(u => u.username === userData.username);
-            if (user) {
-                currentUser = user;
-                initUserData(currentUser.username);
-                document.getElementById('authScreen').classList.add('hidden');
-                document.getElementById('mainMenuScreen').classList.remove('hidden');
-                updateUIafterAuth();
-            } else {
-                showLogin();
-            }
-        }
-    } else {
-        showLogin();
-    }
-
-    document.getElementById('showLoginBtn').onclick = showLogin;
-    document.getElementById('showRegisterBtn').onclick = showRegister;
-    document.getElementById('doLoginBtn').onclick = loginUser;
-    document.getElementById('doRegisterBtn').onclick = registerUser;
-    document.getElementById('guestLoginBtn').onclick = guestLogin;
-    document.getElementById('guestRegisterBtn').onclick = guestLogin;
-    document.getElementById('logoutBtn').onclick = logout;
-    document.getElementById('showGamesBtn').onclick = () => { document.getElementById('gamesPanel').style.display='block'; document.getElementById('myProjectsPanel').style.display='none'; document.getElementById('shopPanel').style.display='none'; document.getElementById('socialPanel').style.display='none'; document.getElementById('settingsPanel').style.display='none'; requestGamesList(); };
-    document.getElementById('showMyProjectsBtn').onclick = () => { document.getElementById('gamesPanel').style.display='none'; document.getElementById('myProjectsPanel').style.display='block'; document.getElementById('shopPanel').style.display='none'; document.getElementById('socialPanel').style.display='none'; document.getElementById('settingsPanel').style.display='none'; renderMyProjects(); };
-    document.getElementById('showShopBtn').onclick = () => { document.getElementById('gamesPanel').style.display='none'; document.getElementById('myProjectsPanel').style.display='none'; document.getElementById('shopPanel').style.display='block'; document.getElementById('socialPanel').style.display='none'; document.getElementById('settingsPanel').style.display='none'; renderShop(); };
-    document.getElementById('showSocialBtn').onclick = () => { document.getElementById('gamesPanel').style.display='none'; document.getElementById('myProjectsPanel').style.display='none'; document.getElementById('shopPanel').style.display='none'; document.getElementById('socialPanel').style.display='block'; document.getElementById('settingsPanel').style.display='none'; renderFriendsList(); renderChat(); };
-    document.getElementById('showSettingsBtn').onclick = () => { document.getElementById('gamesPanel').style.display='none'; document.getElementById('myProjectsPanel').style.display='none'; document.getElementById('shopPanel').style.display='none'; document.getElementById('socialPanel').style.display='none'; document.getElementById('settingsPanel').style.display='block'; };
-    document.getElementById('createGameBtn').onclick = () => openEditor();
-    document.getElementById('earnCoinsBtn').onclick = () => addCoins(100);
-    document.getElementById('addFriendBtn').onclick = addFriend;
-    document.getElementById('sendChatBtn').onclick = sendChatMessage;
-    document.getElementById('chatInput').addEventListener('keypress', e=>{ if(e.key==='Enter') sendChatMessage(); });
-
-    if(users.length===0) { users.push({ username:"demo", password:"123", coins:800, inventory:[], isGuest:false, friends:[], friendRequests:[], customModel:null }); saveUsers(); }
-    if (!savedUser) showLogin();
-</script>
+<script type="module" src="./platform.js"></script>
 </body>
-</html>
+            </html>

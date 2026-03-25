@@ -128,7 +128,7 @@ let gameScene = null, gameCamera = null, gameRenderer = null, gamePlayer = null;
 let gameActive = false;
 let gameAnimationId = null;
 let collisionBlocks = [];
-let moveSpeed = 4;
+let moveSpeed = 4;  // скорость движения (можно менять в настройках)
 
 // Размеры игрока (простой куб)
 const PLAYER_SIZE = 0.6;
@@ -177,7 +177,7 @@ function renderGamesList(games) {
     attachMobileEvents();
 }
 
-// ========== КОЛЛИЗИЯ ==========
+// ========== КОЛЛИЗИЯ (упрощённая, но надёжная) ==========
 function getBlockBox(block) {
     if (block.scale) {
         const halfX = BLOCK_HALF_SIZE * block.scale.x;
@@ -222,7 +222,7 @@ function resolveCollision(pos, velY, blocks) {
         };
     }
 
-    // X
+    // Коррекция по X
     let playerBox = getPlayerBox(newPos);
     for (let block of blocks) {
         const blockBox = getBlockBox(block);
@@ -240,7 +240,7 @@ function resolveCollision(pos, velY, blocks) {
         }
     }
 
-    // Z
+    // Коррекция по Z
     playerBox = getPlayerBox(newPos);
     for (let block of blocks) {
         const blockBox = getBlockBox(block);
@@ -258,18 +258,20 @@ function resolveCollision(pos, velY, blocks) {
         }
     }
 
-    // Y
+    // Коррекция по Y (гравитация и земля)
     playerBox = getPlayerBox(newPos);
     for (let block of blocks) {
         const blockBox = getBlockBox(block);
         if (playerBox.maxX > blockBox.minX && playerBox.minX < blockBox.maxX &&
             playerBox.maxZ > blockBox.minZ && playerBox.minZ < blockBox.maxZ) {
+            // Приземление сверху
             if (newVelY <= 0 && playerBox.minY <= blockBox.maxY + 0.05 && playerBox.minY > blockBox.minY - 0.1) {
                 const newY = blockBox.maxY + PLAYER_HALF_HEIGHT;
                 newPos.y = newY;
                 newVelY = 0;
                 onGround = true;
             }
+            // Удар головой
             else if (newVelY > 0 && playerBox.maxY >= blockBox.minY - 0.05 && playerBox.maxY < blockBox.minY + 0.1) {
                 const newY = blockBox.minY - PLAYER_HALF_HEIGHT;
                 newPos.y = newY;
@@ -307,13 +309,14 @@ async function startGameSession(gameData, gameName) {
     dirLight.position.set(5,10,7);
     dirLight.castShadow = true;
     gameScene.add(dirLight);
-    const pointLight = new THREE.PointLight(0xffaa66, 1, 20);
+    const pointLight = new THREE.PointLight(0xffaa66, 0.5, 20);
     pointLight.position.set(0,3,0);
     pointLight.castShadow = true;
     gameScene.add(pointLight);
 
     collisionBlocks = [];
 
+    // Платформа
     const platformGeometry = new THREE.BoxGeometry(20, 1, 20);
     const platformMaterial = new THREE.MeshStandardMaterial({ color: 0x6B8E23 });
     const platformMesh = new THREE.Mesh(platformGeometry, platformMaterial);
@@ -323,6 +326,7 @@ async function startGameSession(gameData, gameName) {
     gameScene.add(platformMesh);
     collisionBlocks.push(platformMesh);
 
+    // Блоки из игры
     if (gameData && gameData.blocks) {
         gameData.blocks.forEach(block => {
             const mesh = createMesh(block.shape || 'cube', block.scale, block.color, block.opacity);
@@ -334,6 +338,7 @@ async function startGameSession(gameData, gameName) {
         });
     }
 
+    // Игрок (куб)
     const playerMat = new THREE.MeshStandardMaterial({ color: 0x3a86ff });
     const playerMesh = new THREE.Mesh(new THREE.BoxGeometry(PLAYER_SIZE, PLAYER_HEIGHT, PLAYER_SIZE), playerMat);
     playerMesh.castShadow = true;
@@ -342,6 +347,7 @@ async function startGameSession(gameData, gameName) {
     gameScene.add(playerMesh);
     gamePlayer = playerMesh;
 
+    // Управление
     const keyState = { w: false, s: false, a: false, d: false };
     let jumpRequest = false;
     const handleKey = (e, val) => {
@@ -412,7 +418,7 @@ async function startGameSession(gameData, gameName) {
         gamePlayer.position.copy(newPos);
         sendPosition({x:gamePlayer.position.x, y:gamePlayer.position.y, z:gamePlayer.position.z});
 
-        // Фиксированная камера: всегда позади игрока на расстоянии 5 по Z и выше на 2 по Y
+        // Камера всегда сзади игрока на фиксированном расстоянии
         const targetPos = gamePlayer.position.clone();
         gameCamera.position.x = targetPos.x;
         gameCamera.position.z = targetPos.z + 5;
@@ -458,7 +464,7 @@ async function startLocalGameSession(gameData, gameName) {
     dirLight.position.set(5,10,7);
     dirLight.castShadow = true;
     scene.add(dirLight);
-    const pointLight = new THREE.PointLight(0xffaa66,1,20);
+    const pointLight = new THREE.PointLight(0xffaa66,0.5,20);
     pointLight.position.set(0,3,0);
     pointLight.castShadow = true;
     scene.add(pointLight);
@@ -643,7 +649,9 @@ function showReportDialog() {
     };
     attachMobileEvents();
 }
-function applySettings() { moveSpeed = parseFloat(document.getElementById('moveSpeed').value); }
+function applySettings() { 
+    moveSpeed = parseFloat(document.getElementById('moveSpeed').value); 
+}
 document.getElementById('mouseSensitivity')?.addEventListener('input', applySettings);
 document.getElementById('moveSpeed')?.addEventListener('input', applySettings);
 document.getElementById('reportBugBtn')?.addEventListener('click', showReportDialog);

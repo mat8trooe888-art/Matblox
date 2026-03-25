@@ -1,11 +1,12 @@
+// editor.js — конструктор с полной функциональностью
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 
-// Глобальные данные (доступны через window)
-const { currentUser, customGames, saveGames, renderMyProjects, createGameOnServer } = window;
+// Глобальные данные редактора (доступны из основного окна)
+const { currentUser, customGames, saveGames, createGameOnServer, renderMyProjects } = window;
 
 // Переменные редактора
 let editorScene, editorCamera, editorRenderer, editorControls, transformControls;
@@ -26,6 +27,7 @@ let editorAnimationId = null;
 let gameBeingEdited = null;
 let directionalLight = null;
 
+// Вспомогательные функции
 function createMeshEditor(shape, size = { x: 0.9, y: 0.9, z: 0.9 }, color = 0x8B5A2B, opacity = 1, type = 'block') {
     let geometry;
     switch(shape) {
@@ -310,9 +312,9 @@ function initEditor() {
     editorRenderer.domElement.addEventListener('mousedown', (e) => { if (e.button === 0 && !e.ctrlKey && !e.shiftKey) startDragSelection(e); });
     editorRenderer.domElement.addEventListener('mousemove', (e) => { if (isDraggingSelection) updateDragSelection(e); });
     editorRenderer.domElement.addEventListener('mouseup', (e) => { if (isDraggingSelection) endDragSelection(); });
-    editorRenderer.domElement.addEventListener('touchstart', (e) => { if (e.touches.length === 1) { e.preventDefault(); e.stopPropagation(); startDragSelection(e.touches[0]); } });
-    editorRenderer.domElement.addEventListener('touchmove', (e) => { if (isDraggingSelection && e.touches.length === 1) { e.preventDefault(); e.stopPropagation(); updateDragSelection(e.touches[0]); } });
-    editorRenderer.domElement.addEventListener('touchend', (e) => { if (isDraggingSelection) { e.preventDefault(); e.stopPropagation(); endDragSelection(); } });
+    editorRenderer.domElement.addEventListener('touchstart', (e) => { if (e.touches.length === 1) { e.preventDefault(); startDragSelection(e.touches[0]); } });
+    editorRenderer.domElement.addEventListener('touchmove', (e) => { if (isDraggingSelection && e.touches.length === 1) { e.preventDefault(); updateDragSelection(e.touches[0]); } });
+    editorRenderer.domElement.addEventListener('touchend', (e) => { if (isDraggingSelection) endDragSelection(); });
 
     document.getElementById('modeMove').onclick = () => { transformControls.setMode('translate'); currentTransformMode = 'move'; };
     document.getElementById('modeRotate').onclick = () => { transformControls.setMode('rotate'); currentTransformMode = 'rotate'; };
@@ -408,11 +410,7 @@ function deserializeBlock(data) {
         });
         return group;
     } else {
-        let colorStr = data.color;
-        if (typeof colorStr === 'number') {
-            colorStr = '#' + colorStr.toString(16).padStart(6, '0');
-        }
-        const colorNum = parseInt(colorStr.slice(1), 16);
+        const colorNum = parseInt(data.color.slice(1), 16);
         const block = createMeshEditor(data.shape, data.scale, colorNum, data.opacity, data.userData?.type || 'block');
         block.position.set(data.x, data.y, data.z);
         block.rotation.set(data.rotation.x, data.rotation.y, data.rotation.z);

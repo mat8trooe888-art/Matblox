@@ -132,7 +132,6 @@ let moveDirection = { x: 0, z: 0 };
 let jumpRequest = false;
 let moveSpeed = 4;
 let cameraDistance = 5;
-let cameraAngle = { theta: 0, phi: 0.5 }; // для плавного вращения, но пока не используем
 
 const PLAYER_HALF_WIDTH = 0.3;
 const PLAYER_HALF_HEIGHT = 0.4;
@@ -179,7 +178,7 @@ function renderGamesList(games) {
     attachMobileEvents();
 }
 
-// ========== КОЛЛИЗИЯ ==========
+// ========== КОЛЛИЗИЯ (проверенная) ==========
 function checkCollisionAndAdjust(pos, velY, blocks) {
     let newPos = pos.clone();
     let newVelY = velY;
@@ -196,7 +195,7 @@ function checkCollisionAndAdjust(pos, velY, blocks) {
         };
     }
 
-    // Коррекция по X
+    // X
     let playerBox = getPlayerBox(newPos);
     for (let block of blocks) {
         const bPos = block.position;
@@ -225,7 +224,7 @@ function checkCollisionAndAdjust(pos, velY, blocks) {
         }
     }
 
-    // Коррекция по Z
+    // Z
     playerBox = getPlayerBox(newPos);
     for (let block of blocks) {
         const bPos = block.position;
@@ -254,7 +253,7 @@ function checkCollisionAndAdjust(pos, velY, blocks) {
         }
     }
 
-    // Коррекция по Y
+    // Y
     playerBox = getPlayerBox(newPos);
     for (let block of blocks) {
         const bPos = block.position;
@@ -303,8 +302,7 @@ async function startGameSession(gameData, gameName) {
     gameScene.background = new THREE.Color(0x87CEEB);
     gameScene.fog = new THREE.Fog(0x87CEEB, 30, 60);
     gameCamera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-    gameCamera.position.set(5, 5, 8);
-    gameCamera.lookAt(0, 1, 0);
+    gameCamera.position.set(0, 2, 5);
     gameRenderer = new THREE.WebGLRenderer({ antialias: true });
     gameRenderer.setSize(window.innerWidth, window.innerHeight);
     gameRenderer.shadowMap.enabled = true;
@@ -400,7 +398,6 @@ async function startGameSession(gameData, gameName) {
         jumpBtnDiv.addEventListener('mouseup', () => { jumpRequest=false; });
     }
 
-    // Простое управление камерой: фиксированный угол и расстояние
     const zoomIn = document.getElementById('zoomIn');
     const zoomOut = document.getElementById('zoomOut');
     if (zoomIn) zoomIn.onclick = () => { cameraDistance = Math.max(3, cameraDistance - 0.5); };
@@ -458,10 +455,11 @@ async function startGameSession(gameData, gameName) {
         gamePlayer.position.copy(newPos);
         sendPosition({x:gamePlayer.position.x, y:gamePlayer.position.y, z:gamePlayer.position.z});
 
-        // Обновление камеры: сзади и сверху от игрока
+        // Камера следует за игроком
         const targetPos = gamePlayer.position.clone();
-        const cameraOffset = new THREE.Vector3(0, 2, cameraDistance);
-        gameCamera.position.copy(targetPos.clone().add(cameraOffset));
+        gameCamera.position.x = targetPos.x;
+        gameCamera.position.z = targetPos.z + cameraDistance;
+        gameCamera.position.y = targetPos.y + 2;
         gameCamera.lookAt(targetPos);
         pointLight.position.set(gamePlayer.position.x, gamePlayer.position.y+1, gamePlayer.position.z);
     }
@@ -491,8 +489,7 @@ async function startLocalGameSession(gameData, gameName) {
     scene.background = new THREE.Color(0x87CEEB);
     scene.fog = new THREE.Fog(0x87CEEB,30,60);
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-    camera.position.set(5,5,8);
-    camera.lookAt(0,1,0);
+    camera.position.set(0,2,5);
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
@@ -643,10 +640,10 @@ async function startLocalGameSession(gameData, gameName) {
 
         player.position.copy(newPos);
 
-        // Обновление камеры
         const targetPos = player.position.clone();
-        const cameraOffset = new THREE.Vector3(0, 2, cameraDistanceLocal);
-        camera.position.copy(targetPos.clone().add(cameraOffset));
+        camera.position.x = targetPos.x;
+        camera.position.z = targetPos.z + cameraDistanceLocal;
+        camera.position.y = targetPos.y + 2;
         camera.lookAt(targetPos);
         pointLight.position.set(player.position.x, player.position.y+1, player.position.z);
         renderer.render(scene, camera);

@@ -186,7 +186,7 @@ function checkCollisionAndAdjust(pos, velY, blocks) {
     let newVelY = velY;
     let onGround = false;
 
-    function getBox(p) {
+    function getPlayerBox(p) {
         return {
             minX: p.x - PLAYER_HALF_WIDTH,
             maxX: p.x + PLAYER_HALF_WIDTH,
@@ -197,68 +197,92 @@ function checkCollisionAndAdjust(pos, velY, blocks) {
         };
     }
 
-    // X
-    let box = getBox(newPos);
-    for (let b of blocks) {
-        const bp = b.position;
-        const bs = b.scale;
-        const hx = BLOCK_HALF_SIZE * bs.x;
-        const hy = BLOCK_HALF_SIZE * bs.y;
-        const hz = BLOCK_HALF_SIZE * bs.z;
-        const bbox = { minX: bp.x-hx, maxX: bp.x+hx, minY: bp.y-hy, maxY: bp.y+hy, minZ: bp.z-hz, maxZ: bp.z+hz };
-        if (box.maxX > bbox.minX && box.minX < bbox.maxX &&
-            box.maxY > bbox.minY && box.minY < bbox.maxY &&
-            box.maxZ > bbox.minZ && box.minZ < bbox.maxZ) {
-            const left = box.maxX - bbox.minX;
-            const right = bbox.maxX - box.minX;
-            if (left > 0 && right > 0) {
-                if (left < right) newPos.x -= left;
-                else newPos.x += right;
-                box = getBox(newPos);
+    // Коррекция по X
+    let playerBox = getPlayerBox(newPos);
+    for (let block of blocks) {
+        const bPos = block.position;
+        const bScale = block.scale;
+        const halfX = BLOCK_HALF_SIZE * bScale.x;
+        const halfY = BLOCK_HALF_SIZE * bScale.y;
+        const halfZ = BLOCK_HALF_SIZE * bScale.z;
+        const blockBox = {
+            minX: bPos.x - halfX,
+            maxX: bPos.x + halfX,
+            minY: bPos.y - halfY,
+            maxY: bPos.y + halfY,
+            minZ: bPos.z - halfZ,
+            maxZ: bPos.z + halfZ
+        };
+        if (playerBox.maxX > blockBox.minX && playerBox.minX < blockBox.maxX &&
+            playerBox.maxY > blockBox.minY && playerBox.minY < blockBox.maxY &&
+            playerBox.maxZ > blockBox.minZ && playerBox.minZ < blockBox.maxZ) {
+            const overlapLeft = playerBox.maxX - blockBox.minX;
+            const overlapRight = blockBox.maxX - playerBox.minX;
+            if (overlapLeft > 0 && overlapRight > 0) {
+                if (overlapLeft < overlapRight) newPos.x -= overlapLeft;
+                else newPos.x += overlapRight;
+                playerBox = getPlayerBox(newPos);
             }
         }
     }
 
-    // Z
-    box = getBox(newPos);
-    for (let b of blocks) {
-        const bp = b.position;
-        const bs = b.scale;
-        const hx = BLOCK_HALF_SIZE * bs.x;
-        const hy = BLOCK_HALF_SIZE * bs.y;
-        const hz = BLOCK_HALF_SIZE * bs.z;
-        const bbox = { minX: bp.x-hx, maxX: bp.x+hx, minY: bp.y-hy, maxY: bp.y+hy, minZ: bp.z-hz, maxZ: bp.z+hz };
-        if (box.maxX > bbox.minX && box.minX < bbox.maxX &&
-            box.maxY > bbox.minY && box.minY < bbox.maxY &&
-            box.maxZ > bbox.minZ && box.minZ < bbox.maxZ) {
-            const front = box.maxZ - bbox.minZ;
-            const back = bbox.maxZ - box.minZ;
-            if (front > 0 && back > 0) {
-                if (front < back) newPos.z -= front;
-                else newPos.z += back;
-                box = getBox(newPos);
+    // Коррекция по Z
+    playerBox = getPlayerBox(newPos);
+    for (let block of blocks) {
+        const bPos = block.position;
+        const bScale = block.scale;
+        const halfX = BLOCK_HALF_SIZE * bScale.x;
+        const halfY = BLOCK_HALF_SIZE * bScale.y;
+        const halfZ = BLOCK_HALF_SIZE * bScale.z;
+        const blockBox = {
+            minX: bPos.x - halfX,
+            maxX: bPos.x + halfX,
+            minY: bPos.y - halfY,
+            maxY: bPos.y + halfY,
+            minZ: bPos.z - halfZ,
+            maxZ: bPos.z + halfZ
+        };
+        if (playerBox.maxX > blockBox.minX && playerBox.minX < blockBox.maxX &&
+            playerBox.maxY > blockBox.minY && playerBox.minY < blockBox.maxY &&
+            playerBox.maxZ > blockBox.minZ && playerBox.minZ < blockBox.maxZ) {
+            const overlapFront = playerBox.maxZ - blockBox.minZ;
+            const overlapBack = blockBox.maxZ - playerBox.minZ;
+            if (overlapFront > 0 && overlapBack > 0) {
+                if (overlapFront < overlapBack) newPos.z -= overlapFront;
+                else newPos.z += overlapBack;
+                playerBox = getPlayerBox(newPos);
             }
         }
     }
 
-    // Y
-    box = getBox(newPos);
-    for (let b of blocks) {
-        const bp = b.position;
-        const bs = b.scale;
-        const hx = BLOCK_HALF_SIZE * bs.x;
-        const hy = BLOCK_HALF_SIZE * bs.y;
-        const hz = BLOCK_HALF_SIZE * bs.z;
-        const bbox = { minX: bp.x-hx, maxX: bp.x+hx, minY: bp.y-hy, maxY: bp.y+hy, minZ: bp.z-hz, maxZ: bp.z+hz };
-        if (box.maxX > bbox.minX && box.minX < bbox.maxX &&
-            box.maxZ > bbox.minZ && box.minZ < bbox.maxZ) {
-            if (newVelY <= 0 && box.minY <= bbox.maxY + 0.05 && box.minY > bbox.minY - 0.1) {
-                const newY = bbox.maxY + PLAYER_HALF_HEIGHT;
+    // Коррекция по Y
+    playerBox = getPlayerBox(newPos);
+    for (let block of blocks) {
+        const bPos = block.position;
+        const bScale = block.scale;
+        const halfX = BLOCK_HALF_SIZE * bScale.x;
+        const halfY = BLOCK_HALF_SIZE * bScale.y;
+        const halfZ = BLOCK_HALF_SIZE * bScale.z;
+        const blockBox = {
+            minX: bPos.x - halfX,
+            maxX: bPos.x + halfX,
+            minY: bPos.y - halfY,
+            maxY: bPos.y + halfY,
+            minZ: bPos.z - halfZ,
+            maxZ: bPos.z + halfZ
+        };
+        if (playerBox.maxX > blockBox.minX && playerBox.minX < blockBox.maxX &&
+            playerBox.maxZ > blockBox.minZ && playerBox.minZ < blockBox.maxZ) {
+            // Приземление
+            if (newVelY <= 0 && playerBox.minY <= blockBox.maxY + 0.05 && playerBox.minY > blockBox.minY - 0.1) {
+                const newY = blockBox.maxY + PLAYER_HALF_HEIGHT;
                 newPos.y = newY;
                 newVelY = 0;
                 onGround = true;
-            } else if (newVelY > 0 && box.maxY >= bbox.minY - 0.05 && box.maxY < bbox.minY + 0.1) {
-                const newY = bbox.minY - PLAYER_HALF_HEIGHT;
+            }
+            // Удар головой
+            else if (newVelY > 0 && playerBox.maxY >= blockBox.minY - 0.05 && playerBox.maxY < blockBox.minY + 0.1) {
+                const newY = blockBox.minY - PLAYER_HALF_HEIGHT;
                 newPos.y = newY;
                 newVelY = 0;
             }
@@ -267,14 +291,15 @@ function checkCollisionAndAdjust(pos, velY, blocks) {
     return { pos: newPos, velY: newVelY, onGround };
 }
 
+// ========== УПРОЩЁННАЯ ФУНКЦИЯ РАЗМЕЩЕНИЯ НА ПЛАТФОРМЕ ==========
 function placeOnPlatform(model, platform) {
-    const bbox = new THREE.Box3().setFromObject(model);
-    const modelMinY = bbox.min.y;
-    const topY = platform.position.y + (BLOCK_HALF_SIZE * platform.scale.y);
-    const offset = topY - modelMinY;
-    model.position.set(platform.position.x, offset, platform.position.z);
+    // Верх платформы
+    const platformTop = platform.position.y + (BLOCK_HALF_SIZE * platform.scale.y);
+    // Ставим модель так, чтобы её центр был на высоте platformTop + половина высоты модели
+    model.position.set(platform.position.x, platformTop + PLAYER_HALF_HEIGHT, platform.position.z);
 }
 
+// ========== ИГРОВАЯ СЕССИЯ ==========
 async function startGameSession(gameData, gameName) {
     document.getElementById('mainMenuScreen').classList.add('hidden');
     document.getElementById('customGameScreen').classList.remove('hidden');
@@ -303,10 +328,11 @@ async function startGameSession(gameData, gameName) {
 
     collisionBlocks = [];
 
-    const platform = createMesh('cube', {x:20/0.9, y:1/0.9, z:20/0.9}, 0x6B8E23);
-    platform.position.set(0,-0.5,0);
-    gameScene.add(platform);
-    collisionBlocks.push(platform);
+    // Базовая платформа
+    const platformMesh = createMesh('cube', {x:20/0.9, y:1/0.9, z:20/0.9}, 0x6B8E23);
+    platformMesh.position.set(0, -0.5, 0);
+    gameScene.add(platformMesh);
+    collisionBlocks.push(platformMesh);
 
     if (gameData && gameData.blocks) {
         gameData.blocks.forEach(block => {
@@ -319,19 +345,23 @@ async function startGameSession(gameData, gameName) {
         });
     }
 
+    // Создаём игрока и ставим на платформу
     const player = createDefaultCharacter(0x3a86ff);
-    placeOnPlatform(player, platform);
+    placeOnPlatform(player, platformMesh);
     gameScene.add(player);
     gamePlayer = player;
 
+    // Управление (клавиатура + джойстик)
     const keyState = { w: false, s: false, a: false, d: false };
     const handleKey = (e, val) => {
         if(!gameActive) return;
-        if(e.key==='w') keyState.w=val;
-        if(e.key==='s') keyState.s=val;
-        if(e.key==='a') keyState.a=val;
-        if(e.key==='d') keyState.d=val;
-        if(e.key===' '||e.key==='Space') { jumpRequest=val; e.preventDefault(); }
+        switch(e.key) {
+            case 'w': keyState.w = val; break;
+            case 's': keyState.s = val; break;
+            case 'a': keyState.a = val; break;
+            case 'd': keyState.d = val; break;
+            case ' ': case 'Space': jumpRequest = val; e.preventDefault(); break;
+        }
     };
     window.addEventListener('keydown', e=>handleKey(e,true));
     window.addEventListener('keyup', e=>handleKey(e,false));
@@ -430,7 +460,7 @@ async function startGameSession(gameData, gameName) {
         onGround = col.onGround;
 
         if(newPos.y < -5) {
-            placeOnPlatform(gamePlayer, platform);
+            placeOnPlatform(gamePlayer, platformMesh);
             newPos.copy(gamePlayer.position);
             velY = 0;
             onGround = true;
@@ -464,6 +494,7 @@ async function startGameSession(gameData, gameName) {
     attachMobileEvents();
 }
 
+// ========== ЛОКАЛЬНАЯ ИГРОВАЯ СЕССИЯ ==========
 async function startLocalGameSession(gameData, gameName) {
     document.getElementById('mainMenuScreen').classList.add('hidden');
     document.getElementById('customGameScreen').classList.remove('hidden');
@@ -492,10 +523,10 @@ async function startLocalGameSession(gameData, gameName) {
 
     const blocks = [];
 
-    const platform = createMesh('cube', {x:20/0.9, y:1/0.9, z:20/0.9}, 0x6B8E23);
-    platform.position.set(0,-0.5,0);
-    scene.add(platform);
-    blocks.push(platform);
+    const platformMesh = createMesh('cube', {x:20/0.9, y:1/0.9, z:20/0.9}, 0x6B8E23);
+    platformMesh.position.set(0, -0.5, 0);
+    scene.add(platformMesh);
+    blocks.push(platformMesh);
 
     if (gameData && gameData.blocks) {
         gameData.blocks.forEach(block => {
@@ -508,18 +539,21 @@ async function startLocalGameSession(gameData, gameName) {
     }
 
     const player = createDefaultCharacter(0x3a86ff);
-    placeOnPlatform(player, platform);
+    placeOnPlatform(player, platformMesh);
     scene.add(player);
 
-    const keyState = { w: false, s: false, a: false, d: false };
-    let localMove = { x:0, z:0 };
-    let localJump = false;
+    // Управление
+    let localKeyState = { w: false, s: false, a: false, d: false };
+    let localMoveDirection = { x: 0, z: 0 };
+    let localJumpRequest = false;
     const handleKey = (e, val) => {
-        if(e.key==='w') keyState.w=val;
-        if(e.key==='s') keyState.s=val;
-        if(e.key==='a') keyState.a=val;
-        if(e.key==='d') keyState.d=val;
-        if(e.key===' '||e.key==='Space') { localJump=val; e.preventDefault(); }
+        switch(e.key) {
+            case 'w': localKeyState.w = val; break;
+            case 's': localKeyState.s = val; break;
+            case 'a': localKeyState.a = val; break;
+            case 'd': localKeyState.d = val; break;
+            case ' ': case 'Space': localJumpRequest = val; e.preventDefault(); break;
+        }
     };
     window.addEventListener('keydown', e=>handleKey(e,true));
     window.addEventListener('keyup', e=>handleKey(e,false));
@@ -542,12 +576,12 @@ async function startLocalGameSession(gameData, gameName) {
                 const a = Math.atan2(dy,dx);
                 const nx = Math.cos(a)*maxD;
                 const ny = Math.sin(a)*maxD;
-                localMove.x = nx/maxD;
-                localMove.z = ny/maxD;
+                localMoveDirection.x = nx/maxD;
+                localMoveDirection.z = ny/maxD;
                 if(joystickThumb) joystickThumb.style.transform = `translate(${nx}px,${ny}px)`;
             } else {
-                localMove.x = dx/maxD;
-                localMove.z = dy/maxD;
+                localMoveDirection.x = dx/maxD;
+                localMoveDirection.z = dy/maxD;
                 if(joystickThumb) joystickThumb.style.transform = `translate(${dx}px,${dy}px)`;
             }
         };
@@ -559,26 +593,26 @@ async function startLocalGameSession(gameData, gameName) {
             update(e.touches[0]);
         });
         joystickDiv.addEventListener('touchmove', (e) => { e.preventDefault(); if(active) update(e.touches[0]); });
-        joystickDiv.addEventListener('touchend', () => { active=false; localMove={x:0,z:0}; if(joystickThumb) joystickThumb.style.transform='translate(0px,0px)'; });
-        jumpBtnDiv.addEventListener('touchstart', (e) => { e.preventDefault(); localJump=true; });
-        jumpBtnDiv.addEventListener('touchend', () => { localJump=false; });
-        jumpBtnDiv.addEventListener('mousedown', () => { localJump=true; });
-        jumpBtnDiv.addEventListener('mouseup', () => { localJump=false; });
+        joystickDiv.addEventListener('touchend', () => { active=false; localMoveDirection={x:0,z:0}; if(joystickThumb) joystickThumb.style.transform='translate(0px,0px)'; });
+        jumpBtnDiv.addEventListener('touchstart', (e) => { e.preventDefault(); localJumpRequest=true; });
+        jumpBtnDiv.addEventListener('touchend', () => { localJumpRequest=false; });
+        jumpBtnDiv.addEventListener('mousedown', () => { localJumpRequest=true; });
+        jumpBtnDiv.addEventListener('mouseup', () => { localJumpRequest=false; });
     }
 
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
-    controls.rotateSpeed = 1.0;
-    controls.zoomSpeed = 1.2;
-    controls.enableZoom = true;
-    controls.enablePan = false;
-    controls.target.copy(player.position);
+    const localControls = new OrbitControls(camera, renderer.domElement);
+    localControls.enableDamping = true;
+    localControls.dampingFactor = 0.05;
+    localControls.rotateSpeed = 1.0;
+    localControls.zoomSpeed = 1.2;
+    localControls.enableZoom = true;
+    localControls.enablePan = false;
+    localControls.target.copy(player.position);
 
     const zoomIn = document.getElementById('zoomIn');
     const zoomOut = document.getElementById('zoomOut');
-    if(zoomIn) zoomIn.onclick = () => { controls.object.zoom = Math.min(3, controls.object.zoom-0.2); controls.update(); };
-    if(zoomOut) zoomOut.onclick = () => { controls.object.zoom = Math.max(0.5, controls.object.zoom+0.2); controls.update(); };
+    if(zoomIn) zoomIn.onclick = () => { localControls.object.zoom = Math.min(3, localControls.object.zoom-0.2); localControls.update(); };
+    if(zoomOut) zoomOut.onclick = () => { localControls.object.zoom = Math.max(0.5, localControls.object.zoom+0.2); localControls.update(); };
 
     let velY = 0;
     const GRAVITY = 15;
@@ -594,12 +628,12 @@ async function startLocalGameSession(gameData, gameName) {
         lastTime = now;
 
         let mx=0, mz=0;
-        if(keyState.w) mz-=1;
-        if(keyState.s) mz+=1;
-        if(keyState.a) mx-=1;
-        if(keyState.d) mx+=1;
+        if(localKeyState.w) mz-=1;
+        if(localKeyState.s) mz+=1;
+        if(localKeyState.a) mx-=1;
+        if(localKeyState.d) mx+=1;
         if(mx!==0 || mz!==0) { const len = Math.hypot(mx,mz); mx/=len; mz/=len; }
-        if(localMove.x!==0 || localMove.z!==0) { mx=localMove.x; mz=localMove.z; }
+        if(localMoveDirection.x!==0 || localMoveDirection.z!==0) { mx=localMoveDirection.x; mz=localMoveDirection.z; }
 
         if(mx!==0 || mz!==0) {
             const angle = Math.atan2(mx, mz);
@@ -619,21 +653,21 @@ async function startLocalGameSession(gameData, gameName) {
         onGround = col.onGround;
 
         if(newPos.y < -5) {
-            placeOnPlatform(player, platform);
+            placeOnPlatform(player, platformMesh);
             newPos.copy(player.position);
             velY = 0;
             onGround = true;
         }
 
-        if(onGround && localJump) {
+        if(onGround && localJumpRequest) {
             velY = JUMP_FORCE;
-            localJump = false;
+            localJumpRequest = false;
         }
 
         player.position.copy(newPos);
 
-        controls.target.copy(player.position);
-        controls.update();
+        localControls.target.copy(player.position);
+        localControls.update();
         pointLight.position.set(player.position.x, player.position.y+1, player.position.z);
         renderer.render(scene, camera);
         requestAnimationFrame(updateLocal);
@@ -649,6 +683,7 @@ async function startLocalGameSession(gameData, gameName) {
     attachMobileEvents();
 }
 
+// ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
 function createDefaultCharacter(color=0x3a86ff) {
     const group = new THREE.Group();
     const body = new THREE.Mesh(new THREE.BoxGeometry(0.6,0.8,0.4), new THREE.MeshStandardMaterial({color}));

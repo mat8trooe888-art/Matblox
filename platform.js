@@ -136,7 +136,7 @@ const PLAYER_SIZE = 0.6;
 const PLAYER_HEIGHT = 0.8;
 const PLAYER_HALF_SIZE = PLAYER_SIZE / 2;
 const PLAYER_HALF_HEIGHT = PLAYER_HEIGHT / 2;
-const BLOCK_HALF_SIZE = 0.45;
+const BLOCK_HALF_SIZE = 0.45; // для обычных блоков
 
 function connectToServer() {
     try {
@@ -179,6 +179,36 @@ function renderGamesList(games) {
 }
 
 // ========== НАДЁЖНАЯ КОЛЛИЗИЯ ==========
+function getBlockBox(block) {
+    // Если блок создан через createMesh (с масштабом), используем его scale
+    if (block.scale) {
+        const halfX = BLOCK_HALF_SIZE * block.scale.x;
+        const halfY = BLOCK_HALF_SIZE * block.scale.y;
+        const halfZ = BLOCK_HALF_SIZE * block.scale.z;
+        return {
+            minX: block.position.x - halfX,
+            maxX: block.position.x + halfX,
+            minY: block.position.y - halfY,
+            maxY: block.position.y + halfY,
+            minZ: block.position.z - halfZ,
+            maxZ: block.position.z + halfZ
+        };
+    }
+    // Для обычных кубов (например, платформа) берём размеры из геометрии
+    const geom = block.geometry;
+    const width = geom.parameters.width;
+    const height = geom.parameters.height;
+    const depth = geom.parameters.depth;
+    return {
+        minX: block.position.x - width/2,
+        maxX: block.position.x + width/2,
+        minY: block.position.y - height/2,
+        maxY: block.position.y + height/2,
+        minZ: block.position.z - depth/2,
+        maxZ: block.position.z + depth/2
+    };
+}
+
 function resolveCollision(pos, velY, blocks) {
     let newPos = pos.clone();
     let newVelY = velY;
@@ -198,19 +228,7 @@ function resolveCollision(pos, velY, blocks) {
     // Коррекция по X
     let playerBox = getPlayerBox(newPos);
     for (let block of blocks) {
-        const bPos = block.position;
-        const bScale = block.scale;
-        const halfX = BLOCK_HALF_SIZE * bScale.x;
-        const halfY = BLOCK_HALF_SIZE * bScale.y;
-        const halfZ = BLOCK_HALF_SIZE * bScale.z;
-        const blockBox = {
-            minX: bPos.x - halfX,
-            maxX: bPos.x + halfX,
-            minY: bPos.y - halfY,
-            maxY: bPos.y + halfY,
-            minZ: bPos.z - halfZ,
-            maxZ: bPos.z + halfZ
-        };
+        const blockBox = getBlockBox(block);
         if (playerBox.maxX > blockBox.minX && playerBox.minX < blockBox.maxX &&
             playerBox.maxY > blockBox.minY && playerBox.minY < blockBox.maxY &&
             playerBox.maxZ > blockBox.minZ && playerBox.minZ < blockBox.maxZ) {
@@ -228,19 +246,7 @@ function resolveCollision(pos, velY, blocks) {
     // Коррекция по Z
     playerBox = getPlayerBox(newPos);
     for (let block of blocks) {
-        const bPos = block.position;
-        const bScale = block.scale;
-        const halfX = BLOCK_HALF_SIZE * bScale.x;
-        const halfY = BLOCK_HALF_SIZE * bScale.y;
-        const halfZ = BLOCK_HALF_SIZE * bScale.z;
-        const blockBox = {
-            minX: bPos.x - halfX,
-            maxX: bPos.x + halfX,
-            minY: bPos.y - halfY,
-            maxY: bPos.y + halfY,
-            minZ: bPos.z - halfZ,
-            maxZ: bPos.z + halfZ
-        };
+        const blockBox = getBlockBox(block);
         if (playerBox.maxX > blockBox.minX && playerBox.minX < blockBox.maxX &&
             playerBox.maxY > blockBox.minY && playerBox.minY < blockBox.maxY &&
             playerBox.maxZ > blockBox.minZ && playerBox.minZ < blockBox.maxZ) {
@@ -258,22 +264,10 @@ function resolveCollision(pos, velY, blocks) {
     // Коррекция по Y
     playerBox = getPlayerBox(newPos);
     for (let block of blocks) {
-        const bPos = block.position;
-        const bScale = block.scale;
-        const halfX = BLOCK_HALF_SIZE * bScale.x;
-        const halfY = BLOCK_HALF_SIZE * bScale.y;
-        const halfZ = BLOCK_HALF_SIZE * bScale.z;
-        const blockBox = {
-            minX: bPos.x - halfX,
-            maxX: bPos.x + halfX,
-            minY: bPos.y - halfY,
-            maxY: bPos.y + halfY,
-            minZ: bPos.z - halfZ,
-            maxZ: bPos.z + halfZ
-        };
+        const blockBox = getBlockBox(block);
         if (playerBox.maxX > blockBox.minX && playerBox.minX < blockBox.maxX &&
             playerBox.maxZ > blockBox.minZ && playerBox.minZ < blockBox.maxZ) {
-            // Падение сверху
+            // Приземление сверху
             if (newVelY <= 0 && playerBox.minY <= blockBox.maxY + 0.05 && playerBox.minY > blockBox.minY - 0.1) {
                 const newY = blockBox.maxY + PLAYER_HALF_HEIGHT;
                 newPos.y = newY;
@@ -292,7 +286,7 @@ function resolveCollision(pos, velY, blocks) {
 }
 
 function placeOnPlatform(model, platform) {
-    const platformTop = platform.position.y + (BLOCK_HALF_SIZE * platform.scale.y);
+    const platformTop = platform.position.y + platform.geometry.parameters.height / 2;
     model.position.set(platform.position.x, platformTop + PLAYER_HALF_HEIGHT, platform.position.z);
 }
 
@@ -325,8 +319,13 @@ async function startGameSession(gameData, gameName) {
 
     collisionBlocks = [];
 
-    const platformMesh = createMesh('cube', {x:20/0.9, y:1/0.9, z:20/0.9}, 0x6B8E23);
+    // Платформа – простой куб 20x1x20, без масштаба
+    const platformGeometry = new THREE.BoxGeometry(20, 1, 20);
+    const platformMaterial = new THREE.MeshStandardMaterial({ color: 0x6B8E23 });
+    const platformMesh = new THREE.Mesh(platformGeometry, platformMaterial);
     platformMesh.position.set(0, -0.5, 0);
+    platformMesh.receiveShadow = true;
+    platformMesh.castShadow = true;
     gameScene.add(platformMesh);
     collisionBlocks.push(platformMesh);
 
@@ -476,8 +475,12 @@ async function startLocalGameSession(gameData, gameName) {
 
     const blocks = [];
 
-    const platformMesh = createMesh('cube', {x:20/0.9, y:1/0.9, z:20/0.9}, 0x6B8E23);
+    const platformGeometry = new THREE.BoxGeometry(20, 1, 20);
+    const platformMaterial = new THREE.MeshStandardMaterial({ color: 0x6B8E23 });
+    const platformMesh = new THREE.Mesh(platformGeometry, platformMaterial);
     platformMesh.position.set(0, -0.5, 0);
+    platformMesh.receiveShadow = true;
+    platformMesh.castShadow = true;
     scene.add(platformMesh);
     blocks.push(platformMesh);
 

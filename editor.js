@@ -1,4 +1,3 @@
-// editor.js — конструктор с полной функциональностью
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
@@ -12,9 +11,6 @@ const { currentUser, customGames, saveGames, renderMyProjects, createGameOnServe
 let editorScene, editorCamera, editorRenderer, editorControls, transformControls;
 let editorBlocks = [];
 let selectedObjects = [];
-let isDraggingSelection = false;
-let dragSelectionStart = null;
-let dragSelectionEnd = null;
 let currentTransformMode = 'move';
 let currentShape = 'cube';
 let currentBlockType = 'wood';
@@ -203,53 +199,6 @@ function selectObject(obj, addToSelection = false) {
     updatePropertiesPanel();
 }
 
-function startDragSelection(e) {
-    isDraggingSelection = true;
-    dragSelectionStart = { x: e.clientX, y: e.clientY };
-    dragSelectionEnd = null;
-    const rectDiv = document.createElement('div'); rectDiv.id = 'dragSelectionRect'; rectDiv.style.cssText = 'position:fixed; border:1px dashed #fff; background:rgba(100,100,255,0.2); pointer-events:none; z-index:1000;'; document.body.appendChild(rectDiv);
-}
-function updateDragSelection(e) {
-    if (!isDraggingSelection || !dragSelectionStart) return;
-    dragSelectionEnd = { x: e.clientX, y: e.clientY };
-    const rectDiv = document.getElementById('dragSelectionRect');
-    if (rectDiv) {
-        const left = Math.min(dragSelectionStart.x, dragSelectionEnd.x);
-        const top = Math.min(dragSelectionStart.y, dragSelectionEnd.y);
-        const width = Math.abs(dragSelectionStart.x - dragSelectionEnd.x);
-        const height = Math.abs(dragSelectionStart.y - dragSelectionEnd.y);
-        rectDiv.style.left = left + 'px'; rectDiv.style.top = top + 'px'; rectDiv.style.width = width + 'px'; rectDiv.style.height = height + 'px';
-    }
-}
-function endDragSelection() {
-    isDraggingSelection = false;
-    const rectDiv = document.getElementById('dragSelectionRect'); if (rectDiv) rectDiv.remove();
-    if (!dragSelectionStart || !dragSelectionEnd) { dragSelectionStart = null; dragSelectionEnd = null; return; }
-    const start = new THREE.Vector2(dragSelectionStart.x, dragSelectionStart.y);
-    const end = new THREE.Vector2(dragSelectionEnd.x, dragSelectionEnd.y);
-    const rect = { left: Math.min(start.x, end.x), top: Math.min(start.y, end.y), right: Math.max(start.x, end.x), bottom: Math.max(start.y, end.y) };
-    const toSelect = [];
-    editorBlocks.forEach(obj => {
-        const vector = obj.position.clone().project(editorCamera);
-        const x = (vector.x * 0.5 + 0.5) * editorRenderer.domElement.clientWidth;
-        const y = (-(vector.y * 0.5 - 0.5)) * editorRenderer.domElement.clientHeight;
-        if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) toSelect.push(obj);
-    });
-    if (toSelect.length) { clearSelection(); toSelect.forEach(obj => selectObject(obj, true)); }
-    dragSelectionStart = null; dragSelectionEnd = null;
-}
-
-function groupSelected() {
-    if (selectedObjects.length < 2) return;
-    const objectsToGroup = [...selectedObjects];
-    const group = createGroup(objectsToGroup);
-    editorScene.add(group);
-    objectsToGroup.forEach(obj => { const idx = editorBlocks.indexOf(obj); if (idx !== -1) editorBlocks.splice(idx, 1); });
-    editorBlocks.push(group);
-    clearSelection();
-    selectObject(group);
-}
-
 function initEditor() {
     if (editorActive) return;
     const container = document.getElementById('editorCanvasContainer');
@@ -286,7 +235,6 @@ function initEditor() {
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
     editorRenderer.domElement.addEventListener('click', (event) => {
-        if (isDraggingSelection) return;
         const rect = editorRenderer.domElement.getBoundingClientRect();
         mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
         mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
@@ -308,12 +256,6 @@ function initEditor() {
             } else selectObject(hit, false);
         } else clearSelection();
     });
-    editorRenderer.domElement.addEventListener('mousedown', (e) => { if (e.button === 0 && !e.ctrlKey && !e.shiftKey) startDragSelection(e); });
-    editorRenderer.domElement.addEventListener('mousemove', (e) => { if (isDraggingSelection) updateDragSelection(e); });
-    editorRenderer.domElement.addEventListener('mouseup', (e) => { if (isDraggingSelection) endDragSelection(); });
-    editorRenderer.domElement.addEventListener('touchstart', (e) => { if (e.touches.length === 1) { e.preventDefault(); e.stopPropagation(); startDragSelection(e.touches[0]); } });
-    editorRenderer.domElement.addEventListener('touchmove', (e) => { if (isDraggingSelection && e.touches.length === 1) { e.preventDefault(); e.stopPropagation(); updateDragSelection(e.touches[0]); } });
-    editorRenderer.domElement.addEventListener('touchend', (e) => { if (isDraggingSelection) { e.preventDefault(); e.stopPropagation(); endDragSelection(); } });
 
     document.getElementById('modeMove').onclick = () => { transformControls.setMode('translate'); currentTransformMode = 'move'; };
     document.getElementById('modeRotate').onclick = () => { transformControls.setMode('rotate'); currentTransformMode = 'rotate'; };
@@ -429,4 +371,4 @@ export function openEditor(gameToEdit = null) {
     document.getElementById('mainMenuScreen').classList.add('hidden');
     document.getElementById('editorScreen').classList.remove('hidden');
     initEditor();
-    }
+                                            }

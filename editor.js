@@ -1,15 +1,13 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 
 // Глобальные данные (доступны через window)
 const { currentUser, customGames, saveGames, renderMyProjects, createGameOnServer } = window;
 
 // ========== ПЕРЕМЕННЫЕ РЕДАКТОРА ==========
 let editorScene, editorCamera, editorRenderer, editorControls, transformControls;
-let editorObjects = []; // массив объектов с иерархией
+let editorObjects = [];
 let selectedObjects = [];
 let currentTransformMode = 'translate';
 let currentBlockType = 'wood';
@@ -19,12 +17,11 @@ let currentOpacity = 1;
 let editorActive = false;
 let editorAnimationId = null;
 let gameBeingEdited = null;
-let directionalLight = null;
 
-// ========== VFX (система частиц) ==========
+// VFX
 let particleSystems = [];
 
-// ========== АНИМАЦИИ ==========
+// Анимации
 let animations = [];
 let currentAnimation = null;
 let isPlaying = false;
@@ -33,16 +30,13 @@ let animationRequestId = null;
 let recording = false;
 let recordedKeyframes = [];
 let recordTarget = null;
+let recordStartTime = 0;
 
-// ========== GUI ==========
+// GUI
 let guiElements = [];
 
-// Вспомогательные функции для идентификаторов
-function generateId() {
-    return Date.now() + '-' + Math.random().toString(36).substr(2, 8);
-}
+function generateId() { return Date.now() + '-' + Math.random().toString(36).substr(2, 8); }
 
-// Создание меша блока с учётом формы
 function createBlockMesh(shape, size = { x: 0.9, y: 0.9, z: 0.9 }, color = 0x8B5A2B, opacity = 1, type = 'block') {
     let geometry;
     switch(shape) {
@@ -51,18 +45,18 @@ function createBlockMesh(shape, size = { x: 0.9, y: 0.9, z: 0.9 }, color = 0x8B5
         case 'cone': geometry = new THREE.ConeGeometry(0.45, 0.9, 32); break;
         default: geometry = new THREE.BoxGeometry(0.9, 0.9, 0.9);
     }
-    const material = new THREE.MeshStandardMaterial({ color });
+    const material = new THREE.MeshStandardMaterial({ color: typeof color === 'string' ? parseInt(color.slice(1), 16) : color });
     material.transparent = opacity < 1;
     material.opacity = opacity;
     const mesh = new THREE.Mesh(geometry, material);
     mesh.scale.set(size.x, size.y, size.z);
-    mesh.userData = { type, shape, color: '#' + color.toString(16).padStart(6,'0'), opacity };
+    mesh.userData = { type, shape, color: '#' + (typeof color === 'number' ? color.toString(16).padStart(6,'0') : color.slice(1)), opacity };
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     return mesh;
 }
 
-// ========== ФУНКЦИИ ДЛЯ ЧАСТИЦ ==========
+// ========== ЧАСТИЦЫ ==========
 function createParticleSystem(config) {
     const geometry = new THREE.BufferGeometry();
     const count = config.count || 100;
@@ -79,11 +73,9 @@ function createParticleSystem(config) {
         });
     }
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    const texture = config.texture ? new THREE.TextureLoader().load(config.texture) : null;
     const material = new THREE.PointsMaterial({
         color: config.color || 0xffaa44,
         size: config.size || 0.2,
-        map: texture,
         blending: THREE.AdditiveBlending
     });
     const points = new THREE.Points(geometry, material);
@@ -149,7 +141,7 @@ function addParticleSystem(config) {
     return obj;
 }
 
-// ========== ФУНКЦИИ ДЛЯ АНИМАЦИЙ ==========
+// ========== АНИМАЦИИ ==========
 function createAnimation(name) {
     const id = generateId();
     const anim = {
@@ -201,14 +193,9 @@ function applyAnimation(anim, time) {
         const value = getInterpolatedValue(track.keyframes, time);
         if (value === null) continue;
         switch(track.property) {
-            case 'position.x': targetObj.threeObject.position.x = value; break;
-            case 'position.y': targetObj.threeObject.position.y = value; break;
-            case 'position.z': targetObj.threeObject.position.z = value; break;
-            case 'scale.x': targetObj.threeObject.scale.x = value; break;
-            case 'scale.y': targetObj.threeObject.scale.y = value; break;
-            case 'scale.z': targetObj.threeObject.scale.z = value; break;
-            case 'rotation.y': targetObj.threeObject.rotation.y = value; break;
-            case 'color': if (targetObj.threeObject.material) targetObj.threeObject.material.color.set(value); break;
+            case 'position': targetObj.threeObject.position.copy(value); break;
+            case 'rotation': targetObj.threeObject.rotation.copy(value); break;
+            case 'scale': targetObj.threeObject.scale.copy(value); break;
         }
     }
 }
@@ -349,7 +336,7 @@ function updateGUIPreview() {
     });
 }
 
-// ========== ОБЩИЕ ФУНКЦИИ (проводник, свойства, сохранение) ==========
+// ========== ОБЩИЕ ФУНКЦИИ ==========
 function addObject(obj) {
     editorObjects.push(obj);
     if (obj.threeObject) editorScene.add(obj.threeObject);
@@ -629,7 +616,6 @@ function updatePropertiesPanel() {
         return;
     }
 
-    // Стандартные свойства для блока или группы
     container.innerHTML = `
         <div class="prop-group">
             <label>Имя</label>
@@ -707,7 +693,6 @@ function applyProps() {
         parseFloat(document.getElementById('propScaleY').value),
         parseFloat(document.getElementById('propScaleZ').value)
     );
-    if (transformControls.object === obj.threeObject) transformControls.update();
     renderExplorer();
 }
 
@@ -771,27 +756,6 @@ function serializeObject(obj) {
     }
 }
 
-function loadGameForEditing(game) {
-    clearEditor();
-    if (!game.data || !game.data.blocks) return;
-    game.data.blocks.forEach(blockData => {
-        const obj = deserializeObject(blockData);
-        if (obj) addObject(obj);
-    });
-    if (game.data.animations) {
-        animations = game.data.animations.map(anim => ({
-            ...anim,
-            tracks: anim.tracks.map(track => ({ ...track }))
-        }));
-        updateAnimationSelect();
-    }
-    if (game.data.gui) {
-        guiElements = game.data.gui;
-        renderGUIList();
-    }
-    selectObject(null);
-}
-
 function deserializeObject(data) {
     if (data.type === 'group') {
         const group = new THREE.Group();
@@ -830,12 +794,7 @@ function deserializeObject(data) {
             userData: { type: 'particle', config: data.config }
         };
     } else {
-        let colorStr = data.color;
-        if (typeof colorStr === 'number') {
-            colorStr = '#' + colorStr.toString(16).padStart(6, '0');
-        }
-        const colorNum = parseInt(colorStr.slice(1), 16);
-        const mesh = createBlockMesh(data.shape, data.scale, colorNum, data.opacity, 'block');
+        const mesh = createBlockMesh(data.shape, data.scale, data.color, data.opacity, 'block');
         mesh.position.copy(data.position);
         mesh.rotation.copy(data.rotation);
         mesh.scale.copy(data.scale);
@@ -846,9 +805,30 @@ function deserializeObject(data) {
             parentId: null,
             childrenIds: [],
             threeObject: mesh,
-            userData: { type: 'block', shape: data.shape, color: colorStr, opacity: data.opacity }
+            userData: { type: 'block', shape: data.shape, color: data.color, opacity: data.opacity }
         };
     }
+}
+
+function loadGameForEditing(game) {
+    clearEditor();
+    if (!game.data || !game.data.blocks) return;
+    game.data.blocks.forEach(blockData => {
+        const obj = deserializeObject(blockData);
+        if (obj) addObject(obj);
+    });
+    if (game.data.animations) {
+        animations = game.data.animations.map(anim => ({
+            ...anim,
+            tracks: anim.tracks.map(track => ({ ...track }))
+        }));
+        updateAnimationSelect();
+    }
+    if (game.data.gui) {
+        guiElements = game.data.gui;
+        renderGUIList();
+    }
+    selectObject(null);
 }
 
 function clearEditor() {
@@ -890,10 +870,10 @@ function initEditor() {
 
     const ambient = new THREE.AmbientLight(0x404060);
     editorScene.add(ambient);
-    directionalLight = new THREE.DirectionalLight(0xffaa66, 1);
-    directionalLight.position.set(5, 10, 7);
-    directionalLight.castShadow = true;
-    editorScene.add(directionalLight);
+    const dirLight = new THREE.DirectionalLight(0xffaa66, 1);
+    dirLight.position.set(5, 10, 7);
+    dirLight.castShadow = true;
+    editorScene.add(dirLight);
     const fillLight = new THREE.PointLight(0x4466cc, 0.5);
     fillLight.position.set(2, 3, 4);
     editorScene.add(fillLight);
@@ -929,29 +909,42 @@ function initEditor() {
     addObject(spawnObj);
     addDefaultBlock();
 
-    // Привязка кнопок тулбара
+    // Привязка кнопок
     document.getElementById('modeMoveBtn').onclick = () => {
         transformControls.setMode('translate');
         currentTransformMode = 'translate';
-        document.querySelectorAll('.toolbar button').forEach(btn => btn.classList.remove('active'));
         document.getElementById('modeMoveBtn').classList.add('active');
+        document.getElementById('modeRotateBtn').classList.remove('active');
+        document.getElementById('modeScaleBtn').classList.remove('active');
     };
     document.getElementById('modeRotateBtn').onclick = () => {
         transformControls.setMode('rotate');
         currentTransformMode = 'rotate';
-        document.querySelectorAll('.toolbar button').forEach(btn => btn.classList.remove('active'));
         document.getElementById('modeRotateBtn').classList.add('active');
+        document.getElementById('modeMoveBtn').classList.remove('active');
+        document.getElementById('modeScaleBtn').classList.remove('active');
     };
     document.getElementById('modeScaleBtn').onclick = () => {
         transformControls.setMode('scale');
         currentTransformMode = 'scale';
-        document.querySelectorAll('.toolbar button').forEach(btn => btn.classList.remove('active'));
         document.getElementById('modeScaleBtn').classList.add('active');
+        document.getElementById('modeMoveBtn').classList.remove('active');
+        document.getElementById('modeRotateBtn').classList.remove('active');
     };
-    document.getElementById('shapeCubeBtn')?.addEventListener('click', () => { currentShape = 'cube'; document.getElementById('shapeCubeBtn').classList.add('active'); document.getElementById('shapeSphereBtn')?.classList.remove('active'); document.getElementById('shapeCylinderBtn')?.classList.remove('active'); document.getElementById('shapeConeBtn')?.classList.remove('active'); });
-    document.getElementById('shapeSphereBtn')?.addEventListener('click', () => { currentShape = 'sphere'; document.getElementById('shapeSphereBtn').classList.add('active'); document.getElementById('shapeCubeBtn')?.classList.remove('active'); document.getElementById('shapeCylinderBtn')?.classList.remove('active'); document.getElementById('shapeConeBtn')?.classList.remove('active'); });
-    document.getElementById('shapeCylinderBtn')?.addEventListener('click', () => { currentShape = 'cylinder'; document.getElementById('shapeCylinderBtn').classList.add('active'); document.getElementById('shapeCubeBtn')?.classList.remove('active'); document.getElementById('shapeSphereBtn')?.classList.remove('active'); document.getElementById('shapeConeBtn')?.classList.remove('active'); });
-    document.getElementById('shapeConeBtn')?.addEventListener('click', () => { currentShape = 'cone'; document.getElementById('shapeConeBtn').classList.add('active'); document.getElementById('shapeCubeBtn')?.classList.remove('active'); document.getElementById('shapeSphereBtn')?.classList.remove('active'); document.getElementById('shapeCylinderBtn')?.classList.remove('active'); });
+    document.getElementById('shapeCubeBtn')?.addEventListener('click', () => { currentShape = 'cube'; updateShapeButtons('cube'); });
+    document.getElementById('shapeSphereBtn')?.addEventListener('click', () => { currentShape = 'sphere'; updateShapeButtons('sphere'); });
+    document.getElementById('shapeCylinderBtn')?.addEventListener('click', () => { currentShape = 'cylinder'; updateShapeButtons('cylinder'); });
+    document.getElementById('shapeConeBtn')?.addEventListener('click', () => { currentShape = 'cone'; updateShapeButtons('cone'); });
+    function updateShapeButtons(shape) {
+        document.getElementById('shapeCubeBtn').classList.remove('active');
+        document.getElementById('shapeSphereBtn').classList.remove('active');
+        document.getElementById('shapeCylinderBtn').classList.remove('active');
+        document.getElementById('shapeConeBtn').classList.remove('active');
+        if (shape === 'cube') document.getElementById('shapeCubeBtn').classList.add('active');
+        else if (shape === 'sphere') document.getElementById('shapeSphereBtn').classList.add('active');
+        else if (shape === 'cylinder') document.getElementById('shapeCylinderBtn').classList.add('active');
+        else if (shape === 'cone') document.getElementById('shapeConeBtn').classList.add('active');
+    }
     document.getElementById('addCubeBtn').onclick = addDefaultBlock;
     document.getElementById('groupBtn').onclick = groupSelected;
     document.getElementById('saveGameBtn').onclick = saveGameLocal;
@@ -973,7 +966,6 @@ function initEditor() {
         });
     });
     document.querySelector('.block-option').classList.add('selected');
-    document.getElementById('explorerAddBtn')?.addEventListener('click', () => addDefaultBlock());
 
     // VFX
     document.getElementById('addParticleBtn')?.addEventListener('click', () => {
@@ -1000,6 +992,7 @@ function initEditor() {
         recording = true;
         recordTarget = selectedObjects[0];
         recordedKeyframes = [];
+        recordStartTime = performance.now() / 1000;
         alert('Запись начата. Изменяйте свойства объекта (двигайте, вращайте, масштабируйте). Нажмите Стоп для завершения.');
     });
     document.getElementById('playAnimationBtn')?.addEventListener('click', () => {
@@ -1046,7 +1039,7 @@ function initEditor() {
 
     function recordProperty(property, value) {
         if (!recording || !recordTarget) return;
-        const time = performance.now() / 1000 - animationStartTime;
+        const time = performance.now() / 1000 - recordStartTime;
         recordedKeyframes.push({ time, property, value: value.clone ? value.clone() : value });
     }
 
@@ -1112,4 +1105,4 @@ export function openEditor(gameToEdit = null) {
     document.getElementById('mainMenuScreen').classList.add('hidden');
     document.getElementById('editorScreen').classList.remove('hidden');
     initEditor();
-        }
+}

@@ -130,7 +130,6 @@ let gameAnimationId = null;
 let collisionBlocks = [];
 let moveSpeed = 4;
 
-// Размеры игрока (простой куб)
 const PLAYER_SIZE = 0.6;
 const PLAYER_HEIGHT = 0.8;
 const PLAYER_HALF_SIZE = PLAYER_SIZE / 2;
@@ -177,7 +176,7 @@ function renderGamesList(games) {
     attachMobileEvents();
 }
 
-// ========== ИСПРАВЛЕННАЯ КОЛЛИЗИЯ ==========
+// ========== КОЛЛИЗИЯ ==========
 function getBlockBox(block) {
     if (block.scale) {
         const halfX = BLOCK_HALF_SIZE * block.scale.x;
@@ -279,6 +278,22 @@ function placeOnPlatform(model, platform) {
     model.position.set(platform.position.x, platformTop + PLAYER_HALF_HEIGHT, platform.position.z);
 }
 
+function createMesh(shape, size, color, opacity) {
+    let geo;
+    switch(shape) {
+        case 'sphere': geo = new THREE.SphereGeometry(0.45, 32, 32); break;
+        case 'cylinder': geo = new THREE.CylinderGeometry(0.45, 0.45, 0.9, 32); break;
+        case 'cone': geo = new THREE.ConeGeometry(0.45, 0.9, 32); break;
+        default: geo = new THREE.BoxGeometry(0.9, 0.9, 0.9);
+    }
+    const material = new THREE.MeshStandardMaterial({ color: typeof color === 'string' ? parseInt(color.slice(1), 16) : color });
+    material.transparent = opacity < 1;
+    material.opacity = opacity;
+    const mesh = new THREE.Mesh(geo, material);
+    mesh.scale.set(size.x, size.y, size.z);
+    return mesh;
+}
+
 async function startGameSession(gameData, gameName) {
     document.getElementById('mainMenuScreen').classList.add('hidden');
     document.getElementById('customGameScreen').classList.remove('hidden');
@@ -320,7 +335,7 @@ async function startGameSession(gameData, gameName) {
     if (gameData && gameData.blocks) {
         gameData.blocks.forEach(block => {
             const mesh = createMesh(block.shape || 'cube', block.scale, block.color, block.opacity);
-            mesh.position.set(block.x, block.y, block.z);
+            mesh.position.set(block.position.x, block.position.y, block.position.z);
             mesh.rotation.set(block.rotation.x, block.rotation.y, block.rotation.z);
             mesh.userData = { ...block.userData };
             gameScene.add(mesh);
@@ -430,7 +445,6 @@ async function startGameSession(gameData, gameName) {
 }
 
 async function startLocalGameSession(gameData, gameName) {
-    // аналогично startGameSession, но без WebSocket
     document.getElementById('mainMenuScreen').classList.add('hidden');
     document.getElementById('customGameScreen').classList.remove('hidden');
     const container = document.getElementById('customGameContainer');
@@ -471,7 +485,7 @@ async function startLocalGameSession(gameData, gameName) {
     if (gameData && gameData.blocks) {
         gameData.blocks.forEach(block => {
             const mesh = createMesh(block.shape || 'cube', block.scale, block.color, block.opacity);
-            mesh.position.set(block.x, block.y, block.z);
+            mesh.position.set(block.position.x, block.position.y, block.position.z);
             mesh.rotation.set(block.rotation.x, block.rotation.y, block.rotation.z);
             scene.add(mesh);
             blocks.push(mesh);
@@ -578,22 +592,6 @@ function createRemotePlayer() {
     cube.castShadow = true;
     cube.receiveShadow = true;
     return cube;
-}
-
-function createMesh(shape, size, color, opacity) {
-    let geo;
-    switch(shape) {
-        case 'sphere': geo = new THREE.SphereGeometry(0.45,32,32); break;
-        case 'cylinder': geo = new THREE.CylinderGeometry(0.45,0.45,0.9,32); break;
-        case 'cone': geo = new THREE.ConeGeometry(0.45,0.9,32); break;
-        default: geo = new THREE.BoxGeometry(0.9,0.9,0.9);
-    }
-    const mat = new THREE.MeshStandardMaterial({color});
-    mat.transparent = opacity<1;
-    mat.opacity = opacity;
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.scale.set(size.x, size.y, size.z);
-    return mesh;
 }
 
 function renderMyProjects() {

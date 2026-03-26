@@ -22,18 +22,20 @@ let gameBeingEdited = null;
 let directionalLight = null;
 
 // ========== VFX (система частиц) ==========
-let particleSystems = []; // { id, name, obj, config, active }
-let nextParticleId = 1;
+let particleSystems = [];
 
 // ========== АНИМАЦИИ ==========
-let animations = []; // { id, name, duration, tracks: [{ targetId, property, keyframes: [{time, value}] }] }
+let animations = [];
 let currentAnimation = null;
 let isPlaying = false;
 let animationStartTime = 0;
 let animationRequestId = null;
 let recording = false;
-let recordedKeyframes = []; // для записи
+let recordedKeyframes = [];
 let recordTarget = null;
+
+// ========== GUI ==========
+let guiElements = [];
 
 // Вспомогательные функции для идентификаторов
 function generateId() {
@@ -105,7 +107,6 @@ function updateParticleSystem(ps, delta) {
     for (let i = 0; i < count; i++) {
         lifetimes[i] += delta;
         if (lifetimes[i] >= cfg.lifetime) {
-            // респавн
             lifetimes[i] = 0;
             positions[i*3] = 0;
             positions[i*3+1] = 0;
@@ -172,7 +173,6 @@ function addKeyframe(animationId, targetId, property, time, value) {
     }
     track.keyframes.push({ time, value });
     track.keyframes.sort((a,b) => a.time - b.time);
-    // обновляем длительность анимации
     if (time > anim.duration) anim.duration = time;
 }
 
@@ -201,32 +201,14 @@ function applyAnimation(anim, time) {
         const value = getInterpolatedValue(track.keyframes, time);
         if (value === null) continue;
         switch(track.property) {
-            case 'position.x':
-                targetObj.threeObject.position.x = value;
-                break;
-            case 'position.y':
-                targetObj.threeObject.position.y = value;
-                break;
-            case 'position.z':
-                targetObj.threeObject.position.z = value;
-                break;
-            case 'scale.x':
-                targetObj.threeObject.scale.x = value;
-                break;
-            case 'scale.y':
-                targetObj.threeObject.scale.y = value;
-                break;
-            case 'scale.z':
-                targetObj.threeObject.scale.z = value;
-                break;
-            case 'rotation.y':
-                targetObj.threeObject.rotation.y = value;
-                break;
-            case 'color':
-                if (targetObj.threeObject.material) {
-                    targetObj.threeObject.material.color.set(value);
-                }
-                break;
+            case 'position.x': targetObj.threeObject.position.x = value; break;
+            case 'position.y': targetObj.threeObject.position.y = value; break;
+            case 'position.z': targetObj.threeObject.position.z = value; break;
+            case 'scale.x': targetObj.threeObject.scale.x = value; break;
+            case 'scale.y': targetObj.threeObject.scale.y = value; break;
+            case 'scale.z': targetObj.threeObject.scale.z = value; break;
+            case 'rotation.y': targetObj.threeObject.rotation.y = value; break;
+            case 'color': if (targetObj.threeObject.material) targetObj.threeObject.material.color.set(value); break;
         }
     }
 }
@@ -265,6 +247,108 @@ function updateAnimationSelect() {
     });
 }
 
+// ========== GUI ==========
+function addGUIElement(type, properties) {
+    const id = generateId();
+    const element = {
+        id: id,
+        type: type,
+        name: properties.name || `${type}_${guiElements.length+1}`,
+        x: properties.x || 100,
+        y: properties.y || 100,
+        width: properties.width || 200,
+        height: properties.height || 50,
+        text: properties.text || (type === 'button' ? 'Кнопка' : type === 'panel' ? 'Панель' : 'Текст'),
+        color: properties.color || '#4a6e8a',
+        fontSize: properties.fontSize || 14,
+        action: properties.action || ''
+    };
+    guiElements.push(element);
+    renderGUIList();
+    return element;
+}
+
+function renderGUIList() {
+    const container = document.getElementById('guiElementsList');
+    if (!container) return;
+    container.innerHTML = '';
+    guiElements.forEach(el => {
+        const div = document.createElement('div');
+        div.style.cssText = 'background:#2c2f36; margin:4px 0; padding:4px 8px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;';
+        div.innerHTML = `
+            <span>${el.type === 'button' ? '🔘' : el.type === 'panel' ? '📦' : '📝'} ${el.name}</span>
+            <div>
+                <button class="editGuiBtn" data-id="${el.id}" style="background:#ffaa44; border:none; border-radius:12px; padding:2px 8px; margin-right:4px;">✎</button>
+                <button class="deleteGuiBtn" data-id="${el.id}" style="background:#ff3333; border:none; border-radius:12px; padding:2px 8px;">🗑</button>
+            </div>
+        `;
+        container.appendChild(div);
+    });
+    document.querySelectorAll('.editGuiBtn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const id = btn.dataset.id;
+            const el = guiElements.find(g => g.id === id);
+            if (el) editGUIElement(el);
+        });
+    });
+    document.querySelectorAll('.deleteGuiBtn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const id = btn.dataset.id;
+            guiElements = guiElements.filter(g => g.id !== id);
+            renderGUIList();
+            updateGUIPreview();
+        });
+    });
+    updateGUIPreview();
+}
+
+function editGUIElement(el) {
+    const newName = prompt('Название', el.name);
+    if (newName) el.name = newName;
+    const newX = prompt('X позиция (px)', el.x);
+    if (newX !== null) el.x = parseInt(newX);
+    const newY = prompt('Y позиция (px)', el.y);
+    if (newY !== null) el.y = parseInt(newY);
+    const newText = prompt('Текст', el.text);
+    if (newText !== null) el.text = newText;
+    renderGUIList();
+}
+
+function updateGUIPreview() {
+    const container = document.getElementById('guiPreview');
+    if (!container) return;
+    container.innerHTML = '';
+    guiElements.forEach(el => {
+        const div = document.createElement('div');
+        div.style.position = 'absolute';
+        div.style.left = el.x + 'px';
+        div.style.top = el.y + 'px';
+        div.style.width = el.width + 'px';
+        div.style.height = el.height + 'px';
+        div.style.backgroundColor = el.color;
+        div.style.color = 'white';
+        div.style.borderRadius = '8px';
+        div.style.display = 'flex';
+        div.style.alignItems = 'center';
+        div.style.justifyContent = 'center';
+        div.style.fontSize = el.fontSize + 'px';
+        div.style.cursor = el.type === 'button' ? 'pointer' : 'default';
+        div.style.zIndex = '100';
+        div.textContent = el.text;
+        if (el.type === 'button') {
+            div.addEventListener('click', () => {
+                if (el.action) {
+                    try {
+                        new Function('game', 'player', 'world', el.action)(null, null, null);
+                    } catch(e) { console.warn(e); }
+                }
+                alert(`Нажата кнопка: ${el.name}`);
+            });
+        }
+        container.appendChild(div);
+    });
+}
+
 // ========== ОБЩИЕ ФУНКЦИИ (проводник, свойства, сохранение) ==========
 function addObject(obj) {
     editorObjects.push(obj);
@@ -290,7 +374,6 @@ function deleteObject(obj) {
 
 function duplicateObject(obj) {
     if (obj.type === 'particle') {
-        // клонируем систему частиц
         const newConfig = { ...obj.userData.config };
         newConfig.name = obj.name + ' (копия)';
         addParticleSystem(newConfig);
@@ -532,7 +615,6 @@ function updatePropertiesPanel() {
                 lifetime: parseFloat(document.getElementById('propLifetime').value),
                 texture: document.getElementById('propTexture').value
             };
-            // пересоздаём систему частиц
             const newPs = createParticleSystem(newCfg);
             newPs.userData.id = obj.id;
             newPs.userData.name = obj.name;
@@ -643,7 +725,8 @@ function saveGameLocal() {
             keyframes: track.keyframes
         }))
     }));
-    const gameData = { blocks: blocksData, animations: animationsData };
+    const guiData = guiElements;
+    const gameData = { blocks: blocksData, animations: animationsData, gui: guiData };
     const gameId = Date.now();
     const newGame = { id: gameId, name: gameName, author: window.currentUser.username, desc: 'Создано в конструкторе', data: gameData };
     window.customGames.push(newGame);
@@ -701,6 +784,10 @@ function loadGameForEditing(game) {
             tracks: anim.tracks.map(track => ({ ...track }))
         }));
         updateAnimationSelect();
+    }
+    if (game.data.gui) {
+        guiElements = game.data.gui;
+        renderGUIList();
     }
     selectObject(null);
 }
@@ -771,10 +858,12 @@ function clearEditor() {
     editorObjects = [];
     selectedObjects = [];
     animations = [];
+    guiElements = [];
     if (transformControls.object) transformControls.detach();
     renderExplorer();
     updatePropertiesPanel();
     updateAnimationSelect();
+    renderGUIList();
 }
 
 // ========== ИНИЦИАЛИЗАЦИЯ ==========
@@ -926,7 +1015,6 @@ function initEditor() {
                 const animName = prompt('Название анимации', 'Запись ' + new Date().toLocaleTimeString());
                 if (animName) {
                     const newAnim = createAnimation(animName);
-                    // группируем ключевые кадры по свойству
                     const framesByProp = {};
                     recordedKeyframes.forEach(kf => {
                         if (!framesByProp[kf.property]) framesByProp[kf.property] = [];
@@ -945,13 +1033,6 @@ function initEditor() {
             stopAnimation();
         }
     });
-    // Функция для записи изменений свойств во время записи
-    function recordProperty(property, value) {
-        if (!recording || !recordTarget) return;
-        const time = performance.now() / 1000 - animationStartTime;
-        recordedKeyframes.push({ time, property, value: value.clone ? value.clone() : value });
-    }
-    // Навешиваем обработчики на TransformControls для записи
     transformControls.addEventListener('objectChange', () => {
         if (recording && recordTarget && transformControls.object === recordTarget.threeObject) {
             const pos = recordTarget.threeObject.position.clone();
@@ -963,27 +1044,58 @@ function initEditor() {
         }
     });
 
+    function recordProperty(property, value) {
+        if (!recording || !recordTarget) return;
+        const time = performance.now() / 1000 - animationStartTime;
+        recordedKeyframes.push({ time, property, value: value.clone ? value.clone() : value });
+    }
+
+    // GUI
+    document.getElementById('addButtonBtn')?.addEventListener('click', () => {
+        addGUIElement('button', { name: 'Новая кнопка', text: 'Кнопка', x: 100, y: 100, width: 120, height: 40, action: 'alert("Hello")' });
+    });
+    document.getElementById('addPanelBtn')?.addEventListener('click', () => {
+        addGUIElement('panel', { name: 'Панель', text: 'Панель', x: 100, y: 200, width: 200, height: 150 });
+    });
+    document.getElementById('addTextBtn')?.addEventListener('click', () => {
+        addGUIElement('text', { name: 'Текст', text: 'Привет, мир!', x: 100, y: 300, width: 200, height: 30, fontSize: 14 });
+    });
+
     // Вкладки
-    const tabs = document.querySelectorAll('.editor-tab');
-    const tabContents = {
+    const tabs = document.querySelectorAll('.tab');
+    const tabPanels = {
         blocks: document.getElementById('blocksTabContent'),
         vfx: document.getElementById('vfxTabContent'),
-        animations: document.getElementById('animationsTabContent')
+        animations: document.getElementById('animationsTabContent'),
+        scripts: document.getElementById('scriptsTabContent'),
+        gui: document.getElementById('guiTabContent')
     };
     tabs.forEach(tab => {
         tab.addEventListener('click', () => {
             tabs.forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
             const tabId = tab.dataset.tab;
-            Object.values(tabContents).forEach(c => c.classList.remove('active'));
-            tabContents[tabId].classList.add('active');
+            Object.values(tabPanels).forEach(panel => panel.classList.remove('active'));
+            tabPanels[tabId].classList.add('active');
         });
     });
 
+    // Скрипты
+    document.getElementById('applyScriptBtn')?.addEventListener('click', () => {
+        if (!selectedObjects.length) { alert('Выберите блок'); return; }
+        const obj = selectedObjects[0];
+        const script = document.getElementById('blockScriptEditor').value;
+        obj.userData.script = script;
+        alert('Скрипт сохранён');
+    });
+    if (selectedObjects.length) {
+        const scriptArea = document.getElementById('blockScriptEditor');
+        if (scriptArea && selectedObjects[0].userData.script) scriptArea.value = selectedObjects[0].userData.script;
+    }
+
     if (gameBeingEdited) loadGameForEditing(gameBeingEdited);
     function animateEditor() { if (!editorActive) return; editorAnimationId = requestAnimationFrame(animateEditor); editorControls.update(); 
-        // Обновление частиц
-        const delta = 1/60; // упрощённо
+        const delta = 1/60;
         for (let obj of editorObjects) {
             if (obj.type === 'particle') {
                 updateParticleSystem(obj.threeObject, delta);
@@ -1000,4 +1112,4 @@ export function openEditor(gameToEdit = null) {
     document.getElementById('mainMenuScreen').classList.add('hidden');
     document.getElementById('editorScreen').classList.remove('hidden');
     initEditor();
-                }
+        }

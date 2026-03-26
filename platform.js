@@ -128,7 +128,7 @@ let gameScene = null, gameCamera = null, gameRenderer = null, gamePlayer = null;
 let gameActive = false;
 let gameAnimationId = null;
 let collisionBlocks = [];
-let moveSpeed = 4;  // скорость движения (можно менять в настройках)
+let moveSpeed = 4;
 
 // Размеры игрока (простой куб)
 const PLAYER_SIZE = 0.6;
@@ -177,7 +177,7 @@ function renderGamesList(games) {
     attachMobileEvents();
 }
 
-// ========== КОЛЛИЗИЯ (упрощённая, но надёжная) ==========
+// ========== ИСПРАВЛЕННАЯ КОЛЛИЗИЯ ==========
 function getBlockBox(block) {
     if (block.scale) {
         const halfX = BLOCK_HALF_SIZE * block.scale.x;
@@ -231,11 +231,8 @@ function resolveCollision(pos, velY, blocks) {
             playerBox.maxZ > blockBox.minZ && playerBox.minZ < blockBox.maxZ) {
             const overlapLeft = playerBox.maxX - blockBox.minX;
             const overlapRight = blockBox.maxX - playerBox.minX;
-            if (overlapLeft < overlapRight) {
-                newPos.x -= overlapLeft;
-            } else {
-                newPos.x += overlapRight;
-            }
+            if (overlapLeft < overlapRight) newPos.x -= overlapLeft;
+            else newPos.x += overlapRight;
             playerBox = getPlayerBox(newPos);
         }
     }
@@ -249,29 +246,24 @@ function resolveCollision(pos, velY, blocks) {
             playerBox.maxZ > blockBox.minZ && playerBox.minZ < blockBox.maxZ) {
             const overlapFront = playerBox.maxZ - blockBox.minZ;
             const overlapBack = blockBox.maxZ - playerBox.minZ;
-            if (overlapFront < overlapBack) {
-                newPos.z -= overlapFront;
-            } else {
-                newPos.z += overlapBack;
-            }
+            if (overlapFront < overlapBack) newPos.z -= overlapFront;
+            else newPos.z += overlapBack;
             playerBox = getPlayerBox(newPos);
         }
     }
 
-    // Коррекция по Y (гравитация и земля)
+    // Коррекция по Y
     playerBox = getPlayerBox(newPos);
     for (let block of blocks) {
         const blockBox = getBlockBox(block);
         if (playerBox.maxX > blockBox.minX && playerBox.minX < blockBox.maxX &&
             playerBox.maxZ > blockBox.minZ && playerBox.minZ < blockBox.maxZ) {
-            // Приземление сверху
             if (newVelY <= 0 && playerBox.minY <= blockBox.maxY + 0.05 && playerBox.minY > blockBox.minY - 0.1) {
                 const newY = blockBox.maxY + PLAYER_HALF_HEIGHT;
                 newPos.y = newY;
                 newVelY = 0;
                 onGround = true;
             }
-            // Удар головой
             else if (newVelY > 0 && playerBox.maxY >= blockBox.minY - 0.05 && playerBox.maxY < blockBox.minY + 0.1) {
                 const newY = blockBox.minY - PLAYER_HALF_HEIGHT;
                 newPos.y = newY;
@@ -316,7 +308,6 @@ async function startGameSession(gameData, gameName) {
 
     collisionBlocks = [];
 
-    // Платформа
     const platformGeometry = new THREE.BoxGeometry(20, 1, 20);
     const platformMaterial = new THREE.MeshStandardMaterial({ color: 0x6B8E23 });
     const platformMesh = new THREE.Mesh(platformGeometry, platformMaterial);
@@ -326,7 +317,6 @@ async function startGameSession(gameData, gameName) {
     gameScene.add(platformMesh);
     collisionBlocks.push(platformMesh);
 
-    // Блоки из игры
     if (gameData && gameData.blocks) {
         gameData.blocks.forEach(block => {
             const mesh = createMesh(block.shape || 'cube', block.scale, block.color, block.opacity);
@@ -338,7 +328,6 @@ async function startGameSession(gameData, gameName) {
         });
     }
 
-    // Игрок (куб)
     const playerMat = new THREE.MeshStandardMaterial({ color: 0x3a86ff });
     const playerMesh = new THREE.Mesh(new THREE.BoxGeometry(PLAYER_SIZE, PLAYER_HEIGHT, PLAYER_SIZE), playerMat);
     playerMesh.castShadow = true;
@@ -347,7 +336,6 @@ async function startGameSession(gameData, gameName) {
     gameScene.add(playerMesh);
     gamePlayer = playerMesh;
 
-    // Управление
     const keyState = { w: false, s: false, a: false, d: false };
     let jumpRequest = false;
     const handleKey = (e, val) => {
@@ -418,7 +406,6 @@ async function startGameSession(gameData, gameName) {
         gamePlayer.position.copy(newPos);
         sendPosition({x:gamePlayer.position.x, y:gamePlayer.position.y, z:gamePlayer.position.z});
 
-        // Камера всегда сзади игрока на фиксированном расстоянии
         const targetPos = gamePlayer.position.clone();
         gameCamera.position.x = targetPos.x;
         gameCamera.position.z = targetPos.z + 5;
@@ -443,6 +430,7 @@ async function startGameSession(gameData, gameName) {
 }
 
 async function startLocalGameSession(gameData, gameName) {
+    // аналогично startGameSession, но без WebSocket
     document.getElementById('mainMenuScreen').classList.add('hidden');
     document.getElementById('customGameScreen').classList.remove('hidden');
     const container = document.getElementById('customGameContainer');
@@ -649,9 +637,7 @@ function showReportDialog() {
     };
     attachMobileEvents();
 }
-function applySettings() { 
-    moveSpeed = parseFloat(document.getElementById('moveSpeed').value); 
-}
+function applySettings() { moveSpeed = parseFloat(document.getElementById('moveSpeed').value); }
 document.getElementById('mouseSensitivity')?.addEventListener('input', applySettings);
 document.getElementById('moveSpeed')?.addEventListener('input', applySettings);
 document.getElementById('reportBugBtn')?.addEventListener('click', showReportDialog);

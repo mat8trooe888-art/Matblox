@@ -134,37 +134,6 @@ const PLAYER_SIZE = 0.6;
 const PLAYER_HEIGHT = 0.8;
 const PLAYER_HALF_SIZE = PLAYER_SIZE / 2;
 const PLAYER_HALF_HEIGHT = PLAYER_HEIGHT / 2;
-const BLOCK_HALF_SIZE = 0.45;
-
-// Вспомогательные функции для безопасного извлечения свойств блока
-function getBlockPosition(block) {
-    if (block.position && typeof block.position.x === 'number') {
-        return block.position;
-    } else if (typeof block.x === 'number') {
-        return { x: block.x, y: block.y, z: block.z };
-    }
-    return { x: 0, y: 0, z: 0 };
-}
-
-function getBlockRotation(block) {
-    if (block.rotation && typeof block.rotation.x === 'number') {
-        return block.rotation;
-    } else if (typeof block.rx === 'number') {
-        return { x: block.rx, y: block.ry, z: block.rz };
-    }
-    return { x: 0, y: 0, z: 0 };
-}
-
-function getBlockScale(block) {
-    if (block.scale && typeof block.scale.x === 'number') {
-        return block.scale;
-    } else if (typeof block.sx === 'number') {
-        return { x: block.sx, y: block.sy, z: block.sz };
-    } else if (typeof block.scale === 'number') {
-        return { x: block.scale, y: block.scale, z: block.scale };
-    }
-    return { x: 1, y: 1, z: 1 };
-}
 
 function connectToServer() {
     try {
@@ -206,100 +175,174 @@ function renderGamesList(games) {
     attachMobileEvents();
 }
 
-// ========== КОЛЛИЗИЯ ==========
-function getBlockBox(block) {
-    if (block.scale) {
-        const halfX = BLOCK_HALF_SIZE * block.scale.x;
-        const halfY = BLOCK_HALF_SIZE * block.scale.y;
-        const halfZ = BLOCK_HALF_SIZE * block.scale.z;
-        return {
-            minX: block.position.x - halfX,
-            maxX: block.position.x + halfX,
-            minY: block.position.y - halfY,
-            maxY: block.position.y + halfY,
-            minZ: block.position.z - halfZ,
-            maxZ: block.position.z + halfZ
-        };
+// ========== НОВАЯ, ПРОСТАЯ И НАДЁЖНАЯ КОЛЛИЗИЯ ==========
+function getBlockBoundingBox(block) {
+    let halfX, halfY, halfZ;
+    if (block.geometry) {
+        if (block.geometry.parameters.width) {
+            halfX = block.geometry.parameters.width / 2;
+            halfY = block.geometry.parameters.height / 2;
+            halfZ = block.geometry.parameters.depth / 2;
+        } else {
+            halfX = (block.scale?.x || 1) * 0.45;
+            halfY = (block.scale?.y || 1) * 0.45;
+            halfZ = (block.scale?.z || 1) * 0.45;
+        }
+    } else {
+        halfX = (block.scale?.x || 1) * 0.45;
+        halfY = (block.scale?.y || 1) * 0.45;
+        halfZ = (block.scale?.z || 1) * 0.45;
     }
-    const geom = block.geometry;
-    const width = geom.parameters.width;
-    const height = geom.parameters.height;
-    const depth = geom.parameters.depth;
     return {
-        minX: block.position.x - width/2,
-        maxX: block.position.x + width/2,
-        minY: block.position.y - height/2,
-        maxY: block.position.y + height/2,
-        minZ: block.position.z - depth/2,
-        maxZ: block.position.z + depth/2
+        minX: block.position.x - halfX,
+        maxX: block.position.x + halfX,
+        minY: block.position.y - halfY,
+        maxY: block.position.y + halfY,
+        minZ: block.position.z - halfZ,
+        maxZ: block.position.z + halfZ
     };
 }
 
+function getPlayerBoundingBox(pos) {
+    return {
+        minX: pos.x - PLAYER_HALF_SIZE,
+        maxX: pos.x + PLAYER_HALF_SIZE,
+        minY: pos.y - PLAYER_HALF_HEIGHT,
+        maxY: pos.y + PLAYER_HALF_HEIGHT,
+        minZ: pos.z - PLAYER_HALF_SIZE,
+        maxZ: pos.z + PLAYER_HALF_SIZE
+    };
+}
+
+function intersectBoxes(a, b) {
+    return a.maxX > b.minX && a.minX < b.maxX &&
+           a.maxY > b.minY && a.minY < b.maxY &&
+           a.maxZ > b.minZ && a.minZ < b.maxZ;
+}
+
+// Главная функция разрешения коллизий
 function resolveCollision(pos, velY, blocks) {
     let newPos = pos.clone();
     let newVelY = velY;
     let onGround = false;
+    const epsilon = 0.05; // небольшой допуск
 
-    function getPlayerBox(p) {
-        return {
-            minX: p.x - PLAYER_HALF_SIZE,
-            maxX: p.x + PLAYER_HALF_SIZE,
-            minY: p.y - PLAYER_HALF_HEIGHT,
-            maxY: p.y + PLAYER_HALF_HEIGHT,
-            minZ: p.z - PLAYER_HALF_SIZE,
-            maxZ: p.z + PLAYER_HALF_SIZE
-        };
+    // Сначала проверяем коллизию по Y (вертикаль)
+    // Двигаемся по Y с учётом скорости
+    let yStep = newVelY * 0.016; // приблизительный dt, но мы будем обрабатывать каждый кадр
+    // Вместо этого мы будем двигать по Y и разрешать коллизию за один шаг
+    // Проще: попробуем применить смещение по Y, затем проверим коллизию
+    let testPos = newPos.clone();
+    testPos.y += newVelY * 0.016; // небольшой шаг, но точнее будет использовать dt из update
+    // Но мы не знаем dt здесь. Поэтому будем разрешать коллизию итеративно.
+
+    // Для простоты: сначала проверяем, стоит ли игрок на каком-либо блоке
+    // И корректируем Y, чтобы он всегда был над блоками
+    let playerBox = getPlayerBoundingBox(testPos);
+    let lowestBlockTop = -Infinity;
+    for (let block of blocks) {
+        const blockBox = getBlockBoundingBox(block);
+        if (playerBox.minX < blockBox.maxX && playerBox.maxX > blockBox.minX &&
+            playerBox.minZ < blockBox.maxZ && playerBox.maxZ > blockBox.minZ) {
+            // Игрок находится над блоком по X и Z
+            const blockTop = blockBox.maxY;
+            if (blockTop > lowestBlockTop && blockTop < playerBox.minY + epsilon) {
+                lowestBlockTop = blockTop;
+            }
+        }
+    }
+    if (lowestBlockTop > -Infinity) {
+        // Стоим на блоке
+        newPos.y = lowestBlockTop + PLAYER_HALF_HEIGHT;
+        newVelY = 0;
+        onGround = true;
+    } else {
+        // Нет блока внизу, применяем гравитацию
+        newPos.y += newVelY * 0.016; // dt примерно 0.016, но будем использовать реальный dt из update
+        // В реальности dt передаётся в update, но мы здесь не можем. Значит, нужно переделать структуру.
+        // Вместо этого мы будем вызывать resolveCollision с dt из update.
     }
 
-    // Коррекция по X
-    let playerBox = getPlayerBox(newPos);
+    // Поскольку мы не можем передать dt сюда, переделаем: будем передавать dt в resolveCollision.
+    // Но для совместимости с текущим вызовом, изменим сигнатуру.
+    // Временно сделаем так: передадим dt вторым аргументом.
+    // Но проще переписать update, чтобы dt использовалось везде.
+    // Я перепишу update ниже, а здесь оставлю заглушку.
+
+    // В итоге я перепишу функцию resolveCollision, чтобы она принимала dt.
+    // Пока оставлю как есть, но потом изменю.
+
+    return { pos: newPos, velY: newVelY, onGround };
+}
+
+// Новая функция коллизии, которая принимает dt
+function collide(dt, pos, velY, blocks) {
+    let newPos = pos.clone();
+    let newVelY = velY;
+    let onGround = false;
+
+    // Шаг по Y
+    newPos.y += newVelY * dt;
+    let playerBox = getPlayerBoundingBox(newPos);
+    // Проверяем столкновения по Y
     for (let block of blocks) {
-        const blockBox = getBlockBox(block);
-        if (playerBox.maxX > blockBox.minX && playerBox.minX < blockBox.maxX &&
-            playerBox.maxY > blockBox.minY && playerBox.minY < blockBox.maxY &&
-            playerBox.maxZ > blockBox.minZ && playerBox.minZ < blockBox.maxZ) {
+        const blockBox = getBlockBoundingBox(block);
+        if (playerBox.minX < blockBox.maxX && playerBox.maxX > blockBox.minX &&
+            playerBox.minZ < blockBox.maxZ && playerBox.maxZ > blockBox.minZ) {
+            // Падение на блок
+            if (newVelY <= 0 && playerBox.minY <= blockBox.maxY + 0.05 && playerBox.minY > blockBox.maxY - 0.2) {
+                newPos.y = blockBox.maxY + PLAYER_HALF_HEIGHT;
+                newVelY = 0;
+                onGround = true;
+            }
+            // Удар головой
+            else if (newVelY > 0 && playerBox.maxY >= blockBox.minY - 0.05 && playerBox.maxY < blockBox.minY + 0.2) {
+                newPos.y = blockBox.minY - PLAYER_HALF_HEIGHT;
+                newVelY = 0;
+            }
+        }
+    }
+
+    // Шаг по X
+    playerBox = getPlayerBoundingBox(newPos);
+    for (let block of blocks) {
+        const blockBox = getBlockBoundingBox(block);
+        if (intersectBoxes(playerBox, blockBox)) {
             const overlapLeft = playerBox.maxX - blockBox.minX;
             const overlapRight = blockBox.maxX - playerBox.minX;
             if (overlapLeft < overlapRight) newPos.x -= overlapLeft;
             else newPos.x += overlapRight;
-            playerBox = getPlayerBox(newPos);
+            playerBox = getPlayerBoundingBox(newPos);
         }
     }
 
-    // Коррекция по Z
-    playerBox = getPlayerBox(newPos);
+    // Шаг по Z
+    playerBox = getPlayerBoundingBox(newPos);
     for (let block of blocks) {
-        const blockBox = getBlockBox(block);
-        if (playerBox.maxX > blockBox.minX && playerBox.minX < blockBox.maxX &&
-            playerBox.maxY > blockBox.minY && playerBox.minY < blockBox.maxY &&
-            playerBox.maxZ > blockBox.minZ && playerBox.minZ < blockBox.maxZ) {
+        const blockBox = getBlockBoundingBox(block);
+        if (intersectBoxes(playerBox, blockBox)) {
             const overlapFront = playerBox.maxZ - blockBox.minZ;
             const overlapBack = blockBox.maxZ - playerBox.minZ;
             if (overlapFront < overlapBack) newPos.z -= overlapFront;
             else newPos.z += overlapBack;
-            playerBox = getPlayerBox(newPos);
+            playerBox = getPlayerBoundingBox(newPos);
         }
     }
 
-    // Коррекция по Y
-    playerBox = getPlayerBox(newPos);
+    // Проверка, стоит ли игрок на земле после всех перемещений
+    playerBox = getPlayerBoundingBox(newPos);
     for (let block of blocks) {
-        const blockBox = getBlockBox(block);
-        if (playerBox.maxX > blockBox.minX && playerBox.minX < blockBox.maxX &&
-            playerBox.maxZ > blockBox.minZ && playerBox.minZ < blockBox.maxZ) {
-            if (newVelY <= 0 && playerBox.minY <= blockBox.maxY + 0.05 && playerBox.minY > blockBox.minY - 0.1) {
-                const newY = blockBox.maxY + PLAYER_HALF_HEIGHT;
-                newPos.y = newY;
-                newVelY = 0;
+        const blockBox = getBlockBoundingBox(block);
+        if (playerBox.minX < blockBox.maxX && playerBox.maxX > blockBox.minX &&
+            playerBox.minZ < blockBox.maxZ && playerBox.maxZ > blockBox.minZ) {
+            if (Math.abs(playerBox.minY - blockBox.maxY) < 0.1 && newVelY <= 0) {
                 onGround = true;
-            }
-            else if (newVelY > 0 && playerBox.maxY >= blockBox.minY - 0.05 && playerBox.maxY < blockBox.minY + 0.1) {
-                const newY = blockBox.minY - PLAYER_HALF_HEIGHT;
-                newPos.y = newY;
                 newVelY = 0;
+                break;
             }
         }
     }
+
     return { pos: newPos, velY: newVelY, onGround };
 }
 
@@ -308,7 +351,6 @@ function placeOnPlatform(model, platform) {
     model.position.set(platform.position.x, platformTop + PLAYER_HALF_HEIGHT, platform.position.z);
 }
 
-// Улучшенная функция создания меша с поддержкой различных форматов scale
 function createMesh(shape, size, color, opacity) {
     let sx = 0.9, sy = 0.9, sz = 0.9;
     if (size) {
@@ -333,6 +375,23 @@ function createMesh(shape, size, color, opacity) {
     const mesh = new THREE.Mesh(geometry, material);
     mesh.scale.set(sx, sy, sz);
     return mesh;
+}
+
+function getBlockPosition(block) {
+    if (block.position && typeof block.position.x === 'number') return block.position;
+    if (typeof block.x === 'number') return { x: block.x, y: block.y, z: block.z };
+    return { x: 0, y: 0, z: 0 };
+}
+function getBlockRotation(block) {
+    if (block.rotation && typeof block.rotation.x === 'number') return block.rotation;
+    if (typeof block.rx === 'number') return { x: block.rx, y: block.ry, z: block.rz };
+    return { x: 0, y: 0, z: 0 };
+}
+function getBlockScale(block) {
+    if (block.scale && typeof block.scale.x === 'number') return block.scale;
+    if (typeof block.sx === 'number') return { x: block.sx, y: block.sy, z: block.sz };
+    if (typeof block.scale === 'number') return { x: block.scale, y: block.scale, z: block.scale };
+    return { x: 1, y: 1, z: 1 };
 }
 
 async function startGameSession(gameData, gameName) {
@@ -414,26 +473,27 @@ async function startGameSession(gameData, gameName) {
     const GRAVITY = 15;
     const JUMP_FORCE = 7;
     let onGround = false;
-    let lastTime = performance.now()/1000;
+    let lastTime = performance.now() / 1000;
 
     function update() {
         if(!gameActive) return;
-        const now = performance.now()/1000;
-        const dt = Math.min(0.033, now - lastTime);
+        const now = performance.now() / 1000;
+        let dt = Math.min(0.033, now - lastTime);
+        if (dt <= 0) dt = 0.016;
         lastTime = now;
 
-        let mx=0, mz=0;
-        if(keyState.w) mz-=1;
-        if(keyState.s) mz+=1;
-        if(keyState.a) mx-=1;
-        if(keyState.d) mx+=1;
-        if(mx!==0 || mz!==0) {
-            const len = Math.hypot(mx,mz);
+        let mx = 0, mz = 0;
+        if(keyState.w) mz -= 1;
+        if(keyState.s) mz += 1;
+        if(keyState.a) mx -= 1;
+        if(keyState.d) mx += 1;
+        if(mx !== 0 || mz !== 0) {
+            const len = Math.hypot(mx, mz);
             mx /= len;
             mz /= len;
         }
 
-        if(mx!==0 || mz!==0) {
+        if(mx !== 0 || mz !== 0) {
             const angle = Math.atan2(mx, mz);
             gamePlayer.rotation.y = angle;
         }
@@ -445,10 +505,10 @@ async function startGameSession(gameData, gameName) {
         velY -= GRAVITY * dt;
         newPos.y += velY * dt;
 
-        const col = resolveCollision(newPos, velY, collisionBlocks);
-        newPos = col.pos;
-        velY = col.velY;
-        onGround = col.onGround;
+        const collisionResult = collide(dt, newPos, velY, collisionBlocks);
+        newPos = collisionResult.pos;
+        velY = collisionResult.velY;
+        onGround = collisionResult.onGround;
 
         if(newPos.y < -5) {
             placeOnPlatform(gamePlayer, platformMesh);
@@ -463,7 +523,7 @@ async function startGameSession(gameData, gameName) {
         }
 
         gamePlayer.position.copy(newPos);
-        sendPosition({x:gamePlayer.position.x, y:gamePlayer.position.y, z:gamePlayer.position.z});
+        sendPosition({x: gamePlayer.position.x, y: gamePlayer.position.y, z: gamePlayer.position.z});
 
         const targetPos = gamePlayer.position.clone();
         gameCamera.position.x = targetPos.x;
@@ -472,7 +532,13 @@ async function startGameSession(gameData, gameName) {
         gameCamera.lookAt(targetPos);
         pointLight.position.set(gamePlayer.position.x, gamePlayer.position.y+1, gamePlayer.position.z);
     }
-    function animate() { if(!gameActive) return; gameAnimationId = requestAnimationFrame(animate); update(); gameRenderer.render(gameScene, gameCamera); }
+
+    function animate() {
+        if(!gameActive) return;
+        gameAnimationId = requestAnimationFrame(animate);
+        update();
+        gameRenderer.render(gameScene, gameCamera);
+    }
     gameActive = true;
     animate();
 
@@ -568,7 +634,8 @@ async function startLocalGameSession(gameData, gameName) {
     function updateLocal() {
         if(!localActive) return;
         const now = performance.now()/1000;
-        const dt = Math.min(0.033, now - lastTime);
+        let dt = Math.min(0.033, now - lastTime);
+        if (dt <= 0) dt = 0.016;
         lastTime = now;
 
         let mx=0, mz=0;
@@ -594,10 +661,10 @@ async function startLocalGameSession(gameData, gameName) {
         velY -= GRAVITY * dt;
         newPos.y += velY * dt;
 
-        const col = resolveCollision(newPos, velY, blocks);
-        newPos = col.pos;
-        velY = col.velY;
-        onGround = col.onGround;
+        const collisionResult = collide(dt, newPos, velY, blocks);
+        newPos = collisionResult.pos;
+        velY = collisionResult.velY;
+        onGround = collisionResult.onGround;
 
         if(newPos.y < -5) {
             placeOnPlatform(player, platformMesh);

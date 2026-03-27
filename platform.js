@@ -136,6 +136,36 @@ const PLAYER_HALF_SIZE = PLAYER_SIZE / 2;
 const PLAYER_HALF_HEIGHT = PLAYER_HEIGHT / 2;
 const BLOCK_HALF_SIZE = 0.45;
 
+// Вспомогательные функции для безопасного извлечения свойств блока
+function getBlockPosition(block) {
+    if (block.position && typeof block.position.x === 'number') {
+        return block.position;
+    } else if (typeof block.x === 'number') {
+        return { x: block.x, y: block.y, z: block.z };
+    }
+    return { x: 0, y: 0, z: 0 };
+}
+
+function getBlockRotation(block) {
+    if (block.rotation && typeof block.rotation.x === 'number') {
+        return block.rotation;
+    } else if (typeof block.rx === 'number') {
+        return { x: block.rx, y: block.ry, z: block.rz };
+    }
+    return { x: 0, y: 0, z: 0 };
+}
+
+function getBlockScale(block) {
+    if (block.scale && typeof block.scale.x === 'number') {
+        return block.scale;
+    } else if (typeof block.sx === 'number') {
+        return { x: block.sx, y: block.sy, z: block.sz };
+    } else if (typeof block.scale === 'number') {
+        return { x: block.scale, y: block.scale, z: block.scale };
+    }
+    return { x: 1, y: 1, z: 1 };
+}
+
 function connectToServer() {
     try {
         ws = new WebSocket('wss://blockverse-server.onrender.com');
@@ -278,19 +308,30 @@ function placeOnPlatform(model, platform) {
     model.position.set(platform.position.x, platformTop + PLAYER_HALF_HEIGHT, platform.position.z);
 }
 
+// Улучшенная функция создания меша с поддержкой различных форматов scale
 function createMesh(shape, size, color, opacity) {
-    let geo;
+    let sx = 0.9, sy = 0.9, sz = 0.9;
+    if (size) {
+        if (typeof size === 'number') {
+            sx = sy = sz = size;
+        } else if (typeof size.x === 'number') {
+            sx = size.x;
+            sy = size.y !== undefined ? size.y : size.x;
+            sz = size.z !== undefined ? size.z : size.x;
+        }
+    }
+    let geometry;
     switch(shape) {
-        case 'sphere': geo = new THREE.SphereGeometry(0.45, 32, 32); break;
-        case 'cylinder': geo = new THREE.CylinderGeometry(0.45, 0.45, 0.9, 32); break;
-        case 'cone': geo = new THREE.ConeGeometry(0.45, 0.9, 32); break;
-        default: geo = new THREE.BoxGeometry(0.9, 0.9, 0.9);
+        case 'sphere': geometry = new THREE.SphereGeometry(0.45, 32, 32); break;
+        case 'cylinder': geometry = new THREE.CylinderGeometry(0.45, 0.45, 0.9, 32); break;
+        case 'cone': geometry = new THREE.ConeGeometry(0.45, 0.9, 32); break;
+        default: geometry = new THREE.BoxGeometry(0.9, 0.9, 0.9);
     }
     const material = new THREE.MeshStandardMaterial({ color: typeof color === 'string' ? parseInt(color.slice(1), 16) : color });
     material.transparent = opacity < 1;
     material.opacity = opacity;
-    const mesh = new THREE.Mesh(geo, material);
-    mesh.scale.set(size.x, size.y, size.z);
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.scale.set(sx, sy, sz);
     return mesh;
 }
 
@@ -334,9 +375,12 @@ async function startGameSession(gameData, gameName) {
 
     if (gameData && gameData.blocks) {
         gameData.blocks.forEach(block => {
-            const mesh = createMesh(block.shape || 'cube', block.scale, block.color, block.opacity);
-            mesh.position.set(block.position.x, block.position.y, block.position.z);
-            mesh.rotation.set(block.rotation.x, block.rotation.y, block.rotation.z);
+            const pos = getBlockPosition(block);
+            const rot = getBlockRotation(block);
+            const scale = getBlockScale(block);
+            const mesh = createMesh(block.shape || 'cube', scale, block.color, block.opacity);
+            mesh.position.set(pos.x, pos.y, pos.z);
+            mesh.rotation.set(rot.x, rot.y, rot.z);
             mesh.userData = { ...block.userData };
             gameScene.add(mesh);
             collisionBlocks.push(mesh);
@@ -484,9 +528,12 @@ async function startLocalGameSession(gameData, gameName) {
 
     if (gameData && gameData.blocks) {
         gameData.blocks.forEach(block => {
-            const mesh = createMesh(block.shape || 'cube', block.scale, block.color, block.opacity);
-            mesh.position.set(block.position.x, block.position.y, block.position.z);
-            mesh.rotation.set(block.rotation.x, block.rotation.y, block.rotation.z);
+            const pos = getBlockPosition(block);
+            const rot = getBlockRotation(block);
+            const scale = getBlockScale(block);
+            const mesh = createMesh(block.shape || 'cube', scale, block.color, block.opacity);
+            mesh.position.set(pos.x, pos.y, pos.z);
+            mesh.rotation.set(rot.x, rot.y, rot.z);
             scene.add(mesh);
             blocks.push(mesh);
         });

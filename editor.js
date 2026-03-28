@@ -1077,22 +1077,22 @@ function initEditor() {
         addGUIElement('text', { name: 'Текст', text: 'Привет, мир!', x: 100, y: 300, width: 200, height: 30, fontSize: 14 });
     });
 
-    // Вкладки
+    // Вкладки и подразделы
     const tabs = document.querySelectorAll('.tab');
-    const tabPanels = {
-        blocks: document.getElementById('blocksTabContent'),
-        vfx: document.getElementById('vfxTabContent'),
-        animations: document.getElementById('animationsTabContent'),
-        scripts: document.getElementById('scriptsTabContent'),
-        gui: document.getElementById('guiTabContent')
+    const subpanels = {
+        blocks: document.getElementById('subpanelBlocks'),
+        vfx: document.getElementById('subpanelVfx'),
+        animations: document.getElementById('subpanelAnimations'),
+        scripts: document.getElementById('subpanelScripts'),
+        gui: document.getElementById('subpanelGui')
     };
     tabs.forEach(tab => {
         tab.addEventListener('click', () => {
             tabs.forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
             const tabId = tab.dataset.tab;
-            Object.values(tabPanels).forEach(panel => panel.classList.remove('active'));
-            tabPanels[tabId].classList.add('active');
+            Object.values(subpanels).forEach(panel => panel.classList.remove('active'));
+            if (subpanels[tabId]) subpanels[tabId].classList.add('active');
         });
     });
 
@@ -1128,4 +1128,4 @@ export function openEditor(gameToEdit = null) {
     document.getElementById('mainMenuScreen').classList.add('hidden');
     document.getElementById('editorScreen').classList.remove('hidden');
     initEditor();
-        }
+                }

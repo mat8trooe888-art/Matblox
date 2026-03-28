@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BlockVerse - Вход</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .auth-container {
+            max-width: 400px;
+            width: 100%;
+            background: rgba(20, 25, 40, 0.85);
+            backdrop-filter: blur(12px);
+            border-radius: 32px;
+            padding: 32px;
+            box-shadow: 0 25px 45px rgba(0,0,0,0.5);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        .auth-container h2 {
+            text-align: center;
+            margin-bottom: 24px;
+            font-size: 32px;
+            background: linear-gradient(135deg, #ffaa44, #ff5722);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+        .auth-input {
+            width: 100%;
+            padding: 14px 18px;
+            margin: 12px 0;
+            background: rgba(0,0,0,0.5);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 40px;
+            color: white;
+            font-size: 16px;
+            outline: none;
+        }
+        .auth-input:focus {
+            border-color: #ff5722;
+        }
+        .btn {
+            background: linear-gradient(135deg, #ff5722, #ff884d);
+            border: none;
+            padding: 12px 20px;
+            border-radius: 40px;
+            font-weight: bold;
+            font-size: 16px;
+            color: white;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 12px;
+            transition: 0.2s;
+        }
+        .btn-secondary {
+            background: linear-gradient(135deg, #2c3e66, #1a2a4a);
+        }
+        .btn-guest {
+            background: linear-gradient(135deg, #4a6e8a, #2c4c6a);
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            filter: brightness(1.05);
+        }
+        #authTabs {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        #authMessage {
+            margin-top: 12px;
+            text-align: center;
+            color: #ffaa44;
+        }
+    </style>
+</head>
+<body>
+    <div class="auth-container">
+        <h2>🎮 BlockVerse</h2>
+        <div id="authTabs">
+            <button id="showLoginBtn" class="btn">Вход</button>
+            <button id="showRegisterBtn" class="btn btn-secondary">Регистрация</button>
+        </div>
+        <div id="loginForm">
+            <input type="text" id="loginUsername" class="auth-input" placeholder="Имя пользователя">
+            <input type="password" id="loginPassword" class="auth-input" placeholder="Пароль">
+            <button id="doLoginBtn" class="btn">Войти</button>
+            <button id="guestLoginBtn" class="btn btn-guest">Продолжить как гость</button>
+            <div id="authMessage"></div>
+        </div>
+        <div id="registerForm" style="display: none;">
+            <input type="text" id="regUsername" class="auth-input" placeholder="Имя пользователя">
+            <input type="password" id="regPassword" class="auth-input" placeholder="Пароль">
+            <button id="doRegisterBtn" class="btn">Создать аккаунт</button>
+            <button id="guestRegisterBtn" class="btn btn-guest">Продолжить как гость</button>
+        </div>
+    </div>
+    <script type="module" src="auth.js"></script>
+</body>
+</html>

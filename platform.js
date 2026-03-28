@@ -21,6 +21,9 @@ window.createGameOnServer = createGameOnServer;
 window.addCoins = addCoins;
 window.spendCoins = spendCoins;
 
+// Для очистки интервалов
+let chatPollingInterval = null;
+
 function updateGlobalRefs() {
     window.currentUser = currentUser;
     window.customGames = customGames;
@@ -61,6 +64,7 @@ function addCoins(amount) { if (!currentUser) return; currentUser.coins += amoun
 function spendCoins(amount) { if (!currentUser) return false; if (currentUser.coins >= amount) { currentUser.coins -= amount; if (!currentUser.isGuest) saveUsers(); document.getElementById('userCoins').innerText = currentUser.coins; updateGlobalRefs(); return true; } return false; }
 
 function renderShop() {
+    if (!currentUser) return;
     const container = document.getElementById('shopItemsList');
     if (!container) return;
     container.innerHTML = '';
@@ -75,6 +79,7 @@ function renderShop() {
 }
 
 function renderFriendsList() {
+    if (!currentUser) return;
     const container = document.getElementById('friendsList');
     if (!container) return;
     container.innerHTML = '';
@@ -88,6 +93,7 @@ function renderFriendsList() {
     attachMobileEvents();
 }
 function addFriend() {
+    if (!currentUser) return;
     const friendName = document.getElementById('friendSearch').value.trim();
     if (!friendName || friendName === currentUser.username) return;
     const targetUser = users.find(u => u.username === friendName);
@@ -108,16 +114,26 @@ function renderChat() {
     container.scrollTop = container.scrollHeight;
 }
 function sendChatMessage() {
+    if (!currentUser) return;
     const input = document.getElementById('chatInput');
     const text = input.value.trim();
-    if (!text || !currentUser) return;
+    if (!text) return;
     const newMsg = { user: currentUser.username, text: text, time: new Date().toLocaleTimeString() };
     chatMessages.push(newMsg);
     saveChat();
     renderChat();
     input.value = '';
 }
-function startChatPolling() { setInterval(() => { const stored = JSON.parse(localStorage.getItem('blockverse_chat')) || []; if (JSON.stringify(stored) !== JSON.stringify(chatMessages)) { chatMessages = stored; renderChat(); } }, 2000); }
+function startChatPolling() {
+    if (chatPollingInterval) clearInterval(chatPollingInterval);
+    chatPollingInterval = setInterval(() => {
+        const stored = JSON.parse(localStorage.getItem('blockverse_chat')) || [];
+        if (JSON.stringify(stored) !== JSON.stringify(chatMessages)) {
+            chatMessages = stored;
+            renderChat();
+        }
+    }, 2000);
+}
 
 // ========== МУЛЬТИПЛЕЕР ==========
 let ws = null;
@@ -155,8 +171,14 @@ function connectToServer() {
     } catch(e) { console.warn('WebSocket failed'); }
 }
 function requestGamesList() { if(ws && ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({type:'get_games_list'})); }
-function createGameOnServer(name, data) { if(ws && ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({type:'create_game',gameName:name,author:currentUser.username,gameData:data})); }
-function joinGame(id) { if(ws && ws.readyState===WebSocket.OPEN) { currentGameId=id; ws.send(JSON.stringify({type:'join_game',gameId:id})); } else { startLocalGameSession(null,'Локальная'); } }
+function createGameOnServer(name, data) {
+    if (!currentUser) return;
+    if(ws && ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({type:'create_game',gameName:name,author:currentUser.username,gameData:data}));
+}
+function joinGame(id) {
+    if (!currentUser) return;
+    if(ws && ws.readyState===WebSocket.OPEN) { currentGameId=id; ws.send(JSON.stringify({type:'join_game',gameId:id})); } else { startLocalGameSession(null,'Локальная'); }
+}
 function sendPosition(p) { if(ws && ws.readyState===WebSocket.OPEN && currentGameId) ws.send(JSON.stringify({type:'update_position',position:p})); }
 function leaveGame() { if(ws && ws.readyState===WebSocket.OPEN && currentGameId) ws.send(JSON.stringify({type:'leave_game'})); currentGameId=null; }
 
@@ -175,7 +197,7 @@ function renderGamesList(games) {
     attachMobileEvents();
 }
 
-// ========== НОВАЯ, ПРОСТАЯ И НАДЁЖНАЯ КОЛЛИЗИЯ ==========
+// ========== КОЛЛИЗИЯ ==========
 function getBlockBoundingBox(block) {
     let halfX, halfY, halfZ;
     if (block.geometry) {
@@ -220,62 +242,6 @@ function intersectBoxes(a, b) {
            a.maxZ > b.minZ && a.minZ < b.maxZ;
 }
 
-// Главная функция разрешения коллизий
-function resolveCollision(pos, velY, blocks) {
-    let newPos = pos.clone();
-    let newVelY = velY;
-    let onGround = false;
-    const epsilon = 0.05; // небольшой допуск
-
-    // Сначала проверяем коллизию по Y (вертикаль)
-    // Двигаемся по Y с учётом скорости
-    let yStep = newVelY * 0.016; // приблизительный dt, но мы будем обрабатывать каждый кадр
-    // Вместо этого мы будем двигать по Y и разрешать коллизию за один шаг
-    // Проще: попробуем применить смещение по Y, затем проверим коллизию
-    let testPos = newPos.clone();
-    testPos.y += newVelY * 0.016; // небольшой шаг, но точнее будет использовать dt из update
-    // Но мы не знаем dt здесь. Поэтому будем разрешать коллизию итеративно.
-
-    // Для простоты: сначала проверяем, стоит ли игрок на каком-либо блоке
-    // И корректируем Y, чтобы он всегда был над блоками
-    let playerBox = getPlayerBoundingBox(testPos);
-    let lowestBlockTop = -Infinity;
-    for (let block of blocks) {
-        const blockBox = getBlockBoundingBox(block);
-        if (playerBox.minX < blockBox.maxX && playerBox.maxX > blockBox.minX &&
-            playerBox.minZ < blockBox.maxZ && playerBox.maxZ > blockBox.minZ) {
-            // Игрок находится над блоком по X и Z
-            const blockTop = blockBox.maxY;
-            if (blockTop > lowestBlockTop && blockTop < playerBox.minY + epsilon) {
-                lowestBlockTop = blockTop;
-            }
-        }
-    }
-    if (lowestBlockTop > -Infinity) {
-        // Стоим на блоке
-        newPos.y = lowestBlockTop + PLAYER_HALF_HEIGHT;
-        newVelY = 0;
-        onGround = true;
-    } else {
-        // Нет блока внизу, применяем гравитацию
-        newPos.y += newVelY * 0.016; // dt примерно 0.016, но будем использовать реальный dt из update
-        // В реальности dt передаётся в update, но мы здесь не можем. Значит, нужно переделать структуру.
-        // Вместо этого мы будем вызывать resolveCollision с dt из update.
-    }
-
-    // Поскольку мы не можем передать dt сюда, переделаем: будем передавать dt в resolveCollision.
-    // Но для совместимости с текущим вызовом, изменим сигнатуру.
-    // Временно сделаем так: передадим dt вторым аргументом.
-    // Но проще переписать update, чтобы dt использовалось везде.
-    // Я перепишу update ниже, а здесь оставлю заглушку.
-
-    // В итоге я перепишу функцию resolveCollision, чтобы она принимала dt.
-    // Пока оставлю как есть, но потом изменю.
-
-    return { pos: newPos, velY: newVelY, onGround };
-}
-
-// Новая функция коллизии, которая принимает dt
 function collide(dt, pos, velY, blocks) {
     let newPos = pos.clone();
     let newVelY = velY;
@@ -284,18 +250,15 @@ function collide(dt, pos, velY, blocks) {
     // Шаг по Y
     newPos.y += newVelY * dt;
     let playerBox = getPlayerBoundingBox(newPos);
-    // Проверяем столкновения по Y
     for (let block of blocks) {
         const blockBox = getBlockBoundingBox(block);
         if (playerBox.minX < blockBox.maxX && playerBox.maxX > blockBox.minX &&
             playerBox.minZ < blockBox.maxZ && playerBox.maxZ > blockBox.minZ) {
-            // Падение на блок
             if (newVelY <= 0 && playerBox.minY <= blockBox.maxY + 0.05 && playerBox.minY > blockBox.maxY - 0.2) {
                 newPos.y = blockBox.maxY + PLAYER_HALF_HEIGHT;
                 newVelY = 0;
                 onGround = true;
             }
-            // Удар головой
             else if (newVelY > 0 && playerBox.maxY >= blockBox.minY - 0.05 && playerBox.maxY < blockBox.minY + 0.2) {
                 newPos.y = blockBox.minY - PLAYER_HALF_HEIGHT;
                 newVelY = 0;
@@ -709,6 +672,7 @@ function createRemotePlayer() {
 }
 
 function renderMyProjects() {
+    if (!currentUser) return;
     const container = document.getElementById('myProjectsList');
     if (!container) return;
     container.innerHTML = '';
@@ -734,6 +698,7 @@ function renderReports() {
     reports.slice().reverse().forEach(r => { const div = document.createElement('div'); div.style.background='#1e263a'; div.style.margin='8px 0'; div.style.padding='8px'; div.style.borderRadius='12px'; div.innerHTML = `<b>${r.user}</b> (${r.time}): ${r.text}`; container.appendChild(div); });
 }
 function showReportDialog() {
+    if (!currentUser) return;
     const ov = document.createElement('div'); ov.className='overlay';
     const diag = document.createElement('div'); diag.className='report-dialog';
     diag.innerHTML = `<div style="display:flex;justify-content:space-between;margin-bottom:12px;"><h3>Сообщить о проблеме</h3><button class="close-dialog" style="background:none;border:none;color:white;font-size:20px;">✖</button></div><textarea id="reportText" rows="4" style="width:100%;background:#1a1f2e;border:1px solid #ffaa44;border-radius:12px;padding:8px;color:white;"></textarea><button id="submitReportBtn" class="btn" style="margin-top:12px;">Отправить</button>`;
@@ -797,6 +762,7 @@ function guestLogin() {
 function logout() {
     if(gameActive) { gameActive=false; if(gameAnimationId) cancelAnimationFrame(gameAnimationId); }
     if(ws) ws.close();
+    if (chatPollingInterval) clearInterval(chatPollingInterval);
     currentUser = null;
     localStorage.removeItem('blockverse_current_user');
     document.getElementById('mainMenuScreen').classList.add('hidden');

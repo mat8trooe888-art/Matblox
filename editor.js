@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
+import * as API from './api.js';
 
 // Глобальные данные
 const { currentUser, customGames, saveGames, renderMyProjects, createGameOnServer } = window;
@@ -696,7 +697,7 @@ function applyProps() {
     renderExplorer();
 }
 
-function saveGameLocal() {
+async function saveGameLocal() {
     if (!window.currentUser) {
         alert('Вы не авторизованы для сохранения');
         return;
@@ -716,12 +717,13 @@ function saveGameLocal() {
     }));
     const guiData = guiElements;
     const gameData = { blocks: blocksData, animations: animationsData, gui: guiData };
-    const gameId = Date.now();
-    const newGame = { id: gameId, name: gameName, author: window.currentUser.username, desc: 'Создано в конструкторе', data: gameData };
-    window.customGames.push(newGame);
-    window.saveGames();
-    if (window.renderMyProjects) window.renderMyProjects();
-    alert('Игра сохранена локально');
+    const result = await API.saveGame(gameName, window.currentUser.username, gameData);
+    if (result.id) {
+        alert('Игра сохранена');
+        if (window.renderMyProjects) window.renderMyProjects();
+    } else {
+        alert('Ошибка сохранения');
+    }
 }
 
 function serializeObject(obj) {
@@ -1128,4 +1130,4 @@ export function openEditor(gameToEdit = null) {
     document.getElementById('mainMenuScreen').classList.add('hidden');
     document.getElementById('editorScreen').classList.remove('hidden');
     initEditor();
-                }
+        }

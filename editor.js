@@ -2,10 +2,10 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 
-// Глобальные данные (доступны через window)
+// Глобальные данные
 const { currentUser, customGames, saveGames, renderMyProjects, createGameOnServer } = window;
 
-// ========== ПЕРЕМЕННЫЕ РЕДАКТОРА ==========
+// Переменные редактора
 let editorScene, editorCamera, editorRenderer, editorControls, transformControls;
 let editorObjects = [];
 let selectedObjects = [];
@@ -697,6 +697,10 @@ function applyProps() {
 }
 
 function saveGameLocal() {
+    if (!window.currentUser) {
+        alert('Вы не авторизованы для сохранения');
+        return;
+    }
     const gameName = prompt('Введите название игры для сохранения:');
     if (!gameName) return;
     const blocksData = editorObjects.map(obj => serializeObject(obj));
@@ -967,6 +971,25 @@ function initEditor() {
     });
     document.querySelector('.block-option').classList.add('selected');
 
+    // Новые кнопки
+    document.getElementById('deleteBtn')?.addEventListener('click', () => {
+        if (selectedObjects.length) deleteObject(selectedObjects[0]);
+        else alert('Выберите объект для удаления');
+    });
+    document.getElementById('duplicateBtn')?.addEventListener('click', () => {
+        if (selectedObjects.length) duplicateObject(selectedObjects[0]);
+        else alert('Выберите объект для дублирования');
+    });
+    document.getElementById('workBtn')?.addEventListener('click', () => {
+        transformControls.setMode('translate');
+        currentTransformMode = 'translate';
+        document.getElementById('modeMoveBtn').classList.add('active');
+        document.getElementById('modeRotateBtn').classList.remove('active');
+        document.getElementById('modeScaleBtn').classList.remove('active');
+    });
+    document.getElementById('addBlockBtn')?.addEventListener('click', addDefaultBlock);
+    document.getElementById('groupBtn2')?.addEventListener('click', groupSelected);
+
     // VFX
     document.getElementById('addParticleBtn')?.addEventListener('click', () => {
         const config = {
@@ -1105,4 +1128,4 @@ export function openEditor(gameToEdit = null) {
     document.getElementById('mainMenuScreen').classList.add('hidden');
     document.getElementById('editorScreen').classList.remove('hidden');
     initEditor();
-}
+        }

@@ -21,7 +21,6 @@ window.createGameOnServer = createGameOnServer;
 window.addCoins = addCoins;
 window.spendCoins = spendCoins;
 
-// Для очистки интервалов
 let chatPollingInterval = null;
 
 function updateGlobalRefs() {
@@ -254,12 +253,12 @@ function collide(dt, pos, velY, blocks) {
         const blockBox = getBlockBoundingBox(block);
         if (playerBox.minX < blockBox.maxX && playerBox.maxX > blockBox.minX &&
             playerBox.minZ < blockBox.maxZ && playerBox.maxZ > blockBox.minZ) {
-            if (newVelY <= 0 && playerBox.minY <= blockBox.maxY + 0.05 && playerBox.minY > blockBox.maxY - 0.2) {
+            if (newVelY <= 0 && playerBox.minY <= blockBox.maxY + 0.1 && playerBox.minY > blockBox.maxY - 0.2) {
                 newPos.y = blockBox.maxY + PLAYER_HALF_HEIGHT;
                 newVelY = 0;
                 onGround = true;
             }
-            else if (newVelY > 0 && playerBox.maxY >= blockBox.minY - 0.05 && playerBox.maxY < blockBox.minY + 0.2) {
+            else if (newVelY > 0 && playerBox.maxY >= blockBox.minY - 0.1 && playerBox.maxY < blockBox.minY + 0.2) {
                 newPos.y = blockBox.minY - PLAYER_HALF_HEIGHT;
                 newVelY = 0;
             }
@@ -292,7 +291,7 @@ function collide(dt, pos, velY, blocks) {
         }
     }
 
-    // Проверка, стоит ли игрок на земле после всех перемещений
+    // Проверка пола после коррекции
     playerBox = getPlayerBoundingBox(newPos);
     for (let block of blocks) {
         const blockBox = getBlockBoundingBox(block);
@@ -301,6 +300,7 @@ function collide(dt, pos, velY, blocks) {
             if (Math.abs(playerBox.minY - blockBox.maxY) < 0.1 && newVelY <= 0) {
                 onGround = true;
                 newVelY = 0;
+                newPos.y = blockBox.maxY + PLAYER_HALF_HEIGHT;
                 break;
             }
         }
@@ -357,6 +357,89 @@ function getBlockScale(block) {
     return { x: 1, y: 1, z: 1 };
 }
 
+// ========== МОБИЛЬНОЕ УПРАВЛЕНИЕ ==========
+let joystickActive = false;
+let joystickVector = { x: 0, z: 0 };
+let mobileJump = false;
+
+function initMobileControls() {
+    const joystickContainer = document.getElementById('joystickContainer');
+    const joystickThumb = document.getElementById('joystickThumb');
+    const jumpBtn = document.getElementById('mobileJumpBtn');
+    
+    if (!joystickContainer) return;
+
+    let touchId = null;
+    let startX = 0, startY = 0;
+    const maxDist = 40;
+
+    const onTouchStart = (e) => {
+        e.preventDefault();
+        const rect = joystickContainer.getBoundingClientRect();
+        const touch = e.touches[0];
+        touchId = touch.identifier;
+        startX = touch.clientX - rect.left - 35;
+        startY = touch.clientY - rect.top - 35;
+        joystickActive = true;
+        joystickThumb.style.transition = 'none';
+        updateJoystickPosition(touch.clientX - rect.left, touch.clientY - rect.top);
+    };
+
+    const onTouchMove = (e) => {
+        if (!joystickActive) return;
+        const rect = joystickContainer.getBoundingClientRect();
+        for (let i = 0; i < e.touches.length; i++) {
+            if (e.touches[i].identifier === touchId) {
+                const touchX = e.touches[i].clientX - rect.left;
+                const touchY = e.touches[i].clientY - rect.top;
+                updateJoystickPosition(touchX, touchY);
+                break;
+            }
+        }
+    };
+
+    const onTouchEnd = (e) => {
+        if (!joystickActive) return;
+        joystickActive = false;
+        joystickVector = { x: 0, z: 0 };
+        joystickThumb.style.transition = '0.1s';
+        joystickThumb.style.left = '35px';
+        joystickThumb.style.top = '35px';
+    };
+
+    function updateJoystickPosition(x, y) {
+        let dx = x - 35;
+        let dy = y - 35;
+        const dist = Math.hypot(dx, dy);
+        if (dist > maxDist) {
+            dx = dx * maxDist / dist;
+            dy = dy * maxDist / dist;
+        }
+        joystickThumb.style.left = (35 + dx) + 'px';
+        joystickThumb.style.top = (35 + dy) + 'px';
+        joystickVector = { x: dx / maxDist, z: dy / maxDist };
+    }
+
+    joystickContainer.addEventListener('touchstart', onTouchStart, { passive: false });
+    document.addEventListener('touchmove', onTouchMove, { passive: false });
+    document.addEventListener('touchend', onTouchEnd);
+    document.addEventListener('touchcancel', onTouchEnd);
+
+    if (jumpBtn) {
+        jumpBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            mobileJump = true;
+        });
+        jumpBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            mobileJump = false;
+        });
+        jumpBtn.addEventListener('mousedown', () => { mobileJump = true; });
+        jumpBtn.addEventListener('mouseup', () => { mobileJump = false; });
+    }
+}
+
+// ========== ИГРОВАЯ ЛОГИКА ==========
 async function startGameSession(gameData, gameName) {
     document.getElementById('mainMenuScreen').classList.add('hidden');
     document.getElementById('customGameScreen').classList.remove('hidden');
@@ -417,6 +500,7 @@ async function startGameSession(gameData, gameName) {
     gameScene.add(playerMesh);
     gamePlayer = playerMesh;
 
+    // Управление: клавиатура + джойстик
     const keyState = { w: false, s: false, a: false, d: false };
     let jumpRequest = false;
     const handleKey = (e, val) => {
@@ -445,18 +529,21 @@ async function startGameSession(gameData, gameName) {
         if (dt <= 0) dt = 0.016;
         lastTime = now;
 
-        let mx = 0, mz = 0;
-        if(keyState.w) mz -= 1;
-        if(keyState.s) mz += 1;
-        if(keyState.a) mx -= 1;
-        if(keyState.d) mx += 1;
-        if(mx !== 0 || mz !== 0) {
-            const len = Math.hypot(mx, mz);
+        // Объединяем ввод с клавиатуры и джойстика
+        let mx = (keyState.d ? 1 : 0) - (keyState.a ? 1 : 0);
+        let mz = (keyState.s ? 1 : 0) - (keyState.w ? 1 : 0);
+        if (joystickActive) {
+            mx += joystickVector.x;
+            mz += joystickVector.z;
+        }
+        // Нормализуем, если длина >1
+        const len = Math.hypot(mx, mz);
+        if (len > 1) {
             mx /= len;
             mz /= len;
         }
 
-        if(mx !== 0 || mz !== 0) {
+        if (mx !== 0 || mz !== 0) {
             const angle = Math.atan2(mx, mz);
             gamePlayer.rotation.y = angle;
         }
@@ -480,9 +567,12 @@ async function startGameSession(gameData, gameName) {
             onGround = true;
         }
 
-        if(onGround && jumpRequest) {
+        // Обработка прыжка (клавиатура и мобильный)
+        let shouldJump = jumpRequest || mobileJump;
+        if(onGround && shouldJump) {
             velY = JUMP_FORCE;
             jumpRequest = false;
+            mobileJump = false; // сброс после прыжка
         }
 
         gamePlayer.position.copy(newPos);
@@ -601,18 +691,19 @@ async function startLocalGameSession(gameData, gameName) {
         if (dt <= 0) dt = 0.016;
         lastTime = now;
 
-        let mx=0, mz=0;
-        if(keyState.w) mz-=1;
-        if(keyState.s) mz+=1;
-        if(keyState.a) mx-=1;
-        if(keyState.d) mx+=1;
-        if(mx!==0 || mz!==0) {
-            const len = Math.hypot(mx,mz);
+        let mx = (keyState.d ? 1 : 0) - (keyState.a ? 1 : 0);
+        let mz = (keyState.s ? 1 : 0) - (keyState.w ? 1 : 0);
+        if (joystickActive) {
+            mx += joystickVector.x;
+            mz += joystickVector.z;
+        }
+        const len = Math.hypot(mx, mz);
+        if (len > 1) {
             mx /= len;
             mz /= len;
         }
 
-        if(mx!==0 || mz!==0) {
+        if (mx !== 0 || mz !== 0) {
             const angle = Math.atan2(mx, mz);
             player.rotation.y = angle;
         }
@@ -636,9 +727,11 @@ async function startLocalGameSession(gameData, gameName) {
             onGround = true;
         }
 
-        if(onGround && jumpRequest) {
+        let shouldJump = jumpRequest || mobileJump;
+        if(onGround && shouldJump) {
             velY = JUMP_FORCE;
             jumpRequest = false;
+            mobileJump = false;
         }
 
         player.position.copy(newPos);
@@ -695,7 +788,7 @@ function renderReports() {
     const container = document.getElementById('reportsList');
     if(!container) return;
     container.innerHTML = '';
-    reports.slice().reverse().forEach(r => { const div = document.createElement('div'); div.style.background='#1e263a'; div.style.margin='8px 0'; div.style.padding='8px'; div.style.borderRadius='12px'; div.innerHTML = `<b>${r.user}</b> (${r.time}): ${r.text}`; container.appendChild(div); });
+    reports.slice().reverse().forEach(r => { const div = document.createElement('div'); div.style.background='rgba(30,38,58,0.8)'; div.style.margin='8px 0'; div.style.padding='8px'; div.style.borderRadius='12px'; div.innerHTML = `<b>${r.user}</b> (${r.time}): ${r.text}`; container.appendChild(div); });
 }
 function showReportDialog() {
     if (!currentUser) return;
@@ -789,6 +882,9 @@ document.getElementById('earnCoinsBtn').onclick = () => addCoins(100);
 document.getElementById('addFriendBtn').onclick = addFriend;
 document.getElementById('sendChatBtn').onclick = sendChatMessage;
 document.getElementById('chatInput').addEventListener('keypress', e=>{ if(e.key==='Enter') sendChatMessage(); });
+
+// Инициализация мобильного управления
+initMobileControls();
 
 if(users.length===0) { users.push({ username:"demo", password:"123", coins:800, inventory:[], isGuest:false, friends:[], friendRequests:[], customModel:null }); saveUsers(); }
 const savedUser = localStorage.getItem('blockverse_current_user');

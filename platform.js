@@ -443,6 +443,10 @@ function initMobileControls() {
 async function startGameSession(gameData, gameName) {
     document.getElementById('mainMenuScreen').classList.add('hidden');
     document.getElementById('customGameScreen').classList.remove('hidden');
+    // Показываем мобильное управление
+    const mobileControls = document.getElementById('mobileControls');
+    if (mobileControls) mobileControls.style.display = 'block';
+    
     const container = document.getElementById('customGameContainer');
     container.innerHTML = '';
 
@@ -602,6 +606,7 @@ async function startGameSession(gameData, gameName) {
         leaveGame();
         document.getElementById('customGameScreen').classList.add('hidden');
         document.getElementById('mainMenuScreen').classList.remove('hidden');
+        if (mobileControls) mobileControls.style.display = 'none';
         requestGamesList();
     };
     attachMobileEvents();
@@ -610,6 +615,9 @@ async function startGameSession(gameData, gameName) {
 async function startLocalGameSession(gameData, gameName) {
     document.getElementById('mainMenuScreen').classList.add('hidden');
     document.getElementById('customGameScreen').classList.remove('hidden');
+    const mobileControls = document.getElementById('mobileControls');
+    if (mobileControls) mobileControls.style.display = 'block';
+    
     const container = document.getElementById('customGameContainer');
     container.innerHTML = '';
 
@@ -752,6 +760,7 @@ async function startLocalGameSession(gameData, gameName) {
         localActive = false;
         document.getElementById('customGameScreen').classList.add('hidden');
         document.getElementById('mainMenuScreen').classList.remove('hidden');
+        if (mobileControls) mobileControls.style.display = 'none';
     };
     attachMobileEvents();
 }
@@ -862,6 +871,8 @@ function logout() {
     document.getElementById('editorScreen').classList.add('hidden');
     document.getElementById('customGameScreen').classList.add('hidden');
     document.getElementById('authScreen').classList.remove('hidden');
+    const mobileControls = document.getElementById('mobileControls');
+    if (mobileControls) mobileControls.style.display = 'none';
     showLogin(); updateGlobalRefs();
 }
 

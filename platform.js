@@ -1,4 +1,7 @@
 import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import * as API from './api.js';
 import { connectToServer, requestGamesList, createGameOnServer, joinGame, sendPosition, leaveGame } from './network.js';
 
@@ -13,6 +16,7 @@ let gameActive = false;
 let gameAnimationId = null;
 let collisionBlocks = [];
 let moveSpeed = 4;
+let effectComposer = null;
 
 const PLAYER_SIZE = 0.6;
 const PLAYER_HEIGHT = 0.8;
@@ -258,30 +262,46 @@ async function startGameSession(gameData, gameName) {
     container.innerHTML = '';
 
     gameScene = new THREE.Scene();
-    gameScene.background = new THREE.Color(0x87CEEB);
-    gameScene.fog = new THREE.Fog(0x87CEEB, 30, 60);
+    gameScene.background = new THREE.Color(0x0a1030);
+    gameScene.fog = new THREE.FogExp2(0x0a1030, 0.008);
     gameCamera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
     gameCamera.position.set(0, 2, 5);
     gameRenderer = new THREE.WebGLRenderer({ antialias: true });
     gameRenderer.setSize(window.innerWidth, window.innerHeight);
     gameRenderer.shadowMap.enabled = true;
+    gameRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.appendChild(gameRenderer.domElement);
+
+    // Постобработка (Bloom)
+    effectComposer = new EffectComposer(gameRenderer);
+    const renderPass = new RenderPass(gameScene, gameCamera);
+    effectComposer.addPass(renderPass);
+    const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+    bloomPass.threshold = 0.1;
+    bloomPass.strength = 0.6;
+    bloomPass.radius = 0.5;
+    effectComposer.addPass(bloomPass);
 
     const ambient = new THREE.AmbientLight(0x404060);
     gameScene.add(ambient);
-    const dirLight = new THREE.DirectionalLight(0xfff5d1, 1);
+    const dirLight = new THREE.DirectionalLight(0xfff5d1, 1.2);
     dirLight.position.set(5,10,7);
     dirLight.castShadow = true;
+    dirLight.shadow.mapSize.width = 1024;
+    dirLight.shadow.mapSize.height = 1024;
     gameScene.add(dirLight);
-    const pointLight = new THREE.PointLight(0xffaa66, 0.5, 20);
+    const pointLight = new THREE.PointLight(0xffaa66, 0.8, 20);
     pointLight.position.set(0,3,0);
     pointLight.castShadow = true;
     gameScene.add(pointLight);
+    const backLight = new THREE.PointLight(0x6688ff, 0.4);
+    backLight.position.set(-2, 1, -3);
+    gameScene.add(backLight);
 
     collisionBlocks = [];
 
     const platformGeometry = new THREE.BoxGeometry(20, 1, 20);
-    const platformMaterial = new THREE.MeshStandardMaterial({ color: 0x6B8E23 });
+    const platformMaterial = new THREE.MeshStandardMaterial({ color: 0x6B8E23, roughness: 0.7, metalness: 0.1 });
     const platformMesh = new THREE.Mesh(platformGeometry, platformMaterial);
     platformMesh.position.set(0, -0.5, 0);
     platformMesh.receiveShadow = true;
@@ -297,12 +317,14 @@ async function startGameSession(gameData, gameName) {
             const mesh = createMesh(block.shape || 'cube', scale, block.color, block.opacity);
             mesh.position.set(pos.x, pos.y, pos.z);
             mesh.rotation.set(rot.x, rot.y, rot.z);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
             gameScene.add(mesh);
             collisionBlocks.push(mesh);
         });
     }
 
-    const playerMat = new THREE.MeshStandardMaterial({ color: 0x3a86ff });
+    const playerMat = new THREE.MeshStandardMaterial({ color: 0x3a86ff, roughness: 0.3, metalness: 0.1 });
     const playerMesh = new THREE.Mesh(new THREE.BoxGeometry(PLAYER_SIZE, PLAYER_HEIGHT, PLAYER_SIZE), playerMat);
     playerMesh.castShadow = true;
     playerMesh.receiveShadow = true;
@@ -393,7 +415,7 @@ async function startGameSession(gameData, gameName) {
         if(!gameActive) return;
         gameAnimationId = requestAnimationFrame(animate);
         update();
-        gameRenderer.render(gameScene, gameCamera);
+        effectComposer.render();
     }
     gameActive = true;
     animate();
@@ -412,7 +434,6 @@ async function startGameSession(gameData, gameName) {
 }
 
 async function startLocalGameSession(gameData, gameName) {
-    // Аналогично startGameSession, но без WebSocket
     startGameSession(gameData, gameName);
 }
 
@@ -448,11 +469,11 @@ async function renderMyProjects() {
     const allGames = await API.getGames();
     const myGames = allGames.filter(g => g.author === currentUser.username);
     container.innerHTML = '';
-    if (!myGames.length) { container.innerHTML='<p>У вас пока нет созданных игр. Перейдите в конструктор, чтобы создать свою первую игру!</p>'; attachMobileEvents(); return; }
+    if (!myGames.length) { container.innerHTML='<p>У вас пока нет созданных игр. Перейдите в конструктор!</p>'; attachMobileEvents(); return; }
     myGames.forEach(game => {
         const card = document.createElement('div');
         card.className = 'project-card';
-        card.innerHTML = `<div class="game-title">${game.name}</div><div class="game-desc" style="font-size:12px;color:#aaa;">${game.description || 'Без описания'}</div><div style="margin-top:12px;display:flex;gap:8px;"><button class="play-btn-small" data-id="${game.id}">Одиночная игра</button><button class="host-btn-small" data-id="${game.id}">🌐 Мультиплеер</button><button class="edit-btn-small" data-id="${game.id}">Редактировать</button><button class="delete-btn-small" data-id="${game.id}">Удалить</button></div>`;
+        card.innerHTML = `<div class="game-title">${game.name}</div><div class="game-desc">${game.description || 'Без описания'}</div><div><button class="play-btn-small" data-id="${game.id}">Одиночная игра</button><button class="host-btn-small" data-id="${game.id}">🌐 Мультиплеер</button><button class="edit-btn-small" data-id="${game.id}">Редактировать</button><button class="delete-btn-small" data-id="${game.id}">Удалить</button></div>`;
         container.appendChild(card);
     });
     document.querySelectorAll('.play-btn-small').forEach(btn => btn.addEventListener('click', async () => { const id = parseInt(btn.dataset.id); const game = (await API.getGames()).find(g => g.id === id); if (game) startLocalGameSession(JSON.parse(game.data), game.name); }));
@@ -485,7 +506,7 @@ function renderFriendsList() {
     (currentUser.friends || []).forEach(friend => {
         const div = document.createElement('div');
         div.className = 'friend-item';
-        div.innerHTML = `<span>${friend}</span><div class="friend-actions"><button class="removeFriendBtn" data-friend="${friend}">❌</button></div>`;
+        div.innerHTML = `<span>${friend}</span><div><button class="removeFriendBtn" data-friend="${friend}">❌</button></div>`;
         container.appendChild(div);
     });
     document.querySelectorAll('.removeFriendBtn').forEach(btn => btn.addEventListener('click', () => { const friend = btn.dataset.friend; currentUser.friends = currentUser.friends.filter(f => f !== friend); renderFriendsList(); }));
@@ -586,7 +607,6 @@ function attachMobileEvents() {
 setInterval(attachMobileEvents,1500);
 attachMobileEvents();
 
-// ========== НАВИГАЦИЯ ==========
 document.getElementById('showGamesBtn').onclick = () => { document.getElementById('gamesPanel').style.display='block'; document.getElementById('myProjectsPanel').style.display='none'; document.getElementById('shopPanel').style.display='none'; document.getElementById('socialPanel').style.display='none'; document.getElementById('settingsPanel').style.display='none'; renderGamesList(); };
 document.getElementById('showMyProjectsBtn').onclick = () => { document.getElementById('gamesPanel').style.display='none'; document.getElementById('myProjectsPanel').style.display='block'; document.getElementById('shopPanel').style.display='none'; document.getElementById('socialPanel').style.display='none'; document.getElementById('settingsPanel').style.display='none'; renderMyProjects(); };
 document.getElementById('showShopBtn').onclick = () => { document.getElementById('gamesPanel').style.display='none'; document.getElementById('myProjectsPanel').style.display='none'; document.getElementById('shopPanel').style.display='block'; document.getElementById('socialPanel').style.display='none'; document.getElementById('settingsPanel').style.display='none'; renderShop(); };
@@ -612,4 +632,4 @@ if (session) {
     updateUIafterAuth();
 } else {
     window.location.href = 'login.html';
-            }
+                }

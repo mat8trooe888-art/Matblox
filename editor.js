@@ -1,12 +1,10 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as API from './api.js';
 
-// Глобальные данные
-const { currentUser, customGames, saveGames, renderMyProjects, createGameOnServer } = window;
-
-// Переменные редактора
+// ========== ПЕРЕМЕННЫЕ РЕДАКТОРА ==========
 let editorScene, editorCamera, editorRenderer, editorControls, transformControls;
 let editorObjects = [];
 let selectedObjects = [];
@@ -33,9 +31,27 @@ let recordedKeyframes = [];
 let recordTarget = null;
 let recordStartTime = 0;
 
+// Таймлайн
+let timelineCanvas, timelineCtx;
+let currentAnimationTime = 0;
+let isDraggingTimeline = false;
+let currentAnimationDuration = 1;
+
 // GUI
 let guiElements = [];
 
+// NPC
+let npcList = [];
+let selectedNpc = null;
+
+// Скульптинг
+let sculptMode = 'pull';
+let sculptActive = false;
+let sculptRadius = 0.5;
+let sculptStrength = 0.2;
+let sculptOriginalPositions = null;
+
+// ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
 function generateId() { return Date.now() + '-' + Math.random().toString(36).substr(2, 8); }
 
 function createBlockMesh(shape, size = { x: 0.9, y: 0.9, z: 0.9 }, color = 0x8B5A2B, opacity = 1, type = 'block') {
@@ -131,7 +147,7 @@ function addParticleSystem(config) {
         id: id,
         name: ps.userData.name,
         type: 'particle',
-        parentId: null,
+        parentId: 'workspace',
         childrenIds: [],
         threeObject: ps,
         userData: { type: 'particle', config: config }
@@ -142,7 +158,64 @@ function addParticleSystem(config) {
     return obj;
 }
 
-// ========== АНИМАЦИИ ==========
+function addParticleSystemPreset(type) {
+    let config;
+    switch(type) {
+        case 'fire':
+            config = {
+                name: 'Огонь',
+                count: 200,
+                color: 0xff6600,
+                size: 0.15,
+                speedY: 3,
+                spread: 0.8,
+                lifetime: 0.8,
+                texture: ''
+            };
+            break;
+        case 'water':
+            config = {
+                name: 'Вода',
+                count: 150,
+                color: 0x3399ff,
+                size: 0.1,
+                speedY: 1.5,
+                spread: 1.2,
+                lifetime: 1.2,
+                texture: ''
+            };
+            break;
+        case 'air':
+            config = {
+                name: 'Воздух',
+                count: 100,
+                color: 0xaaccff,
+                size: 0.2,
+                speedY: 2,
+                spread: 2,
+                lifetime: 1.5,
+                texture: ''
+            };
+            break;
+        case 'smoke':
+            config = {
+                name: 'Дым',
+                count: 80,
+                color: 0x888888,
+                size: 0.3,
+                speedY: 1.2,
+                spread: 1.5,
+                lifetime: 2,
+                texture: ''
+            };
+            break;
+        default:
+            return;
+    }
+    addParticleSystem(config);
+}
+
+// ========== АНИМАЦИИ (с таймлайном) ==========
 function createAnimation(name) {
     const id = generateId();
     const anim = {
@@ -167,6 +240,7 @@ function addKeyframe(animationId, targetId, property, time, value) {
     track.keyframes.push({ time, value });
     track.keyframes.sort((a,b) => a.time - b.time);
     if (time > anim.duration) anim.duration = time;
+    drawTimeline();
 }
 
 function getInterpolatedValue(keyframes, time) {
@@ -205,13 +279,15 @@ function playAnimation(animId) {
     if (isPlaying) stopAnimation();
     currentAnimation = animations.find(a => a.id === animId);
     if (!currentAnimation) return;
+    currentAnimationDuration = currentAnimation.duration;
+    document.getElementById('animationDuration').innerText = currentAnimationDuration.toFixed(2);
     isPlaying = true;
-    animationStartTime = performance.now() / 1000;
+    animationStartTime = performance.now() / 1000 - currentAnimationTime;
     function animateLoop() {
         if (!isPlaying) return;
         const now = performance.now() / 1000;
         let t = (now - animationStartTime) % currentAnimation.duration;
-        applyAnimation(currentAnimation, t);
+        setAnimationTime(t);
         animationRequestId = requestAnimationFrame(animateLoop);
     }
     animateLoop();
@@ -221,6 +297,67 @@ function stopAnimation() {
     if (animationRequestId) cancelAnimationFrame(animationRequestId);
     isPlaying = false;
     currentAnimation = null;
+}
+
+function setAnimationTime(time) {
+    if (!currentAnimation) return;
+    currentAnimationTime = Math.min(time, currentAnimation.duration);
+    document.getElementById('currentTime').innerText = currentAnimationTime.toFixed(2);
+    applyAnimation(currentAnimation, currentAnimationTime);
+    drawTimeline();
+}
+
+function drawTimeline() {
+    if (!timelineCtx) return;
+    timelineCtx.clearRect(0, 0, timelineCanvas.width, timelineCanvas.height);
+    // Сетка
+    timelineCtx.strokeStyle = '#666';
+    for (let i = 0; i <= 10; i++) {
+        const x = i * timelineCanvas.width / 10;
+        timelineCtx.beginPath();
+        timelineCtx.moveTo(x, 0);
+        timelineCtx.lineTo(x, timelineCanvas.height);
+        timelineCtx.stroke();
+    }
+    // Ключевые кадры
+    if (currentAnimation) {
+        for (let track of currentAnimation.tracks) {
+            for (let kf of track.keyframes) {
+                const x = (kf.time / currentAnimation.duration) * timelineCanvas.width;
+                timelineCtx.fillStyle = '#ffaa44';
+                timelineCtx.fillRect(x-2, 0, 4, timelineCanvas.height);
+            }
+        }
+    }
+    // Текущее время
+    if (currentAnimation) {
+        const currentX = (currentAnimationTime / currentAnimation.duration) * timelineCanvas.width;
+        timelineCtx.fillStyle = '#ff5722';
+        timelineCtx.fillRect(currentX-1, 0, 2, timelineCanvas.height);
+    }
+}
+
+function initTimeline() {
+    timelineCanvas = document.getElementById('timelineCanvas');
+    timelineCtx = timelineCanvas.getContext('2d');
+    timelineCanvas.addEventListener('mousedown', (e) => {
+        const rect = timelineCanvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const time = (x / timelineCanvas.width) * currentAnimationDuration;
+        setAnimationTime(time);
+        isDraggingTimeline = true;
+    });
+    window.addEventListener('mouseup', () => { isDraggingTimeline = false; });
+    window.addEventListener('mousemove', (e) => {
+        if (isDraggingTimeline && currentAnimation) {
+            const rect = timelineCanvas.getBoundingClientRect();
+            let x = e.clientX - rect.left;
+            if (x < 0) x = 0;
+            if (x > timelineCanvas.width) x = timelineCanvas.width;
+            const time = (x / timelineCanvas.width) * currentAnimationDuration;
+            setAnimationTime(time);
+        }
+    });
 }
 
 function updateAnimationSelect() {
@@ -337,7 +474,166 @@ function updateGUIPreview() {
     });
 }
 
-// ========== ОБЩИЕ ФУНКЦИИ ==========
+// ========== NPC ==========
+function createNPC(name = "NPC") {
+    const geometry = new THREE.BoxGeometry(0.8, 1.2, 0.8);
+    const material = new THREE.MeshStandardMaterial({ color: 0x88aa88 });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.y = 0.6;
+    mesh.userData = {
+        type: 'npc',
+        name: name,
+        behavior: 'idle',
+        speed: 2,
+        dialog: '',
+        model: null
+    };
+    const obj = {
+        id: generateId(),
+        name: name,
+        type: 'npc',
+        parentId: 'workspace',
+        childrenIds: [],
+        threeObject: mesh,
+        userData: mesh.userData
+    };
+    addObject(obj);
+    npcList.push(obj);
+    renderNpcList();
+    selectObject(obj);
+    return obj;
+}
+
+function renderNpcList() {
+    const container = document.getElementById('npcList');
+    if (!container) return;
+    container.innerHTML = '';
+    npcList.forEach(npc => {
+        const div = document.createElement('div');
+        div.className = 'npc-item';
+        div.style.background = '#2c2f36';
+        div.style.padding = '4px 8px';
+        div.style.margin = '2px 0';
+        div.style.borderRadius = '4px';
+        div.style.cursor = 'pointer';
+        div.textContent = npc.userData.name;
+        div.addEventListener('click', () => selectNPC(npc));
+        container.appendChild(div);
+    });
+}
+
+function selectNPC(npc) {
+    selectedNpc = npc;
+    document.getElementById('npcName').value = npc.userData.name;
+    document.getElementById('npcBehavior').value = npc.userData.behavior;
+    document.getElementById('npcSpeed').value = npc.userData.speed;
+    document.getElementById('npcDialog').value = npc.userData.dialog || '';
+}
+
+function saveNPCProperties() {
+    if (!selectedNpc) return;
+    selectedNpc.userData.name = document.getElementById('npcName').value;
+    selectedNpc.userData.behavior = document.getElementById('npcBehavior').value;
+    selectedNpc.userData.speed = parseFloat(document.getElementById('npcSpeed').value);
+    selectedNpc.userData.dialog = document.getElementById('npcDialog').value;
+    selectedNpc.name = selectedNpc.userData.name;
+    renderNpcList();
+    renderExplorer();
+}
+
+// ========== ИМПОРТ GLTF ==========
+function importGLTFModel() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.gltf,.glb';
+    input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const url = URL.createObjectURL(file);
+        const loader = new GLTFLoader();
+        loader.load(url, (gltf) => {
+            const model = gltf.scene;
+            model.userData = { type: 'model', source: 'gltf' };
+            const obj = {
+                id: generateId(),
+                name: file.name,
+                type: 'model',
+                parentId: 'workspace',
+                childrenIds: [],
+                threeObject: model,
+                userData: { type: 'model', gltfData: gltf }
+            };
+            addObject(obj);
+            selectObject(obj);
+            URL.revokeObjectURL(url);
+        }, undefined, (error) => {
+            console.error('GLTF load error:', error);
+            alert('Ошибка загрузки модели');
+        });
+    };
+    input.click();
+}
+
+// ========== СКУЛЬПТИНГ ==========
+function initSculpting() {
+    document.getElementById('sculptBrushBtn').onclick = () => setSculptMode('pull');
+    document.getElementById('sculptSmoothBtn').onclick = () => setSculptMode('smooth');
+    document.getElementById('sculptFlattenBtn').onclick = () => setSculptMode('flatten');
+    document.getElementById('sculptResetBtn').onclick = resetSculpt;
+    const radiusSlider = document.getElementById('sculptRadius');
+    const strengthSlider = document.getElementById('sculptStrength');
+    radiusSlider.oninput = (e) => { sculptRadius = parseFloat(e.target.value); };
+    strengthSlider.oninput = (e) => { sculptStrength = parseFloat(e.target.value); };
+}
+
+function setSculptMode(mode) {
+    sculptMode = mode;
+    document.querySelectorAll('#subpanelSculpt button').forEach(btn => btn.classList.remove('active'));
+    if (mode === 'pull') document.getElementById('sculptBrushBtn').classList.add('active');
+    if (mode === 'smooth') document.getElementById('sculptSmoothBtn').classList.add('active');
+    if (mode === 'flatten') document.getElementById('sculptFlattenBtn').classList.add('active');
+}
+
+function applySculptToMesh(mesh, point, radius, strength, mode) {
+    if (!mesh.geometry) return;
+    const geometry = mesh.geometry;
+    if (!geometry.attributes.position) return;
+    const positions = geometry.attributes.position.array;
+    const pointLocal = mesh.worldToLocal(point.clone());
+    const radiusSq = radius * radius;
+    for (let i = 0; i < positions.length; i += 3) {
+        const v = new THREE.Vector3(positions[i], positions[i+1], positions[i+2]);
+        const dx = v.x - pointLocal.x;
+        const dy = v.y - pointLocal.y;
+        const dz = v.z - pointLocal.z;
+        const distSq = dx*dx + dy*dy + dz*dz;
+        if (distSq < radiusSq) {
+            const factor = (1 - Math.sqrt(distSq)/radius) * strength;
+            if (mode === 'pull') {
+                v.x += dx * factor;
+                v.y += dy * factor;
+                v.z += dz * factor;
+            } else if (mode === 'flatten') {
+                v.y = pointLocal.y; // упрощённая версия
+            }
+            positions[i] = v.x;
+            positions[i+1] = v.y;
+            positions[i+2] = v.z;
+        }
+    }
+    geometry.attributes.position.needsUpdate = true;
+    geometry.computeVertexNormals();
+}
+
+function resetSculpt() {
+    if (!selectedObjects.length) return;
+    const obj = selectedObjects[0];
+    if (!obj.threeObject.geometry) return;
+    // Восстановление исходных позиций вершин (не реализовано для простоты)
+    alert("Сброс скульптинга пока не реализован");
+}
+
+// ========== ОБЩИЕ ФУНКЦИИ РЕДАКТОРА ==========
 function addObject(obj) {
     editorObjects.push(obj);
     if (obj.threeObject) editorScene.add(obj.threeObject);
@@ -354,6 +650,10 @@ function deleteObject(obj) {
             selectedObjects = selectedObjects.filter(o => o !== obj);
             if (selectedObjects.length === 1) transformControls.attach(selectedObjects[0].threeObject);
             else if (selectedObjects.length === 0) transformControls.detach();
+        }
+        if (obj.type === 'npc') {
+            npcList = npcList.filter(n => n.id !== obj.id);
+            renderNpcList();
         }
         renderExplorer();
         updatePropertiesPanel();
@@ -392,6 +692,10 @@ function renameObject(obj) {
     if (newName) {
         obj.name = newName;
         if (obj.type === 'particle') obj.threeObject.userData.name = newName;
+        if (obj.type === 'npc') {
+            obj.userData.name = newName;
+            renderNpcList();
+        }
         renderExplorer();
         updatePropertiesPanel();
     }
@@ -405,7 +709,7 @@ function addDefaultBlock() {
         id: generateId(),
         name: `Блок (${currentShape})`,
         type: 'block',
-        parentId: null,
+        parentId: 'workspace',
         childrenIds: [],
         threeObject: mesh,
         userData: { type: 'block', shape: currentShape, color: currentColor, opacity: currentOpacity }
@@ -421,7 +725,7 @@ function groupSelected() {
         id: groupId,
         name: 'Группа',
         type: 'group',
-        parentId: null,
+        parentId: 'workspace',
         childrenIds: [],
         threeObject: new THREE.Group()
     };
@@ -485,7 +789,20 @@ function updateSelectedInExplorer() {
 function renderExplorer() {
     const container = document.getElementById('explorerTree');
     if (!container) return;
-    const rootObjects = editorObjects.filter(obj => !obj.parentId);
+    // Создаём корневой элемент Workspace, если его нет
+    let workspaceObj = editorObjects.find(obj => obj.id === 'workspace');
+    if (!workspaceObj) {
+        workspaceObj = {
+            id: 'workspace',
+            name: 'Workspace',
+            type: 'folder',
+            parentId: null,
+            childrenIds: [],
+            threeObject: null
+        };
+        editorObjects.unshift(workspaceObj);
+    }
+    const rootObjects = editorObjects.filter(obj => !obj.parentId || obj.parentId === null);
     container.innerHTML = '';
     rootObjects.forEach(obj => {
         renderExplorerItem(obj, container);
@@ -497,9 +814,12 @@ function renderExplorerItem(obj, parentElement) {
     div.className = 'explorer-item';
     div.dataset.id = obj.id;
     if (selectedObjects.includes(obj)) div.classList.add('selected');
-    let icon = '🧱';
+    let icon = '📄';
     if (obj.type === 'group') icon = '📁';
     if (obj.type === 'particle') icon = '✨';
+    if (obj.type === 'npc') icon = '👤';
+    if (obj.type === 'model') icon = '📦';
+    if (obj.id === 'workspace') icon = '🌐';
     div.innerHTML = `
         <span class="icon">${icon}</span>
         <span class="name">${escapeHtml(obj.name)}</span>
@@ -656,6 +976,24 @@ function updatePropertiesPanel() {
             <input type="range" id="propOpacity" min="0" max="1" step="0.01" value="${obj.userData.opacity}">
         </div>
         ` : ''}
+        ${obj.type === 'npc' ? `
+        <div class="prop-group">
+            <label>Поведение</label>
+            <select id="npcBehaviorProp">
+                <option value="idle">Стоять</option>
+                <option value="patrol">Патрулировать</option>
+                <option value="follow">Следовать</option>
+            </select>
+        </div>
+        <div class="prop-group">
+            <label>Скорость</label>
+            <input type="number" id="npcSpeedProp" step="0.5" value="${obj.userData.speed}">
+        </div>
+        <div class="prop-group">
+            <label>Диалог</label>
+            <textarea id="npcDialogProp">${obj.userData.dialog || ''}</textarea>
+        </div>
+        ` : ''}
         <button id="applyPropsBtn" style="background:#ff5722; border:none; border-radius:20px; padding:6px; color:white; margin-top:8px; width:100%;">Применить</button>
     `;
 
@@ -678,6 +1016,17 @@ function updatePropertiesPanel() {
             obj.threeObject.material.opacity = val;
         });
     }
+    if (obj.type === 'npc') {
+        document.getElementById('npcBehaviorProp')?.addEventListener('change', (e) => {
+            obj.userData.behavior = e.target.value;
+        });
+        document.getElementById('npcSpeedProp')?.addEventListener('change', (e) => {
+            obj.userData.speed = parseFloat(e.target.value);
+        });
+        document.getElementById('npcDialogProp')?.addEventListener('change', (e) => {
+            obj.userData.dialog = e.target.value;
+        });
+    }
     document.getElementById('applyPropsBtn')?.addEventListener('click', applyProps);
 }
 
@@ -697,14 +1046,38 @@ function applyProps() {
     renderExplorer();
 }
 
+// ========== СОХРАНЕНИЕ / ЗАГРУЗКА ==========
 async function saveGameLocal() {
+    const isElectron = typeof window.electronAPI !== 'undefined';
+    if (isElectron) {
+        const gameData = {
+            blocks: editorObjects.filter(o => o.id !== 'workspace').map(obj => serializeObject(obj)),
+            animations: animations,
+            gui: guiElements
+        };
+        let defaultPath;
+        if (window.currentProjectPath) {
+            defaultPath = window.currentProjectPath;
+        } else {
+            const projectsPath = await window.electronAPI.getProjectsPath();
+            const defaultName = `project_${new Date().toISOString().slice(0,19).replace(/:/g, '-')}.bvproj`;
+            defaultPath = `${projectsPath}/${defaultName}`;
+        }
+        const savedPath = await window.electronAPI.saveProject(defaultPath, gameData);
+        if (savedPath) {
+            window.currentProjectPath = savedPath;
+            alert('Проект сохранён на диск');
+        }
+        return;
+    }
+    // Старая логика сохранения в localStorage (для браузера)
     if (!window.currentUser) {
         alert('Вы не авторизованы для сохранения');
         return;
     }
     const gameName = prompt('Введите название игры для сохранения:');
     if (!gameName) return;
-    const blocksData = editorObjects.map(obj => serializeObject(obj));
+    const blocksData = editorObjects.filter(o => o.id !== 'workspace').map(obj => serializeObject(obj));
     const animationsData = animations.map(anim => ({
         id: anim.id,
         name: anim.name,
@@ -747,6 +1120,26 @@ function serializeObject(obj) {
             name: obj.name,
             config: obj.userData.config
         };
+    } else if (obj.type === 'npc') {
+        return {
+            type: 'npc',
+            id: obj.id,
+            name: obj.name,
+            userData: obj.userData,
+            position: { x: obj.threeObject.position.x, y: obj.threeObject.position.y, z: obj.threeObject.position.z },
+            rotation: { x: obj.threeObject.rotation.x, y: obj.threeObject.rotation.y, z: obj.threeObject.rotation.z },
+            scale: { x: obj.threeObject.scale.x, y: obj.threeObject.scale.y, z: obj.threeObject.scale.z }
+        };
+    } else if (obj.type === 'model') {
+        return {
+            type: 'model',
+            id: obj.id,
+            name: obj.name,
+            position: { x: obj.threeObject.position.x, y: obj.threeObject.position.y, z: obj.threeObject.position.z },
+            rotation: { x: obj.threeObject.rotation.x, y: obj.threeObject.rotation.y, z: obj.threeObject.rotation.z },
+            scale: { x: obj.threeObject.scale.x, y: obj.threeObject.scale.y, z: obj.threeObject.scale.z },
+            // Для GLTF нужно сохранить буфер? Не сохраняем, только ссылку на файл – это будет отдельно.
+        };
     } else {
         return {
             type: 'block',
@@ -772,7 +1165,7 @@ function deserializeObject(data) {
             id: data.id,
             name: data.name,
             type: 'group',
-            parentId: null,
+            parentId: 'workspace',
             childrenIds: [],
             threeObject: group
         };
@@ -794,11 +1187,30 @@ function deserializeObject(data) {
             id: data.id,
             name: data.name,
             type: 'particle',
-            parentId: null,
+            parentId: 'workspace',
             childrenIds: [],
             threeObject: ps,
             userData: { type: 'particle', config: data.config }
         };
+    } else if (data.type === 'npc') {
+        const geometry = new THREE.BoxGeometry(0.8, 1.2, 0.8);
+        const material = new THREE.MeshStandardMaterial({ color: 0x88aa88 });
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.position.copy(data.position);
+        mesh.rotation.copy(data.rotation);
+        mesh.scale.copy(data.scale);
+        mesh.userData = data.userData;
+        const obj = {
+            id: data.id,
+            name: data.name,
+            type: 'npc',
+            parentId: 'workspace',
+            childrenIds: [],
+            threeObject: mesh,
+            userData: data.userData
+        };
+        npcList.push(obj);
+        return obj;
     } else {
         const mesh = createBlockMesh(data.shape, data.scale, data.color, data.opacity, 'block');
         mesh.position.copy(data.position);
@@ -808,7 +1220,7 @@ function deserializeObject(data) {
             id: data.id,
             name: data.name,
             type: 'block',
-            parentId: null,
+            parentId: 'workspace',
             childrenIds: [],
             threeObject: mesh,
             userData: { type: 'block', shape: data.shape, color: data.color, opacity: data.opacity }
@@ -816,25 +1228,24 @@ function deserializeObject(data) {
     }
 }
 
-function loadGameForEditing(game) {
+function loadGameIntoEditor(gameData) {
     clearEditor();
-    if (!game.data || !game.data.blocks) return;
-    game.data.blocks.forEach(blockData => {
-        const obj = deserializeObject(blockData);
-        if (obj) addObject(obj);
-    });
-    if (game.data.animations) {
-        animations = game.data.animations.map(anim => ({
-            ...anim,
-            tracks: anim.tracks.map(track => ({ ...track }))
-        }));
+    if (gameData.blocks) {
+        gameData.blocks.forEach(blockData => {
+            const obj = deserializeObject(blockData);
+            if (obj) addObject(obj);
+        });
+    }
+    if (gameData.animations) {
+        animations = gameData.animations;
         updateAnimationSelect();
     }
-    if (game.data.gui) {
-        guiElements = game.data.gui;
+    if (gameData.gui) {
+        guiElements = gameData.gui;
         renderGUIList();
     }
     selectObject(null);
+    renderNpcList();
 }
 
 function clearEditor() {
@@ -845,26 +1256,29 @@ function clearEditor() {
     selectedObjects = [];
     animations = [];
     guiElements = [];
+    npcList = [];
     if (transformControls.object) transformControls.detach();
     renderExplorer();
     updatePropertiesPanel();
     updateAnimationSelect();
     renderGUIList();
+    renderNpcList();
 }
 
-// ========== ИНИЦИАЛИЗАЦИЯ ==========
+// ========== ИНИЦИАЛИЗАЦИЯ РЕДАКТОРА ==========
 function initEditor() {
     if (editorActive) return;
     const container = document.getElementById('editorCanvasContainer');
     container.innerHTML = '';
     editorScene = new THREE.Scene();
-    editorScene.background = new THREE.Color(0x87CEEB);
-    editorScene.fog = new THREE.Fog(0x87CEEB, 40, 80);
+    editorScene.background = new THREE.Color(0x111122);
+    editorScene.fog = new THREE.Fog(0x111122, 40, 80);
     editorCamera = new THREE.PerspectiveCamera(45, container.clientWidth/container.clientHeight, 0.1, 1000);
     editorCamera.position.set(10, 8, 10);
     editorRenderer = new THREE.WebGLRenderer({ antialias: true });
     editorRenderer.setSize(container.clientWidth, container.clientHeight);
     editorRenderer.shadowMap.enabled = true;
+    editorRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.appendChild(editorRenderer.domElement);
     editorControls = new OrbitControls(editorCamera, editorRenderer.domElement);
     editorControls.enableDamping = true;
@@ -874,15 +1288,22 @@ function initEditor() {
     transformControls.addEventListener('objectChange', () => { if (selectedObjects.length) updatePropertiesPanel(); });
     editorScene.add(transformControls);
 
+    // Улучшенное освещение
     const ambient = new THREE.AmbientLight(0x404060);
     editorScene.add(ambient);
-    const dirLight = new THREE.DirectionalLight(0xffaa66, 1);
+    const dirLight = new THREE.DirectionalLight(0xfff5d1, 1.2);
     dirLight.position.set(5, 10, 7);
     dirLight.castShadow = true;
+    dirLight.receiveShadow = true;
+    dirLight.shadow.mapSize.width = 1024;
+    dirLight.shadow.mapSize.height = 1024;
     editorScene.add(dirLight);
     const fillLight = new THREE.PointLight(0x4466cc, 0.5);
     fillLight.position.set(2, 3, 4);
     editorScene.add(fillLight);
+    const backLight = new THREE.PointLight(0xffaa66, 0.3);
+    backLight.position.set(-3, 2, -4);
+    editorScene.add(backLight);
     const gridHelper = new THREE.GridHelper(30, 20, 0x88aaff, 0x335588);
     editorScene.add(gridHelper);
     const axesHelper = new THREE.AxesHelper(5);
@@ -895,7 +1316,7 @@ function initEditor() {
         id: generateId(),
         name: 'Платформа',
         type: 'block',
-        parentId: null,
+        parentId: 'workspace',
         childrenIds: [],
         threeObject: platformMesh,
         userData: { type: 'block', shape: 'cube', color: '#6B8E23', opacity: 1 }
@@ -907,7 +1328,7 @@ function initEditor() {
         id: generateId(),
         name: 'Спавн',
         type: 'block',
-        parentId: null,
+        parentId: 'workspace',
         childrenIds: [],
         threeObject: spawnMesh,
         userData: { type: 'spawn', shape: 'cube', color: '#ff3333', opacity: 1 }
@@ -915,7 +1336,7 @@ function initEditor() {
     addObject(spawnObj);
     addDefaultBlock();
 
-    // Привязка кнопок
+    // Привязка кнопок тулбара
     document.getElementById('modeMoveBtn').onclick = () => {
         transformControls.setMode('translate');
         currentTransformMode = 'translate';
@@ -1006,6 +1427,10 @@ function initEditor() {
         };
         addParticleSystem(config);
     });
+    document.getElementById('vfxFireBtn')?.addEventListener('click', () => addParticleSystemPreset('fire'));
+    document.getElementById('vfxWaterBtn')?.addEventListener('click', () => addParticleSystemPreset('water'));
+    document.getElementById('vfxAirBtn')?.addEventListener('click', () => addParticleSystemPreset('air'));
+    document.getElementById('vfxSmokeBtn')?.addEventListener('click', () => addParticleSystemPreset('smoke'));
 
     // Анимации
     document.getElementById('newAnimationBtn')?.addEventListener('click', () => {
@@ -1061,12 +1486,12 @@ function initEditor() {
             recordProperty('scale', scale);
         }
     });
-
     function recordProperty(property, value) {
         if (!recording || !recordTarget) return;
         const time = performance.now() / 1000 - recordStartTime;
         recordedKeyframes.push({ time, property, value: value.clone ? value.clone() : value });
     }
+    initTimeline();
 
     // GUI
     document.getElementById('addButtonBtn')?.addEventListener('click', () => {
@@ -1079,6 +1504,14 @@ function initEditor() {
         addGUIElement('text', { name: 'Текст', text: 'Привет, мир!', x: 100, y: 300, width: 200, height: 30, fontSize: 14 });
     });
 
+    // NPC
+    document.getElementById('createNpcBtn')?.addEventListener('click', () => createNPC());
+    document.getElementById('importModelBtn')?.addEventListener('click', importGLTFModel);
+    document.getElementById('saveNpcBtn')?.addEventListener('click', saveNPCProperties);
+
+    // Скульптинг
+    initSculpting();
+
     // Вкладки и подразделы
     const tabs = document.querySelectorAll('.tab');
     const subpanels = {
@@ -1086,7 +1519,9 @@ function initEditor() {
         vfx: document.getElementById('subpanelVfx'),
         animations: document.getElementById('subpanelAnimations'),
         scripts: document.getElementById('subpanelScripts'),
-        gui: document.getElementById('subpanelGui')
+        gui: document.getElementById('subpanelGui'),
+        npc: document.getElementById('subpanelNpc'),
+        sculpt: document.getElementById('subpanelSculpt')
     };
     tabs.forEach(tab => {
         tab.addEventListener('click', () => {
@@ -1111,7 +1546,7 @@ function initEditor() {
         if (scriptArea && selectedObjects[0].userData.script) scriptArea.value = selectedObjects[0].userData.script;
     }
 
-    if (gameBeingEdited) loadGameForEditing(gameBeingEdited);
+    if (gameBeingEdited) loadGameIntoEditor(gameBeingEdited);
     function animateEditor() { if (!editorActive) return; editorAnimationId = requestAnimationFrame(animateEditor); editorControls.update(); 
         const delta = 1/60;
         for (let obj of editorObjects) {
@@ -1130,4 +1565,4 @@ export function openEditor(gameToEdit = null) {
     document.getElementById('mainMenuScreen').classList.add('hidden');
     document.getElementById('editorScreen').classList.remove('hidden');
     initEditor();
-        }
+    }

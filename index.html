@@ -7,23 +7,151 @@
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <style>
-        /* ВСЕ ВАШИ СТИЛИ (оставьте как есть) */
-        /* ... здесь ваш существующий CSS ... */
-        /* Убедитесь, что стили для новых вкладок и подразделов уже есть */
+        /* ========== ОСНОВНЫЕ СТИЛИ ========== */
+        * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; -webkit-tap-highlight-color: transparent; }
+        body { font-family: 'Segoe UI', 'Poppins', system-ui, sans-serif; background: linear-gradient(135deg, #0f0c29, #302b63, #24243e); color: white; overflow: hidden; height: 100vh; width: 100%; position: fixed; }
+        .screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; overflow-y: auto; overflow-x: hidden; padding: 20px; }
+        .hidden { display: none; }
+
+        /* ========== ГЛАВНОЕ МЕНЮ ========== */
+        .header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-bottom: 30px; background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); padding: 12px 24px; border-radius: 60px; }
+        .logo { font-size: 28px; font-weight: bold; background: linear-gradient(135deg, #ffaa44, #ff5722); -webkit-background-clip: text; background-clip: text; color: transparent; }
+        .user-info { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+        .coin-badge { background: #f0b90b; color: #1e1e2a; padding: 6px 14px; border-radius: 40px; font-weight: bold; display: flex; align-items: center; gap: 6px; }
+        .nav-buttons { display: flex; gap: 12px; flex-wrap: wrap; }
+        .nav-btn { background: rgba(255,255,255,0.1); backdrop-filter: blur(4px); padding: 8px 20px; border-radius: 40px; cursor: pointer; font-weight: 500; transition: 0.2s; border: 1px solid rgba(255,255,255,0.2); }
+        .nav-btn:hover { background: #ff5722; border-color: #ffaa44; }
+
+        /* Сетки игр и проектов */
+        .games-grid, .my-projects-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 24px; margin-top: 20px; max-height: calc(100vh - 200px); overflow-y: auto; padding-right: 10px; }
+        .game-card, .project-card { background: rgba(30, 35, 55, 0.8); backdrop-filter: blur(8px); border-radius: 24px; overflow: hidden; cursor: pointer; border: 1px solid rgba(255,255,255,0.15); transition: 0.2s; }
+        .game-card:hover, .project-card:hover { transform: translateY(-5px); border-color: #ffaa44; }
+        .game-image { height: 140px; background: linear-gradient(135deg, #2a3a5a, #1a2a4a); display: flex; align-items: center; justify-content: center; font-size: 48px; }
+        .game-info, .project-card { padding: 16px; }
+        .game-title { font-size: 20px; font-weight: bold; }
+        .game-author { font-size: 12px; color: #aaa; margin: 4px 0; }
+        .play-btn { background: #ff5722; border: none; padding: 8px 16px; border-radius: 30px; font-weight: bold; cursor: pointer; margin-top: 8px; width: 100%; }
+
+        /* Социальные панели */
+        .social-panels { display: flex; gap: 20px; margin-top: 20px; flex-wrap: wrap; }
+        .panel { background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); border-radius: 20px; padding: 16px; flex: 1; min-width: 250px; }
+        .friend-list, .chat-messages { max-height: 200px; overflow-y: auto; margin-bottom: 12px; }
+        .friend-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.2); }
+        .chat-input { display: flex; gap: 8px; }
+        .chat-input input { flex: 1; padding: 8px 12px; border-radius: 40px; border: none; background: rgba(255,255,255,0.2); color: white; }
+        .chat-input button { background: #ff5722; border: none; padding: 8px 16px; border-radius: 40px; cursor: pointer; }
+        .shop-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px; margin-top: 24px; max-height: calc(100vh - 200px); overflow-y: auto; }
+        .shop-item { background: rgba(30, 35, 55, 0.9); border-radius: 20px; padding: 16px; text-align: center; backdrop-filter: blur(8px); }
+        .price { color: #ffaa44; font-weight: bold; font-size: 20px; }
+        .buy-btn { background: #2a6f3f; margin-top: 12px; }
+
+        /* ========== КОНСТРУКТОР ========== */
+        .editor-layout { position: relative; width: 100%; height: 100%; display: flex; flex-direction: column; }
+        .top-bar { background: rgba(44, 47, 54, 0.95); backdrop-filter: blur(8px); border-bottom: 1px solid rgba(255,255,255,0.2); padding: 8px 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; z-index: 60; }
+        .tool-group { display: flex; gap: 4px; background: rgba(58, 62, 71, 0.8); border-radius: 30px; padding: 4px 8px; flex-wrap: wrap; }
+        .top-bar button { background: none; border: none; color: white; padding: 6px 12px; border-radius: 30px; cursor: pointer; font-size: 13px; font-weight: bold; transition: 0.2s; }
+        .top-bar button.active { background: #ff5722; }
+        .tabs { display: flex; gap: 8px; margin-left: auto; flex-wrap: wrap; }
+        .tab { background: rgba(58, 62, 71, 0.8); padding: 6px 16px; border-radius: 30px; cursor: pointer; font-size: 13px; font-weight: bold; }
+        .tab.active { background: #ff5722; color: white; }
+        .editor-main { display: flex; flex: 1; overflow: hidden; flex-direction: row; }
+        .viewport-area { flex: 1; position: relative; }
+        .editor-canvas { width: 100%; height: 100%; background: #1e1f24; }
+        .right-panel { width: 280px; background: rgba(44, 47, 54, 0.95); backdrop-filter: blur(8px); display: flex; flex-direction: column; border-left: 1px solid rgba(255,255,255,0.2); }
+        .explorer-panel { flex: 1; overflow-y: auto; border-bottom: 1px solid rgba(255,255,255,0.2); }
+        .properties-panel { height: 40%; overflow-y: auto; }
+        .panel-header { padding: 8px 12px; background: rgba(30, 31, 36, 0.8); font-weight: bold; border-bottom: 1px solid rgba(255,255,255,0.2); font-size: 13px; }
+        .explorer-tree { padding: 8px; user-select: none; }
+        .explorer-item { padding: 4px 8px; margin: 2px 0; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+        .explorer-item:hover { background: rgba(58, 62, 71, 0.8); }
+        .explorer-item.selected { background: #0e639c; }
+        .explorer-item .controls { display: none; gap: 4px; }
+        .explorer-item:hover .controls { display: flex; }
+        .explorer-children { margin-left: 20px; }
+        .properties-content { padding: 12px; overflow-y: auto; }
+        .prop-group { margin-bottom: 12px; }
+        .prop-group label { display: block; margin-bottom: 4px; font-size: 12px; color: #aaa; }
+        .prop-group input, .prop-group select, .prop-group textarea { width: 100%; background: rgba(26, 31, 46, 0.9); border: 1px solid rgba(74, 110, 138, 0.8); border-radius: 20px; padding: 6px 10px; color: white; font-size: 12px; }
+        .sub-panels { background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); border-bottom: 1px solid rgba(255,255,255,0.2); padding: 8px 12px; display: none; }
+        .sub-panels.active { display: block; }
+        .block-palette { display: flex; gap: 10px; flex-wrap: wrap; }
+        .block-option { width: 48px; height: 48px; border-radius: 12px; cursor: pointer; border: 2px solid transparent; }
+        .block-option.selected { border-color: #ffaa44; transform: scale(1.05); }
+        .exit-editor-btn, .exit-game { position: absolute; top: 20px; right: 20px; background: #ff3333; border: none; padding: 8px 16px; border-radius: 40px; color: white; cursor: pointer; z-index: 61; font-weight: bold; }
+        .status-bar { position: absolute; bottom: 20px; right: 20px; background: rgba(0,0,0,0.6); padding: 6px 12px; border-radius: 20px; font-size: 12px; z-index: 30; }
+        .custom-game-ui { position: absolute; bottom: 20px; left: 20px; background: rgba(0,0,0,0.6); padding: 8px 16px; border-radius: 20px; z-index: 20; font-weight: bold; }
+        .server-join { margin: 20px 0; display: flex; gap: 12px; align-items: center; background: rgba(0,0,0,0.5); padding: 8px 16px; border-radius: 40px; flex-wrap: wrap; }
+        .code-editor { background: #1a1f2e; border: 1px solid #4a6e8a; border-radius: 12px; padding: 8px; font-family: monospace; font-size: 12px; color: white; width: 100%; min-height: 120px; resize: vertical; }
+        .gui-preview { background: rgba(44, 47, 54, 0.8); border-radius: 8px; padding: 8px; margin-top: 8px; min-height: 100px; position: relative; }
+        #mobileControls { position: fixed; bottom: 20px; left: 0; right: 0; pointer-events: none; z-index: 1000; display: none; }
+        #joystickContainer { position: absolute; bottom: 0; left: 20px; width: 120px; height: 120px; background: rgba(0,0,0,0.5); border-radius: 60px; pointer-events: auto; }
+        #joystickThumb { position: absolute; width: 50px; height: 50px; background: rgba(255,255,255,0.8); border-radius: 25px; top: 35px; left: 35px; transition: 0.05s linear; }
+        #mobileJumpBtn { position: absolute; bottom: 20px; right: 20px; width: 70px; height: 70px; background: rgba(255,87,34,0.9); border: none; border-radius: 35px; color: white; font-size: 20px; font-weight: bold; pointer-events: auto; box-shadow: 0 4px 8px rgba(0,0,0,0.3); }
+        @media (max-width: 768px) { .right-panel { width: 240px; } .top-bar { flex-direction: column; align-items: stretch; } .tabs { margin-left: 0; justify-content: center; } .editor-main { flex-direction: column; } .right-panel { width: 100%; height: 30%; border-left: none; border-top: 1px solid rgba(255,255,255,0.2); } }
     </style>
 </head>
 <body>
 <script>
-    // Проверка сессии
     if (!sessionStorage.getItem('blockverse_session')) {
         window.location.href = 'login.html';
     }
 </script>
 
+<!-- ГЛАВНОЕ МЕНЮ -->
 <div id="mainMenuScreen" class="screen">
-    <!-- ваш существующий header, панели игр, проектов и т.д. -->
+    <div class="header">
+        <div class="logo">🌟 BlockVerse</div>
+        <div class="user-info">
+            <div class="coin-badge">🪙 <span id="userCoins">0</span> монет</div>
+            <div id="usernameDisplay" style="font-weight:500;"></div>
+            <div class="nav-buttons">
+                <div class="nav-btn" id="showGamesBtn">🎮 Игры</div>
+                <div class="nav-btn" id="showMyProjectsBtn">📁 Мои проекты</div>
+                <div class="nav-btn" id="showShopBtn">🛒 Магазин</div>
+                <div class="nav-btn" id="showSocialBtn">👥 Социальное</div>
+                <div class="nav-btn" id="showSettingsBtn">⚙️ Настройки</div>
+                <div class="nav-btn" id="createGameBtn">🛠️ Конструктор</div>
+                <div class="nav-btn" id="logoutBtn">🚪 Выйти</div>
+            </div>
+        </div>
+    </div>
+    <div id="gamesPanel">
+        <h2 style="margin: 20px 0 10px;">🔥 Игровые серверы</h2>
+        <div class="server-join">
+            <input type="text" id="serverIdInput" placeholder="ID сервера">
+            <button id="connectToServerBtn" class="btn" style="width:auto; padding:8px 20px;">🔗 Подключиться</button>
+        </div>
+        <div class="games-grid" id="gamesList"></div>
+    </div>
+    <div id="myProjectsPanel" style="display: none;">
+        <h2 style="margin: 20px 0 10px;">📁 Мои проекты</h2>
+        <div id="myProjectsList" class="my-projects-grid"></div>
+    </div>
+    <div id="shopPanel" style="display: none;">
+        <h2 style="margin: 20px 0 10px;">✨ Магазин предметов</h2>
+        <div class="shop-grid" id="shopItemsList"></div>
+        <div style="margin-top: 30px; text-align: center;"><button id="earnCoinsBtn" class="btn" style="width: auto; padding: 10px 30px;">➕ Получить 100 монет</button></div>
+    </div>
+    <div id="socialPanel" style="display: none;">
+        <h2 style="margin: 20px 0 10px;">👥 Социальная сеть</h2>
+        <div class="social-panels">
+            <div class="panel"><h3>Мои друзья</h3><div id="friendsList" class="friend-list"></div><div class="chat-input"><input type="text" id="friendSearch" placeholder="Имя пользователя"><button id="addFriendBtn">➕ Добавить друга</button></div></div>
+            <div class="panel"><h3>Глобальный чат</h3><div id="chatMessages" class="chat-messages"></div><div class="chat-input"><input type="text" id="chatInput" placeholder="Написать сообщение..."><button id="sendChatBtn">📨 Отправить</button></div></div>
+        </div>
+    </div>
+    <div id="settingsPanel" style="display: none;">
+        <h2 style="margin: 20px 0 10px;">⚙️ Настройки</h2>
+        <div class="settings-panel">
+            <h3>Камера</h3><label>Чувствительность мыши:</label><input type="range" id="mouseSensitivity" min="0.001" max="0.01" step="0.0005" value="0.005">
+            <label>Скорость движения:</label><input type="range" id="moveSpeed" min="2" max="6" step="0.5" value="4">
+            <h3>Графика</h3><label>Качество теней:</label><select id="shadowQuality"><option value="low">Низкое</option><option value="medium">Среднее</option><option value="high" selected>Высокое</option></select>
+            <h3>Система репортов</h3><button id="reportBugBtn" class="btn" style="width: auto; padding: 8px 20px;">📝 Сообщить о проблеме</button>
+            <div id="reportsList" style="margin-top: 20px; max-height: 200px; overflow-y: auto;"></div>
+        </div>
+    </div>
 </div>
 
+<!-- КОНСТРУКТОР -->
 <div id="editorScreen" class="screen hidden">
     <div class="editor-layout">
         <div class="top-bar">
@@ -51,96 +179,14 @@
                 <div class="tab" data-tab="sculpt">Скульптинг</div>
             </div>
         </div>
-
         <!-- Подразделы -->
-        <div id="subpanelBlocks" class="sub-panels active">
-            <div class="block-palette">
-                <div class="block-option" data-type="wood" style="background:#8B5A2B;"></div>
-                <div class="block-option" data-type="stone" style="background:#808080;"></div>
-                <div class="block-option" data-type="concrete" style="background:#B0B0B0;"></div>
-                <div class="block-option" data-type="dirt" style="background:#6B4C3B;"></div>
-            </div>
-        </div>
-        <div id="subpanelVfx" class="sub-panels">
-            <div style="color: white; margin-bottom: 8px;">✨ Системы частиц</div>
-            <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
-                <button id="addParticleBtn" style="background:#ff5722;">➕ Добавить частицы</button>
-                <button id="vfxFireBtn" style="background:#ff884d;">🔥 Огонь</button>
-                <button id="vfxWaterBtn" style="background:#2a6f8a;">💧 Вода</button>
-                <button id="vfxAirBtn" style="background:#aaccff;">💨 Воздух</button>
-                <button id="vfxSmokeBtn" style="background:#888;">🌫️ Дым</button>
-            </div>
-        </div>
-        <div id="subpanelAnimations" class="sub-panels">
-            <div style="display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;">
-                <button id="newAnimationBtn">➕ Создать</button>
-                <select id="animationSelect">
-                    <option value="">-- Выберите анимацию --</option>
-                </select>
-                <button id="playAnimationBtn">▶ Воспроизвести</button>
-                <button id="stopAnimationBtn">⏹ Стоп</button>
-                <button id="recordAnimationBtn">🎥 Записать</button>
-            </div>
-            <div style="background:#1a1f2e; border-radius:8px; padding:8px;">
-                <div id="timeline" style="position:relative; height:120px; background:#2c2f36; border-radius:8px; overflow-x:auto;">
-                    <canvas id="timelineCanvas" width="1000" height="120" style="display:block; background:#2c2f36;"></canvas>
-                </div>
-                <div style="display: flex; justify-content: space-between; margin-top: 4px;">
-                    <span id="currentTime">0.00</span>
-                    <span id="animationDuration">1.00</span>
-                </div>
-            </div>
-            <div style="margin-top: 8px;">
-                <div id="keyframeList" style="max-height: 100px; overflow-y: auto; background:#1a1f2e; border-radius:8px; padding:4px;"></div>
-            </div>
-        </div>
-        <div id="subpanelScripts" class="sub-panels">
-            <div style="color: white; margin-bottom: 8px;">📜 Скрипт для выбранного блока</div>
-            <textarea id="blockScriptEditor" class="code-editor" rows="6" placeholder='// Ваш скрипт здесь'></textarea>
-            <button id="applyScriptBtn" style="background:#ff5722; border:none; border-radius:20px; padding:6px 12px; margin-top:8px;">💾 Применить скрипт</button>
-        </div>
-        <div id="subpanelGui" class="sub-panels">
-            <div style="color: white; margin-bottom: 8px;">🎨 GUI Элементы</div>
-            <div style="display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;">
-                <button id="addButtonBtn">➕ Кнопка</button>
-                <button id="addPanelBtn">📦 Панель</button>
-                <button id="addTextBtn">📝 Текст</button>
-            </div>
-            <div id="guiElementsList" style="max-height: 100px; overflow-y: auto; margin-bottom: 8px; background:#1a1f2e; border-radius:12px; padding:8px;"></div>
-            <div class="gui-preview" id="guiPreview"></div>
-        </div>
-        <div id="subpanelNpc" class="sub-panels">
-            <div style="margin-bottom: 12px;">
-                <button id="createNpcBtn" style="background:#ff5722;">➕ Создать NPC</button>
-                <button id="importModelBtn" style="background:#4a6e8a;">📁 Импорт GLTF</button>
-            </div>
-            <div id="npcList" style="max-height: 150px; overflow-y: auto;"></div>
-            <div id="npcProperties" style="margin-top: 12px; background:#1a1f2e; border-radius:12px; padding:8px;">
-                <h4>Свойства NPC</h4>
-                <label>Имя: <input type="text" id="npcName" style="width:100%"></label>
-                <label>Поведение:
-                    <select id="npcBehavior">
-                        <option value="idle">Стоять</option>
-                        <option value="patrol">Патрулировать</option>
-                        <option value="follow">Следовать за игроком</option>
-                    </select>
-                </label>
-                <label>Скорость: <input type="number" id="npcSpeed" value="2" step="0.5"></label>
-                <label>Диалог: <textarea id="npcDialog" rows="2" placeholder="Привет!"></textarea></label>
-                <button id="saveNpcBtn" style="background:#ff5722; margin-top:8px;">Сохранить</button>
-            </div>
-        </div>
-        <div id="subpanelSculpt" class="sub-panels">
-            <div style="margin-bottom: 8px;">
-                <button id="sculptBrushBtn" class="active" data-mode="pull">Тянуть</button>
-                <button id="sculptSmoothBtn" data-mode="smooth">Сгладить</button>
-                <button id="sculptFlattenBtn" data-mode="flatten">Выровнять</button>
-                <button id="sculptResetBtn">Сбросить</button>
-            </div>
-            <label>Радиус: <input type="range" id="sculptRadius" min="0.1" max="2" step="0.05" value="0.5"></label>
-            <label>Сила: <input type="range" id="sculptStrength" min="0" max="1" step="0.01" value="0.2"></label>
-            <div id="sculptStatus">Выберите объект для скульптинга</div>
-        </div>
+        <div id="subpanelBlocks" class="sub-panels active"><div class="block-palette"><div class="block-option" data-type="wood" style="background:#8B5A2B;"></div><div class="block-option" data-type="stone" style="background:#808080;"></div><div class="block-option" data-type="concrete" style="background:#B0B0B0;"></div><div class="block-option" data-type="dirt" style="background:#6B4C3B;"></div></div></div>
+        <div id="subpanelVfx" class="sub-panels"><div style="color: white; margin-bottom: 8px;">✨ Системы частиц</div><button id="addParticleBtn">➕ Добавить частицы</button></div>
+        <div id="subpanelAnimations" class="sub-panels"><div style="display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;"><button id="newAnimationBtn">➕ Создать</button><select id="animationSelect"><option value="">-- Выберите анимацию --</option></select><button id="playAnimationBtn">▶ Воспроизвести</button><button id="stopAnimationBtn">⏹ Стоп</button><button id="recordAnimationBtn">🎥 Записать</button></div><div style="background:#1a1f2e; border-radius:8px; padding:8px;"><div id="timeline" style="position:relative; height:120px; background:#2c2f36; border-radius:8px; overflow-x:auto;"><canvas id="timelineCanvas" width="1000" height="120" style="display:block; background:#2c2f36;"></canvas></div><div style="display: flex; justify-content: space-between; margin-top: 4px;"><span id="currentTime">0.00</span><span id="animationDuration">1.00</span></div></div><div id="keyframeList" style="max-height: 100px; overflow-y: auto; background:#1a1f2e; border-radius:8px; padding:4px;"></div></div>
+        <div id="subpanelScripts" class="sub-panels"><div style="color: white; margin-bottom: 8px;">📜 Скрипт для выбранного блока</div><textarea id="blockScriptEditor" class="code-editor" rows="6" placeholder='// Ваш скрипт здесь'></textarea><button id="applyScriptBtn">💾 Применить скрипт</button></div>
+        <div id="subpanelGui" class="sub-panels"><div style="color: white; margin-bottom: 8px;">🎨 GUI Элементы</div><div style="display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;"><button id="addButtonBtn">➕ Кнопка</button><button id="addPanelBtn">📦 Панель</button><button id="addTextBtn">📝 Текст</button></div><div id="guiElementsList" style="max-height: 100px; overflow-y: auto; margin-bottom: 8px; background:#1a1f2e; border-radius:12px; padding:8px;"></div><div class="gui-preview" id="guiPreview"></div></div>
+        <div id="subpanelNpc" class="sub-panels"><div style="margin-bottom: 12px;"><button id="createNpcBtn">➕ Создать NPC</button><button id="importModelBtn">📁 Импорт GLTF</button></div><div id="npcList" style="max-height: 150px; overflow-y: auto;"></div><div id="npcProperties" style="margin-top: 12px; background:#1a1f2e; border-radius:12px; padding:8px;"><h4>Свойства NPC</h4><label>Имя: <input type="text" id="npcName" style="width:100%"></label><label>Поведение: <select id="npcBehavior"><option value="idle">Стоять</option><option value="patrol">Патрулировать</option><option value="follow">Следовать за игроком</option></select></label><label>Скорость: <input type="number" id="npcSpeed" value="2" step="0.5"></label><label>Диалог: <textarea id="npcDialog" rows="2" placeholder="Привет!"></textarea></label><button id="saveNpcBtn">Сохранить</button></div></div>
+        <div id="subpanelSculpt" class="sub-panels"><div><button id="sculptBrushBtn" data-mode="pull">Тянуть</button><button id="sculptSmoothBtn" data-mode="smooth">Сгладить</button><button id="sculptFlattenBtn" data-mode="flatten">Выровнять</button><button id="sculptResetBtn">Сбросить</button></div><label>Радиус: <input type="range" id="sculptRadius" min="0.1" max="2" step="0.05" value="0.5"></label><label>Сила: <input type="range" id="sculptStrength" min="0" max="1" step="0.01" value="0.2"></label><div id="sculptStatus">Выберите объект для скульптинга</div></div>
 
         <div class="editor-main">
             <div class="viewport-area">
@@ -149,14 +195,8 @@
                 <div class="status-bar" id="editorStatus">Готово</div>
             </div>
             <div class="right-panel">
-                <div class="explorer-panel">
-                    <div class="panel-header">📁 Проводник (Workspace)</div>
-                    <div id="explorerTree" class="explorer-tree"></div>
-                </div>
-                <div class="properties-panel">
-                    <div class="panel-header">⚙️ Свойства</div>
-                    <div id="propertiesContent" class="properties-content"></div>
-                </div>
+                <div class="explorer-panel"><div class="panel-header">📁 Проводник (Workspace)</div><div id="explorerTree" class="explorer-tree"></div></div>
+                <div class="properties-panel"><div class="panel-header">⚙️ Свойства</div><div id="propertiesContent" class="properties-content"></div></div>
             </div>
         </div>
     </div>
@@ -168,22 +208,12 @@
     <div class="custom-game-ui">Счёт: 0</div>
 </div>
 
-<div id="mobileControls">
-    <div style="position: relative; width: 100%; height: 150px;">
-        <div id="joystickContainer"><div id="joystickBase"><div id="joystickThumb"></div></div></div>
-        <button id="mobileJumpBtn">ПРЫЖОК</button>
-    </div>
-</div>
+<div id="mobileControls"><div style="position: relative; width: 100%; height: 150px;"><div id="joystickContainer"><div id="joystickBase"><div id="joystickThumb"></div></div></div><button id="mobileJumpBtn">ПРЫЖОК</button></div></div>
 
 <script type="importmap">
-    {
-        "imports": {
-            "three": "https://unpkg.com/three@0.128.0/build/three.module.js",
-            "three/addons/": "https://unpkg.com/three@0.128.0/examples/jsm/"
-        }
-    }
+    { "imports": { "three": "https://unpkg.com/three@0.128.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.128.0/examples/jsm/" } }
 </script>
 <script type="module" src="platform.js"></script>
 <script type="module" src="editor.js"></script>
 </body>
-    </html>
+</html>

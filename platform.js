@@ -3,14 +3,9 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import * as API from './api.js';
-import { connectToServer, requestGamesList, createGameOnServer, joinGame, sendPosition, leaveGame } from './network.js';
 
 let currentUser = null;
 let chatPollingInterval = null;
-let ws = null;
-let currentGameId = null;
-let myPlayerId = null;
-let remotePlayers = new Map();
 let gameScene = null, gameCamera = null, gameRenderer = null, gamePlayer = null;
 let gameActive = false;
 let gameAnimationId = null;
@@ -39,11 +34,99 @@ window.currentUser = currentUser;
 window.customGames = [];
 window.saveGames = () => {};
 window.renderMyProjects = renderMyProjects;
-window.createGameOnServer = createGameOnServer;
 window.addCoins = addCoins;
 window.spendCoins = spendCoins;
 
-// ========== МОБИЛЬНОЕ УПРАВЛЕНИЕ (НОРМАЛЬНАЯ ГИЛЬЗА) ==========
+// ========== ЛОКАЛЬНЫЙ МУЛЬТИПЛЕЕР (без внешнего WebSocket) ==========
+// Хранилище активных игр (в памяти)
+let activeGames = new Map();
+let currentGameId = null;
+let remotePlayers = new Map();
+
+// Создать новую игру
+function createLocalGame(gameName, gameData) {
+    const gameId = 'game_' + Date.now() + '_' + Math.random().toString(36).substr(2, 8);
+    activeGames.set(gameId, {
+        id: gameId,
+        name: gameName,
+        author: currentUser?.username || 'Гость',
+        players: 1,
+        gameData: gameData,
+        playersList: [{ id: 'local_' + Date.now(), name: currentUser?.username || 'Игрок', position: { x: 0, y: 1, z: 0 } }]
+    });
+    alert(`Игра "${gameName}" создана! ID: ${gameId}`);
+    renderLocalGamesList();
+    return gameId;
+}
+
+// Получить список активных игр
+function getLocalGamesList() {
+    return Array.from(activeGames.values()).map(g => ({
+        id: g.id,
+        name: g.name,
+        author: g.author,
+        players: g.playersList.length
+    }));
+}
+
+// Присоединиться к игре
+function joinLocalGame(gameId, gameData, playerName) {
+    const game = activeGames.get(gameId);
+    if (!game) {
+        alert('Игра не найдена');
+        return false;
+    }
+    currentGameId = gameId;
+    startLocalMultiplayerSession(game.gameData, game.name, game);
+    return true;
+}
+
+// Рендер списка игр в UI
+function renderLocalGamesList() {
+    const container = document.getElementById('gamesList');
+    if (!container) return;
+    const games = getLocalGamesList();
+    container.innerHTML = '';
+    if (games.length === 0) {
+        container.innerHTML = '<p>Нет активных серверов. Создайте новый!</p>';
+        return;
+    }
+    games.forEach(game => {
+        const card = document.createElement('div');
+        card.className = 'game-card';
+        card.innerHTML = `
+            <div class="game-image">🎲</div>
+            <div class="game-info">
+                <div class="game-title">${game.name}</div>
+                <div class="game-author">👤 ${game.author} | 🟢 ${game.players} игроков</div>
+                <button class="play-btn" data-id="${game.id}">Играть</button>
+            </div>
+        `;
+        container.appendChild(card);
+    });
+    document.querySelectorAll('.play-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const gameId = btn.dataset.id;
+            const game = activeGames.get(gameId);
+            if (game) {
+                joinLocalGame(gameId, game.gameData, currentUser?.username);
+            }
+        });
+    });
+}
+
+// Создать игру из редактора
+function publishGameToMultiplayer(name, data) {
+    if (!currentUser) {
+        alert('Вы не авторизованы');
+        return;
+    }
+    const gameId = createLocalGame(name, data);
+    alert(`Игра "${name}" опубликована! ID: ${gameId}`);
+    renderLocalGamesList();
+}
+
+// ========== МОБИЛЬНОЕ УПРАВЛЕНИЕ ==========
 let joystickActive = false;
 let joystickVector = { x: 0, z: 0 };
 let mobileJump = false;
@@ -64,16 +147,11 @@ function initMobileControls() {
         const touch = e.touches[0];
         touchId = touch.identifier;
         joystickActive = true;
-        
-        // Вычисляем центр джойстика
         centerX = rect.width / 2;
         centerY = rect.height / 2;
-        
-        // Позиционируем thumb по центру
         joystickThumb.style.transition = 'none';
         joystickThumb.style.left = (centerX - 25) + 'px';
         joystickThumb.style.top = (centerY - 25) + 'px';
-        
         const touchX = touch.clientX - rect.left;
         const touchY = touch.clientY - rect.top;
         updateJoystickPosition(touchX, touchY);
@@ -191,7 +269,6 @@ function collide(dt, pos, velY, blocks) {
     let newVelY = velY;
     let onGround = false;
     
-    // Шаг по Y
     newPos.y += newVelY * dt;
     let playerBox = getPlayerBoundingBox(newPos);
     for (let block of blocks) {
@@ -210,7 +287,6 @@ function collide(dt, pos, velY, blocks) {
         }
     }
     
-    // Шаг по X
     playerBox = getPlayerBoundingBox(newPos);
     for (let block of blocks) {
         if (block.userData?.collision === false) continue;
@@ -224,7 +300,6 @@ function collide(dt, pos, velY, blocks) {
         }
     }
     
-    // Шаг по Z
     playerBox = getPlayerBoundingBox(newPos);
     for (let block of blocks) {
         if (block.userData?.collision === false) continue;
@@ -238,7 +313,6 @@ function collide(dt, pos, velY, blocks) {
         }
     }
     
-    // Повторная проверка пола
     playerBox = getPlayerBoundingBox(newPos);
     for (let block of blocks) {
         if (block.userData?.collision === false) continue;
@@ -299,7 +373,6 @@ function getBlockScale(block) {
     return { x: 1, y: 1, z: 1 };
 }
 
-// ========== СИСТЕМА ЗДОРОВЬЯ И СМЕРТИ ==========
 function takeDamage(amount) {
     if (isDead) return;
     health -= amount;
@@ -349,7 +422,6 @@ function removeFromInventory(itemId) {
 
 let platformMesh;
 
-// ========== ИГРОВАЯ ЛОГИКА ==========
 async function startGameSession(gameData, gameName) {
     document.getElementById('loadingScreen').style.display = 'flex';
     await new Promise(r => setTimeout(r, 100));
@@ -481,7 +553,6 @@ async function startGameSession(gameData, gameName) {
         }
         
         gamePlayer.position.copy(newPos);
-        sendPosition({x: gamePlayer.position.x, y: gamePlayer.position.y, z: gamePlayer.position.z});
         
         const targetPos = gamePlayer.position.clone();
         gameCamera.position.x = targetPos.x;
@@ -505,38 +576,24 @@ async function startGameSession(gameData, gameName) {
     if (exitBtn) exitBtn.onclick = () => {
         gameActive = false;
         if(gameAnimationId) cancelAnimationFrame(gameAnimationId);
-        leaveGame();
         document.getElementById('customGameScreen').classList.add('hidden');
         document.getElementById('mainMenuScreen').classList.remove('hidden');
         if (mobileControls) mobileControls.style.display = 'none';
-        requestGamesList();
     };
     attachMobileEvents();
 }
 
-async function startLocalGameSession(gameData, gameName) { 
-    startGameSession(gameData, gameName); 
+async function startLocalMultiplayerSession(gameData, gameName, gameInfo) {
+    await startGameSession(gameData, gameName);
 }
 
-function createRemotePlayer() { 
-    return new THREE.Mesh(new THREE.BoxGeometry(PLAYER_SIZE, PLAYER_HEIGHT, PLAYER_SIZE), new THREE.MeshStandardMaterial({ color: 0xffaa44 })); 
+async function startLocalGameSession(gameData, gameName) { 
+    await startGameSession(gameData, gameName); 
 }
 
 // ========== UI ФУНКЦИИ ==========
 async function renderGamesList() {
-    const container = document.getElementById('gamesList');
-    if (!container) return;
-    const games = await API.getGames();
-    container.innerHTML = '';
-    if (!games.length) { container.innerHTML='<p>Нет созданных игр</p>'; attachMobileEvents(); return; }
-    games.forEach(game => {
-        const card = document.createElement('div');
-        card.className = 'game-card';
-        card.innerHTML = `<div class="game-image">🎲</div><div class="game-info"><div class="game-title">${game.name}</div><div class="game-author">👤 ${game.author}</div><button class="play-btn" data-id="${game.id}">Играть</button></div>`;
-        container.appendChild(card);
-    });
-    document.querySelectorAll('.play-btn').forEach(btn => btn.addEventListener('click', () => joinGame(btn.dataset.id)));
-    attachMobileEvents();
+    renderLocalGamesList();
 }
 
 async function renderMyProjects() {
@@ -546,17 +603,37 @@ async function renderMyProjects() {
     const allGames = await API.getGames();
     const myGames = allGames.filter(g => g.author === currentUser.username);
     container.innerHTML = '';
-    if (!myGames.length) { container.innerHTML='<p>Нет проектов</p>'; attachMobileEvents(); return; }
+    if (!myGames.length) { 
+        container.innerHTML = '<p>Нет проектов</p>'; 
+        attachMobileEvents(); 
+        return; 
+    }
     myGames.forEach(game => {
         const card = document.createElement('div');
         card.className = 'project-card';
-        card.innerHTML = `<div class="game-title">${game.name}</div><div><button class="play-btn-small" data-id="${game.id}">Играть</button><button class="edit-btn-small" data-id="${game.id}">Редактировать</button><button class="delete-btn-small" data-id="${game.id}">Удалить</button></div>`;
+        card.innerHTML = `
+            <div class="game-title">${game.name}</div>
+            <div>
+                <button class="play-btn-small" data-id="${game.id}">Играть</button>
+                <button class="host-btn-small" data-id="${game.id}" style="background:#4a6e8a;">🌐 Создать сервер</button>
+                <button class="edit-btn-small" data-id="${game.id}">Редактировать</button>
+                <button class="delete-btn-small" data-id="${game.id}">Удалить</button>
+            </div>
+        `;
         container.appendChild(card);
     });
     document.querySelectorAll('.play-btn-small').forEach(btn => btn.addEventListener('click', async () => { 
         const id = parseInt(btn.dataset.id); 
         const game = (await API.getGames()).find(g => g.id === id); 
         if (game) startLocalGameSession(JSON.parse(game.data), game.name); 
+    }));
+    document.querySelectorAll('.host-btn-small').forEach(btn => btn.addEventListener('click', async () => { 
+        const id = parseInt(btn.dataset.id); 
+        const game = (await API.getGames()).find(g => g.id === id); 
+        if (game) {
+            const gameId = createLocalGame(game.name, JSON.parse(game.data));
+            alert(`Сервер создан! ID: ${gameId}`);
+        }
     }));
     document.querySelectorAll('.edit-btn-small').forEach(btn => btn.addEventListener('click', async () => { 
         const id = parseInt(btn.dataset.id); 
@@ -710,12 +787,10 @@ async function updateUIafterAuth() {
     await renderChat();
     await renderReports();
     startChatPolling();
-    connectToServer();
 }
 
 function logout() {
     if(gameActive) { gameActive=false; if(gameAnimationId) cancelAnimationFrame(gameAnimationId); }
-    if(ws) ws.close();
     if (chatPollingInterval) clearInterval(chatPollingInterval);
     currentUser = null;
     window.currentUser = null;
@@ -724,7 +799,7 @@ function logout() {
 }
 
 function attachMobileEvents() {
-    const sel = '.btn, .nav-btn, .play-btn, .buy-btn, .tool-btn, .block-option, .exit-game, .play-btn-small, .edit-btn-small, .delete-btn-small, #earnCoinsBtn, #addFriendBtn, #sendChatBtn, #reportBugBtn, #connectToServerBtn';
+    const sel = '.btn, .nav-btn, .play-btn, .buy-btn, .tool-btn, .block-option, .exit-game, .play-btn-small, .edit-btn-small, .delete-btn-small, .host-btn-small, #earnCoinsBtn, #addFriendBtn, #sendChatBtn, #reportBugBtn, #connectToServerBtn';
     document.querySelectorAll(sel).forEach(el => {
         if(el.hasAttribute('data-touch-fixed')) return;
         el.setAttribute('data-touch-fixed','true');
@@ -794,8 +869,13 @@ document.getElementById('moveSpeed')?.addEventListener('input', applySettings);
 document.getElementById('reportBugBtn')?.addEventListener('click', showReportDialog);
 document.getElementById('connectToServerBtn')?.addEventListener('click', () => { 
     const sid = document.getElementById('serverIdInput').value.trim(); 
-    if(sid) joinGame(sid); 
-    else alert('Введите ID'); 
+    if(sid && activeGames.has(sid)) { 
+        joinLocalGame(sid, null, currentUser?.username); 
+    } else if(sid) {
+        alert('Сервер не найден');
+    } else {
+        alert('Введите ID сервера');
+    }
 });
 
 // ========== ИНИЦИАЛИЗАЦИЯ ==========
@@ -816,4 +896,4 @@ if (session) {
     updateUIafterAuth();
 } else { 
     window.location.href = 'login.html'; 
-            }
+                                }

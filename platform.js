@@ -1,211 +1,42 @@
 import * as THREE from 'three';
-import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import * as API from './api.js';
-import { connectToServer, requestGamesList, createGameOnServer, joinGame, sendPosition, leaveGame } from './network.js';
 
-let currentUser = null;
-let chatPollingInterval = null;
-let ws = null;
-let currentGameId = null;
-let myPlayerId = null;
-let remotePlayers = new Map();
-let gameScene = null, gameCamera = null, gameRenderer = null, gamePlayer = null;
-let gameActive = false;
-let gameAnimationId = null;
-let collisionBlocks = [];
-let moveSpeed = 4;
-let effectComposer = null;
-let health = 100;
-let isDead = false;
-let ragdollParts = [];
-let inventory = [];
-let coins = 0;
+let editorScene, editorCamera, editorRenderer, editorControls, transformControls;
+let editorObjects = [];
+let selectedObjects = [];
+let currentTransformMode = 'translate';
+let currentShape = 'cube';
+let currentColor = '#8B5A2B';
+let currentOpacity = 1;
+let editorActive = false;
+let editorAnimationId = null;
 
-const MAP_SIZE = 500;
-const PLAYER_SIZE = 0.8;
-const PLAYER_HEIGHT = 1.6;
-const PLAYER_HALF_SIZE = PLAYER_SIZE / 2;
-const PLAYER_HALF_HEIGHT = PLAYER_HEIGHT / 2;
+// Папки (как в Roblox Studio)
+let folders = ['Workspace', 'Lighting', 'ServerStorage', 'StarterGui'];
 
-const shopItems = [
-    { id: 'skin_gold', name: 'Золотой скин', price: 250 },
-    { id: 'pickaxe', name: 'Алмазная кирка', price: 500 },
-    { id: 'trail', name: 'Искрящийся след', price: 150 }
-];
+let animations = [];
+let currentAnimation = null;
+let isPlaying = false;
+let animationStartTime = 0;
+let animationRequestId = null;
+let recording = false;
+let recordedKeyframes = [];
+let recordTarget = null;
+let recordStartTime = 0;
+let timelineCanvas, timelineCtx;
+let currentAnimationTime = 0;
+let isDraggingTimeline = false;
+let currentAnimationDuration = 1;
 
-window.currentUser = currentUser;
-window.customGames = [];
-window.saveGames = () => {};
-window.renderMyProjects = renderMyProjects;
-window.createGameOnServer = createGameOnServer;
-window.addCoins = addCoins;
-window.spendCoins = spendCoins;
+let guiElements = [];
+let npcs = [];
+let selectedNpc = null;
 
-let joystickActive = false;
-let joystickVector = { x: 0, z: 0 };
-let mobileJump = false;
+function generateId() { return Date.now() + '-' + Math.random().toString(36).substr(2, 8); }
 
-function initMobileControls() {
-    const joystickContainer = document.getElementById('joystickContainer');
-    const joystickThumb = document.getElementById('joystickThumb');
-    const jumpBtn = document.getElementById('mobileJumpBtn');
-    if (!joystickContainer) return;
-    let touchId = null;
-    const maxDist = 40;
-    const onTouchStart = (e) => {
-        e.preventDefault();
-        const rect = joystickContainer.getBoundingClientRect();
-        const touch = e.touches[0];
-        touchId = touch.identifier;
-        joystickActive = true;
-        joystickThumb.style.transition = 'none';
-        updateJoystickPosition(touch.clientX - rect.left, touch.clientY - rect.top);
-    };
-    const onTouchMove = (e) => {
-        if (!joystickActive) return;
-        const rect = joystickContainer.getBoundingClientRect();
-        for (let i = 0; i < e.touches.length; i++) {
-            if (e.touches[i].identifier === touchId) {
-                const touchX = e.touches[i].clientX - rect.left;
-                const touchY = e.touches[i].clientY - rect.top;
-                updateJoystickPosition(touchX, touchY);
-                break;
-            }
-        }
-    };
-    const onTouchEnd = () => {
-        if (!joystickActive) return;
-        joystickActive = false;
-        joystickVector = { x: 0, z: 0 };
-        joystickThumb.style.transition = '0.1s';
-        joystickThumb.style.left = '30px';
-        joystickThumb.style.top = '30px';
-    };
-    function updateJoystickPosition(x, y) {
-        let dx = x - 30;
-        let dy = y - 30;
-        const dist = Math.hypot(dx, dy);
-        if (dist > maxDist) {
-            dx = dx * maxDist / dist;
-            dy = dy * maxDist / dist;
-        }
-        joystickThumb.style.left = (30 + dx) + 'px';
-        joystickThumb.style.top = (30 + dy) + 'px';
-        joystickVector = { x: dx / maxDist, z: dy / maxDist };
-    }
-    joystickContainer.addEventListener('touchstart', onTouchStart, { passive: false });
-    document.addEventListener('touchmove', onTouchMove, { passive: false });
-    document.addEventListener('touchend', onTouchEnd);
-    document.addEventListener('touchcancel', onTouchEnd);
-    if (jumpBtn) {
-        jumpBtn.addEventListener('touchstart', (e) => { e.preventDefault(); mobileJump = true; });
-        jumpBtn.addEventListener('touchend', (e) => { e.preventDefault(); mobileJump = false; });
-        jumpBtn.addEventListener('mousedown', () => { mobileJump = true; });
-        jumpBtn.addEventListener('mouseup', () => { mobileJump = false; });
-    }
-}
-
-function getBlockBoundingBox(block) {
-    let halfX, halfY, halfZ;
-    if (block.geometry) {
-        if (block.geometry.parameters.width) {
-            halfX = block.geometry.parameters.width / 2;
-            halfY = block.geometry.parameters.height / 2;
-            halfZ = block.geometry.parameters.depth / 2;
-        } else {
-            halfX = (block.scale?.x || 1) * 0.45;
-            halfY = (block.scale?.y || 1) * 0.45;
-            halfZ = (block.scale?.z || 1) * 0.45;
-        }
-    } else {
-        halfX = (block.scale?.x || 1) * 0.45;
-        halfY = (block.scale?.y || 1) * 0.45;
-        halfZ = (block.scale?.z || 1) * 0.45;
-    }
-    return { minX: block.position.x - halfX, maxX: block.position.x + halfX, minY: block.position.y - halfY, maxY: block.position.y + halfY, minZ: block.position.z - halfZ, maxZ: block.position.z + halfZ };
-}
-
-function getPlayerBoundingBox(pos) {
-    return { minX: pos.x - PLAYER_HALF_SIZE, maxX: pos.x + PLAYER_HALF_SIZE, minY: pos.y - PLAYER_HALF_HEIGHT, maxY: pos.y + PLAYER_HALF_HEIGHT, minZ: pos.z - PLAYER_HALF_SIZE, maxZ: pos.z + PLAYER_HALF_SIZE };
-}
-
-function intersectBoxes(a, b) {
-    return a.maxX > b.minX && a.minX < b.maxX && a.maxY > b.minY && a.minY < b.maxY && a.maxZ > b.minZ && a.minZ < b.maxZ;
-}
-
-function collide(dt, pos, velY, blocks) {
-    let newPos = pos.clone();
-    let newVelY = velY;
-    let onGround = false;
-    newPos.y += newVelY * dt;
-    let playerBox = getPlayerBoundingBox(newPos);
-    for (let block of blocks) {
-        if (block.userData?.collision === false) continue;
-        const blockBox = getBlockBoundingBox(block);
-        if (playerBox.minX < blockBox.maxX && playerBox.maxX > blockBox.minX && playerBox.minZ < blockBox.maxZ && playerBox.maxZ > blockBox.minZ) {
-            if (newVelY <= 0 && playerBox.minY <= blockBox.maxY + 0.1 && playerBox.minY > blockBox.maxY - 0.2) {
-                newPos.y = blockBox.maxY + PLAYER_HALF_HEIGHT;
-                newVelY = 0;
-                onGround = true;
-            } else if (newVelY > 0 && playerBox.maxY >= blockBox.minY - 0.1 && playerBox.maxY < blockBox.minY + 0.2) {
-                newPos.y = blockBox.minY - PLAYER_HALF_HEIGHT;
-                newVelY = 0;
-            }
-        }
-    }
-    playerBox = getPlayerBoundingBox(newPos);
-    for (let block of blocks) {
-        if (block.userData?.collision === false) continue;
-        const blockBox = getBlockBoundingBox(block);
-        if (intersectBoxes(playerBox, blockBox)) {
-            const overlapLeft = playerBox.maxX - blockBox.minX;
-            const overlapRight = blockBox.maxX - playerBox.minX;
-            if (overlapLeft < overlapRight) newPos.x -= overlapLeft;
-            else newPos.x += overlapRight;
-            playerBox = getPlayerBoundingBox(newPos);
-        }
-    }
-    playerBox = getPlayerBoundingBox(newPos);
-    for (let block of blocks) {
-        if (block.userData?.collision === false) continue;
-        const blockBox = getBlockBoundingBox(block);
-        if (intersectBoxes(playerBox, blockBox)) {
-            const overlapFront = playerBox.maxZ - blockBox.minZ;
-            const overlapBack = blockBox.maxZ - playerBox.minZ;
-            if (overlapFront < overlapBack) newPos.z -= overlapFront;
-            else newPos.z += overlapBack;
-            playerBox = getPlayerBoundingBox(newPos);
-        }
-    }
-    playerBox = getPlayerBoundingBox(newPos);
-    for (let block of blocks) {
-        if (block.userData?.collision === false) continue;
-        const blockBox = getBlockBoundingBox(block);
-        if (playerBox.minX < blockBox.maxX && playerBox.maxX > blockBox.minX && playerBox.minZ < blockBox.maxZ && playerBox.maxZ > blockBox.minZ) {
-            if (Math.abs(playerBox.minY - blockBox.maxY) < 0.1 && newVelY <= 0) {
-                onGround = true;
-                newVelY = 0;
-                newPos.y = blockBox.maxY + PLAYER_HALF_HEIGHT;
-                break;
-            }
-        }
-    }
-    return { pos: newPos, velY: newVelY, onGround };
-}
-
-function placeOnPlatform(model, platform) {
-    const platformTop = platform.position.y + platform.geometry.parameters.height / 2;
-    model.position.set(platform.position.x, platformTop + PLAYER_HALF_HEIGHT, platform.position.z);
-}
-
-function createMesh(shape, size, color, opacity) {
-    let sx = 0.9, sy = 0.9, sz = 0.9;
-    if (size) {
-        if (typeof size === 'number') { sx = sy = sz = size; }
-        else if (typeof size.x === 'number') { sx = size.x; sy = size.y !== undefined ? size.y : size.x; sz = size.z !== undefined ? size.z : size.x; }
-    }
+function createBlockMesh(shape, size = { x: 0.9, y: 0.9, z: 0.9 }, color = 0x8B5A2B, opacity = 1) {
     let geometry;
     switch(shape) {
         case 'sphere': geometry = new THREE.SphereGeometry(0.45, 32, 32); break;
@@ -217,396 +48,685 @@ function createMesh(shape, size, color, opacity) {
     material.transparent = opacity < 1;
     material.opacity = opacity;
     const mesh = new THREE.Mesh(geometry, material);
-    mesh.scale.set(sx, sy, sz);
+    mesh.scale.set(size.x, size.y, size.z);
+    mesh.userData = { shape, color: '#' + (typeof color === 'number' ? color.toString(16).padStart(6,'0') : color.slice(1)), opacity, collision: true };
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
     return mesh;
 }
 
-function getBlockPosition(block) {
-    if (block.position && typeof block.position.x === 'number') return block.position;
-    if (typeof block.x === 'number') return { x: block.x, y: block.y, z: block.z };
-    return { x: 0, y: 0, z: 0 };
-}
-function getBlockRotation(block) {
-    if (block.rotation && typeof block.rotation.x === 'number') return block.rotation;
-    if (typeof block.rx === 'number') return { x: block.rx, y: block.ry, z: block.rz };
-    return { x: 0, y: 0, z: 0 };
-}
-function getBlockScale(block) {
-    if (block.scale && typeof block.scale.x === 'number') return block.scale;
-    if (typeof block.sx === 'number') return { x: block.sx, y: block.sy, z: block.sz };
-    if (typeof block.scale === 'number') return { x: block.scale, y: block.scale, z: block.scale };
-    return { x: 1, y: 1, z: 1 };
-}
-
-function takeDamage(amount) {
-    if (isDead) return;
-    health -= amount;
-    document.getElementById('healthValue').innerText = health;
-    if (health <= 0) { health = 0; die(); }
-}
-
-function die() {
-    isDead = true;
-    if (gamePlayer) {
-        gamePlayer.visible = false;
-        const positions = [[0,0,0],[0.3,0.2,0],[-0.3,0.2,0],[0,0.5,0]];
-        ragdollParts.forEach(p => gameScene.remove(p));
-        ragdollParts = [];
-        positions.forEach(pos => {
-            const box = new THREE.Mesh(new THREE.BoxGeometry(0.4,0.4,0.4), new THREE.MeshStandardMaterial({ color: 0xaa5555 }));
-            box.position.copy(gamePlayer.position);
-            box.position.x += pos[0];
-            box.position.y += pos[1];
-            box.position.z += pos[2];
-            gameScene.add(box);
-            ragdollParts.push(box);
-        });
-        setTimeout(() => { respawn(); }, 3000);
+function loadTemplate(templateType) {
+    clearEditor();
+    if (templateType === 'platformer') {
+        // Земля
+        const ground = createBlockMesh('cube', { x: 30, y: 1, z: 30 }, 0x6B8E23, 1);
+        ground.position.set(0, -0.5, 0);
+        addObject({ id: generateId(), name: 'Ground', type: 'block', parentId: 'Workspace', threeObject: ground, userData: { collision: true } });
+        // Платформы
+        for (let i = -3; i <= 3; i++) {
+            const plat = createBlockMesh('cube', { x: 2, y: 0.5, z: 2 }, 0xaa8866, 1);
+            plat.position.set(i * 2.5, 0.5 + Math.abs(i) * 0.5, 0);
+            addObject({ id: generateId(), name: `Platform_${i}`, type: 'block', parentId: 'Workspace', threeObject: plat, userData: { collision: true } });
+        }
+        // Спавн
+        const spawn = createBlockMesh('cube', { x: 1, y: 0.5, z: 1 }, 0xff3333, 1);
+        spawn.position.set(0, 0.5, 0);
+        addObject({ id: generateId(), name: 'Spawn', type: 'block', parentId: 'Workspace', threeObject: spawn, userData: { collision: true } });
+    } else if (templateType === 'racing') {
+        const ground = createBlockMesh('cube', { x: 50, y: 1, z: 50 }, 0x555555, 1);
+        ground.position.set(0, -0.5, 0);
+        addObject({ id: generateId(), name: 'Track', type: 'block', parentId: 'Workspace', threeObject: ground, userData: { collision: true } });
+        for (let i = 0; i < 12; i++) {
+            const angle = (i / 12) * Math.PI * 2;
+            const road = createBlockMesh('cube', { x: 2, y: 0.2, z: 2 }, 0xaaaaaa, 1);
+            road.position.set(Math.cos(angle) * 12, -0.3, Math.sin(angle) * 12);
+            addObject({ id: generateId(), name: `Road_${i}`, type: 'block', parentId: 'Workspace', threeObject: road, userData: { collision: true } });
+        }
+    } else if (templateType === 'rpg') {
+        const ground = createBlockMesh('cube', { x: 40, y: 1, z: 40 }, 0x4a7a4a, 1);
+        ground.position.set(0, -0.5, 0);
+        addObject({ id: generateId(), name: 'Grass', type: 'block', parentId: 'Workspace', threeObject: ground, userData: { collision: true } });
+        const house = createBlockMesh('cube', { x: 3, y: 2, z: 3 }, 0xaa8866, 1);
+        house.position.set(6, 0, 6);
+        addObject({ id: generateId(), name: 'House', type: 'block', parentId: 'Workspace', threeObject: house, userData: { collision: true } });
+        const tree = createBlockMesh('cylinder', { x: 1, y: 2, z: 1 }, 0x8B5A2B, 1);
+        tree.position.set(-5, 0, -5);
+        addObject({ id: generateId(), name: 'Tree', type: 'block', parentId: 'Workspace', threeObject: tree, userData: { collision: true } });
+        const spawn = createBlockMesh('cube', { x: 1, y: 0.5, z: 1 }, 0xff3333, 1);
+        spawn.position.set(0, 0.5, 0);
+        addObject({ id: generateId(), name: 'Spawn', type: 'block', parentId: 'Workspace', threeObject: spawn, userData: { collision: true } });
     }
 }
 
-function respawn() {
-    health = 100;
-    isDead = false;
-    document.getElementById('healthValue').innerText = health;
-    ragdollParts.forEach(p => gameScene.remove(p));
-    ragdollParts = [];
-    gamePlayer.visible = true;
-    placeOnPlatform(gamePlayer, platformMesh);
+function createFolder(name) {
+    const folder = { id: generateId(), name: name, type: 'folder', parentId: 'Workspace', childrenIds: [], threeObject: null };
+    addObject(folder);
+    return folder;
 }
 
-function addToInventory(item) {
-    inventory.push(item);
-    document.getElementById('inventoryCount').innerText = inventory.length;
-}
-function removeFromInventory(itemId) {
-    let idx = inventory.findIndex(i => i.id === itemId);
-    if (idx !== -1) inventory.splice(idx,1);
-    document.getElementById('inventoryCount').innerText = inventory.length;
+function addObject(obj) {
+    editorObjects.push(obj);
+    if (obj.threeObject) editorScene.add(obj.threeObject);
+    renderExplorer();
+    return obj;
 }
 
-let platformMesh;
-async function startGameSession(gameData, gameName) {
-    document.getElementById('loadingScreen').style.display = 'flex';
-    await new Promise(r => setTimeout(r, 100));
-    document.getElementById('mainMenuScreen').classList.add('hidden');
-    document.getElementById('customGameScreen').classList.remove('hidden');
-    const mobileControls = document.getElementById('mobileControls');
-    if (mobileControls) mobileControls.style.display = 'block';
-    const container = document.getElementById('customGameContainer');
+function deleteObject(obj) {
+    if (confirm(`Удалить ${obj.name}?`)) {
+        if (obj.threeObject) obj.threeObject.parent?.remove(obj.threeObject);
+        const idx = editorObjects.findIndex(o => o.id === obj.id);
+        if (idx !== -1) editorObjects.splice(idx, 1);
+        if (selectedObjects.includes(obj)) {
+            selectedObjects = selectedObjects.filter(o => o !== obj);
+            if (selectedObjects.length === 1) transformControls.attach(selectedObjects[0].threeObject);
+            else if (selectedObjects.length === 0) transformControls.detach();
+        }
+        if (obj.type === 'npc') { npcs = npcs.filter(n => n.id !== obj.id); renderNpcList(); }
+        renderExplorer();
+        updatePropertiesPanel();
+    }
+}
+
+function duplicateObject(obj) {
+    if (!obj.threeObject) return;
+    const cloneMesh = obj.threeObject.clone();
+    cloneMesh.position.x += 1;
+    const newObj = { id: generateId(), name: `${obj.name} (копия)`, type: obj.type, parentId: obj.parentId, childrenIds: [], threeObject: cloneMesh, userData: { ...obj.userData } };
+    addObject(newObj);
+    selectObject(newObj);
+}
+
+function renameObject(obj) {
+    const newName = prompt('Новое имя', obj.name);
+    if (newName) { obj.name = newName; if (obj.type === 'npc') obj.userData.name = newName; renderExplorer(); updatePropertiesPanel(); }
+}
+
+function addDefaultBlock() {
+    const color = parseInt(currentColor.slice(1), 16);
+    const mesh = createBlockMesh(currentShape, { x: 0.9, y: 0.9, z: 0.9 }, color, currentOpacity);
+    mesh.position.set(0, 1, 0);
+    const obj = { id: generateId(), name: `Block_${currentShape}`, type: 'block', parentId: 'Workspace', childrenIds: [], threeObject: mesh, userData: { shape: currentShape, color: currentColor, opacity: currentOpacity, collision: true } };
+    addObject(obj);
+    selectObject(obj);
+}
+
+function groupSelected() {
+    if (selectedObjects.length < 2) return;
+    const groupId = generateId();
+    const groupObj = { id: groupId, name: 'Group', type: 'group', parentId: 'Workspace', childrenIds: [], threeObject: new THREE.Group() };
+    selectedObjects.forEach(obj => {
+        const idx = editorObjects.findIndex(o => o.id === obj.id);
+        if (idx !== -1) { editorObjects[idx].parentId = groupId; groupObj.childrenIds.push(obj.id); groupObj.threeObject.add(obj.threeObject); }
+    });
+    addObject(groupObj);
+    clearSelection();
+    selectObject(groupObj);
+}
+
+function selectObject(obj, addToSelection = false) {
+    if (!obj) return;
+    if (!addToSelection) clearSelection();
+    if (!selectedObjects.includes(obj)) {
+        selectedObjects.push(obj);
+        if (obj.threeObject && !obj.userData.originalMaterial && obj.threeObject.material) {
+            obj.userData.originalMaterial = obj.threeObject.material;
+            let newMat = obj.threeObject.material.clone();
+            newMat.emissive = new THREE.Color(0x444444);
+            obj.threeObject.material = newMat;
+        }
+        if (selectedObjects.length === 1) transformControls.attach(obj.threeObject);
+    }
+    updatePropertiesPanel();
+    updateSelectedInExplorer();
+}
+
+function clearSelection() {
+    selectedObjects.forEach(obj => {
+        if (obj.userData.originalMaterial && obj.threeObject.material) {
+            obj.threeObject.material = obj.userData.originalMaterial;
+            delete obj.userData.originalMaterial;
+        }
+    });
+    selectedObjects = [];
+    if (transformControls.object) transformControls.detach();
+    updatePropertiesPanel();
+    updateSelectedInExplorer();
+}
+
+function updateSelectedInExplorer() {
+    document.querySelectorAll('.explorer-item').forEach(el => {
+        el.classList.remove('selected');
+        if (selectedObjects.some(obj => obj.id === el.dataset.id)) el.classList.add('selected');
+    });
+}
+
+function renderExplorer() {
+    const container = document.getElementById('explorerTree');
+    if (!container) return;
+    const roots = editorObjects.filter(obj => !obj.parentId);
     container.innerHTML = '';
+    roots.forEach(obj => renderExplorerItem(obj, container));
+}
 
-    gameScene = new THREE.Scene();
-    gameScene.background = new THREE.Color(0x0a1030);
-    gameScene.fog = new THREE.FogExp2(0x0a1030, 0.002);
-    gameCamera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-    gameCamera.position.set(0, 2, 5);
-    gameRenderer = new THREE.WebGLRenderer({ antialias: true });
-    gameRenderer.setSize(window.innerWidth, window.innerHeight);
-    gameRenderer.shadowMap.enabled = true;
-    container.appendChild(gameRenderer.domElement);
+function renderExplorerItem(obj, parentElement) {
+    const div = document.createElement('div');
+    div.className = 'explorer-item';
+    div.dataset.id = obj.id;
+    if (selectedObjects.includes(obj)) div.classList.add('selected');
+    let icon = obj.type === 'folder' ? '📁' : obj.type === 'npc' ? '👤' : obj.type === 'group' ? '📦' : '🧱';
+    div.innerHTML = `<span class="icon">${icon}</span><span class="name">${escapeHtml(obj.name)}</span><span class="controls"><button class="renameBtn">✎</button><button class="deleteBtn">🗑</button><button class="duplicateBtn">📋</button></span>`;
+    if (obj.childrenIds && obj.childrenIds.length) {
+        let childrenContainer = document.createElement('div');
+        childrenContainer.className = 'explorer-children';
+        obj.childrenIds.forEach(childId => {
+            let child = editorObjects.find(o => o.id === childId);
+            if (child) renderExplorerItem(child, childrenContainer);
+        });
+        div.appendChild(childrenContainer);
+    }
+    parentElement.appendChild(div);
+    div.addEventListener('click', (e) => { e.stopPropagation(); selectObject(obj, e.ctrlKey); });
+    div.querySelector('.renameBtn')?.addEventListener('click', (e) => { e.stopPropagation(); renameObject(obj); });
+    div.querySelector('.deleteBtn')?.addEventListener('click', (e) => { e.stopPropagation(); deleteObject(obj); });
+    div.querySelector('.duplicateBtn')?.addEventListener('click', (e) => { e.stopPropagation(); duplicateObject(obj); });
+}
 
-    effectComposer = new EffectComposer(gameRenderer);
-    effectComposer.addPass(new RenderPass(gameScene, gameCamera));
-    const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
-    bloomPass.threshold = 0.1;
-    bloomPass.strength = 0.6;
-    effectComposer.addPass(bloomPass);
+function escapeHtml(str) { return str.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'})[m]); }
+
+function updatePropertiesPanel() {
+    const container = document.getElementById('propertiesContent');
+    if (!container) return;
+    if (selectedObjects.length === 0) { container.innerHTML = '<div style="color:#aaa;">Ничего не выбрано</div>'; return; }
+    const obj = selectedObjects[0];
+    if (obj.type === 'npc') {
+        container.innerHTML = `
+            <div class="prop-group"><label>Имя</label><input id="propName" value="${escapeHtml(obj.name)}"></div>
+            <div class="prop-group"><label>Поведение</label><select id="propBehavior"><option value="idle">Стоять</option><option value="patrol">Патруль</option><option value="follow">Следовать</option></select></div>
+            <div class="prop-group"><label>Скорость</label><input id="propSpeed" type="number" value="${obj.userData.speed || 2}" step="0.5"></div>
+            <div class="prop-group"><label>Диалог</label><textarea id="propDialog" rows="2">${obj.userData.dialog || ''}</textarea></div>
+            <button id="applyNpcBtn">Применить</button>
+        `;
+        document.getElementById('propBehavior').value = obj.userData.behavior || 'idle';
+        document.getElementById('applyNpcBtn')?.addEventListener('click', () => {
+            obj.userData.behavior = document.getElementById('propBehavior').value;
+            obj.userData.speed = parseFloat(document.getElementById('propSpeed').value);
+            obj.userData.dialog = document.getElementById('propDialog').value;
+            if (obj.type === 'npc') { obj.userData.name = document.getElementById('propName').value; obj.name = obj.userData.name; renderNpcList(); }
+            renderExplorer();
+        });
+        document.getElementById('propName')?.addEventListener('change', e => { obj.name = e.target.value; if (obj.type === 'npc') obj.userData.name = e.target.value; renderExplorer(); });
+        return;
+    }
+    if (!obj.threeObject) return;
+    container.innerHTML = `
+        <div class="prop-group"><label>Имя</label><input id="propName" value="${escapeHtml(obj.name)}"></div>
+        <div class="prop-group"><label>Позиция X</label><input id="propPosX" type="number" step="0.1" value="${obj.threeObject.position.x.toFixed(2)}"></div>
+        <div class="prop-group"><label>Позиция Y</label><input id="propPosY" type="number" step="0.1" value="${obj.threeObject.position.y.toFixed(2)}"></div>
+        <div class="prop-group"><label>Позиция Z</label><input id="propPosZ" type="number" step="0.1" value="${obj.threeObject.position.z.toFixed(2)}"></div>
+        <div class="prop-group"><label>Масштаб X</label><input id="propScaleX" type="number" step="0.1" min="0.2" max="5" value="${obj.threeObject.scale.x.toFixed(2)}"></div>
+        <div class="prop-group"><label>Масштаб Y</label><input id="propScaleY" type="number" step="0.1" min="0.2" max="5" value="${obj.threeObject.scale.y.toFixed(2)}"></div>
+        <div class="prop-group"><label>Масштаб Z</label><input id="propScaleZ" type="number" step="0.1" min="0.2" max="5" value="${obj.threeObject.scale.z.toFixed(2)}"></div>
+        ${obj.type === 'block' ? `<div class="prop-group"><label>Цвет</label><input id="propColor" type="color" value="${obj.userData.color}"></div><div class="prop-group"><label>Collision</label><input id="propCollision" type="checkbox" ${obj.userData.collision ? 'checked' : ''}></div>` : ''}
+        <button id="applyPropsBtn">Применить</button>
+    `;
+    document.getElementById('propName')?.addEventListener('change', e => { obj.name = e.target.value; renderExplorer(); });
+    document.getElementById('propPosX')?.addEventListener('change', applyProps);
+    document.getElementById('propPosY')?.addEventListener('change', applyProps);
+    document.getElementById('propPosZ')?.addEventListener('change', applyProps);
+    document.getElementById('propScaleX')?.addEventListener('change', applyProps);
+    document.getElementById('propScaleY')?.addEventListener('change', applyProps);
+    document.getElementById('propScaleZ')?.addEventListener('change', applyProps);
+    if (obj.type === 'block') {
+        document.getElementById('propColor')?.addEventListener('change', e => { obj.userData.color = e.target.value; obj.threeObject.material.color.set(e.target.value); });
+        document.getElementById('propCollision')?.addEventListener('change', e => { obj.userData.collision = e.target.checked; });
+    }
+    document.getElementById('applyPropsBtn')?.addEventListener('click', applyProps);
+}
+
+function applyProps() {
+    if (selectedObjects.length === 0) return;
+    const obj = selectedObjects[0];
+    if (!obj.threeObject) return;
+    obj.threeObject.position.set(parseFloat(document.getElementById('propPosX').value), parseFloat(document.getElementById('propPosY').value), parseFloat(document.getElementById('propPosZ').value));
+    obj.threeObject.scale.set(parseFloat(document.getElementById('propScaleX').value), parseFloat(document.getElementById('propScaleY').value), parseFloat(document.getElementById('propScaleZ').value));
+    renderExplorer();
+}
+
+function createNPC(name = "NPC") {
+    const geometry = new THREE.BoxGeometry(0.8, 1.2, 0.8);
+    const material = new THREE.MeshStandardMaterial({ color: 0x88aa88 });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.y = 0.6;
+    mesh.userData = { name, behavior: 'idle', speed: 2, dialog: '' };
+    const obj = { id: generateId(), name, type: 'npc', parentId: 'Workspace', childrenIds: [], threeObject: mesh, userData: mesh.userData };
+    addObject(obj);
+    npcs.push(obj);
+    renderNpcList();
+    return obj;
+}
+
+function renderNpcList() {
+    const container = document.getElementById('npcList');
+    if (!container) return;
+    container.innerHTML = '';
+    npcs.forEach(npc => {
+        const div = document.createElement('div');
+        div.style.cssText = 'background:#2c2f36; padding:4px 8px; margin:2px 0; border-radius:4px; cursor:pointer;';
+        div.textContent = npc.userData.name;
+        div.onclick = () => selectNPC(npc);
+        container.appendChild(div);
+    });
+}
+
+function selectNPC(npc) {
+    selectedNpc = npc;
+    document.getElementById('npcName').value = npc.userData.name;
+    document.getElementById('npcBehavior').value = npc.userData.behavior;
+    document.getElementById('npcSpeed').value = npc.userData.speed;
+    document.getElementById('npcDialog').value = npc.userData.dialog || '';
+}
+
+function saveNPCProperties() {
+    if (!selectedNpc) return;
+    selectedNpc.userData.name = document.getElementById('npcName').value;
+    selectedNpc.userData.behavior = document.getElementById('npcBehavior').value;
+    selectedNpc.userData.speed = parseFloat(document.getElementById('npcSpeed').value);
+    selectedNpc.userData.dialog = document.getElementById('npcDialog').value;
+    selectedNpc.name = selectedNpc.userData.name;
+    renderNpcList();
+    renderExplorer();
+}
+
+function addGUIElement(type, properties) {
+    const id = generateId();
+    const element = { id, type, name: properties.name, x: properties.x || 100, y: properties.y || 100, width: properties.width || 200, height: properties.height || 50, text: properties.text, color: properties.color || '#4a6e8a', fontSize: properties.fontSize || 14, action: properties.action || '' };
+    guiElements.push(element);
+    renderGUIList();
+    return element;
+}
+
+function renderGUIList() {
+    const container = document.getElementById('guiElementsList');
+    if (!container) return;
+    container.innerHTML = '';
+    guiElements.forEach(el => {
+        const div = document.createElement('div');
+        div.style.cssText = 'background:#2c2f36; margin:4px 0; padding:4px 8px; border-radius:4px; display:flex; justify-content:space-between;';
+        div.innerHTML = `<span>${el.type === 'button' ? '🔘' : el.type === 'panel' ? '📦' : '📝'} ${el.name}</span><div><button class="editGuiBtn" data-id="${el.id}">✎</button><button class="deleteGuiBtn" data-id="${el.id}">🗑</button></div>`;
+        container.appendChild(div);
+    });
+    document.querySelectorAll('.editGuiBtn').forEach(btn => btn.addEventListener('click', () => { const id = btn.dataset.id; const el = guiElements.find(g => g.id === id); if (el) editGUIElement(el); }));
+    document.querySelectorAll('.deleteGuiBtn').forEach(btn => btn.addEventListener('click', () => { const id = btn.dataset.id; guiElements = guiElements.filter(g => g.id !== id); renderGUIList(); updateGUIPreview(); }));
+    updateGUIPreview();
+}
+
+function editGUIElement(el) {
+    const newName = prompt('Название', el.name);
+    if (newName) el.name = newName;
+    const newX = prompt('X', el.x);
+    if (newX !== null) el.x = parseInt(newX);
+    const newY = prompt('Y', el.y);
+    if (newY !== null) el.y = parseInt(newY);
+    const newText = prompt('Текст', el.text);
+    if (newText !== null) el.text = newText;
+    renderGUIList();
+}
+
+function updateGUIPreview() {
+    const container = document.getElementById('guiPreview');
+    if (!container) return;
+    container.innerHTML = '';
+    guiElements.forEach(el => {
+        const div = document.createElement('div');
+        div.style.position = 'absolute';
+        div.style.left = el.x + 'px';
+        div.style.top = el.y + 'px';
+        div.style.width = el.width + 'px';
+        div.style.height = el.height + 'px';
+        div.style.backgroundColor = el.color;
+        div.style.color = 'white';
+        div.style.borderRadius = '4px';
+        div.style.display = 'flex';
+        div.style.alignItems = 'center';
+        div.style.justifyContent = 'center';
+        div.style.fontSize = el.fontSize + 'px';
+        div.style.cursor = el.type === 'button' ? 'pointer' : 'default';
+        div.style.zIndex = '100';
+        div.textContent = el.text;
+        if (el.type === 'button') {
+            div.addEventListener('click', () => { if (el.action) try { new Function('game', 'player', 'world', el.action)(null, null, null); } catch(e) {} alert(`Нажата кнопка: ${el.name}`); });
+        }
+        container.appendChild(div);
+    });
+}
+
+function createParticleSystem(config) {
+    const geometry = new THREE.BufferGeometry();
+    const count = config.count || 100;
+    const positions = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+        positions[i*3] = 0; positions[i*3+1] = 0; positions[i*3+2] = 0;
+    }
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    const material = new THREE.PointsMaterial({ color: config.color || 0xffaa44, size: config.size || 0.2, blending: THREE.AdditiveBlending });
+    const points = new THREE.Points(geometry, material);
+    return points;
+}
+
+function addParticleSystem(config) {
+    const ps = createParticleSystem(config);
+    const obj = { id: generateId(), name: config.name, type: 'particle', parentId: 'Workspace', childrenIds: [], threeObject: ps, userData: { config } };
+    addObject(obj);
+    return obj;
+}
+
+function addParticlePreset(type) {
+    const presets = {
+        fire: { name:'Fire', count:200, color:0xff6600, size:0.15 },
+        water: { name:'Water', count:150, color:0x3399ff, size:0.1 },
+        air: { name:'Air', count:100, color:0xaaccff, size:0.2 },
+        smoke: { name:'Smoke', count:80, color:0x888888, size:0.3 }
+    };
+    addParticleSystem(presets[type]);
+}
+
+function createAnimation(name) {
+    const id = generateId();
+    const anim = { id, name, duration: 1, tracks: [] };
+    animations.push(anim);
+    updateAnimationSelect();
+    return anim;
+}
+
+function addKeyframe(animationId, targetId, property, time, value) {
+    const anim = animations.find(a => a.id === animationId);
+    if (!anim) return;
+    let track = anim.tracks.find(t => t.targetId === targetId && t.property === property);
+    if (!track) { track = { targetId, property, keyframes: [] }; anim.tracks.push(track); }
+    track.keyframes.push({ time, value });
+    track.keyframes.sort((a,b) => a.time - b.time);
+    if (time > anim.duration) anim.duration = time;
+    drawTimeline();
+}
+
+function getInterpolatedValue(keyframes, time) {
+    if (!keyframes.length) return null;
+    if (time <= keyframes[0].time) return keyframes[0].value;
+    if (time >= keyframes[keyframes.length-1].time) return keyframes[keyframes.length-1].value;
+    for (let i=0; i<keyframes.length-1; i++) {
+        if (time >= keyframes[i].time && time <= keyframes[i+1].time) {
+            const t = (time - keyframes[i].time) / (keyframes[i+1].time - keyframes[i].time);
+            if (typeof keyframes[i].value === 'number') return keyframes[i].value + (keyframes[i+1].value - keyframes[i].value) * t;
+            if (keyframes[i].value instanceof THREE.Vector3) return keyframes[i].value.clone().lerp(keyframes[i+1].value, t);
+        }
+    }
+    return null;
+}
+
+function applyAnimation(anim, time) {
+    if (!anim) return;
+    for (let track of anim.tracks) {
+        const targetObj = editorObjects.find(o => o.id === track.targetId);
+        if (!targetObj || !targetObj.threeObject) continue;
+        const value = getInterpolatedValue(track.keyframes, time);
+        if (value === null) continue;
+        switch(track.property) {
+            case 'position': targetObj.threeObject.position.copy(value); break;
+            case 'rotation': targetObj.threeObject.rotation.copy(value); break;
+            case 'scale': targetObj.threeObject.scale.copy(value); break;
+        }
+    }
+}
+
+function playAnimation(animId) {
+    if (isPlaying) stopAnimation();
+    currentAnimation = animations.find(a => a.id === animId);
+    if (!currentAnimation) return;
+    currentAnimationDuration = currentAnimation.duration;
+    document.getElementById('animationDuration').innerText = currentAnimationDuration.toFixed(2);
+    isPlaying = true;
+    animationStartTime = performance.now() / 1000 - currentAnimationTime;
+    function animateLoop() {
+        if (!isPlaying) return;
+        const now = performance.now() / 1000;
+        let t = (now - animationStartTime) % currentAnimation.duration;
+        setAnimationTime(t);
+        animationRequestId = requestAnimationFrame(animateLoop);
+    }
+    animateLoop();
+}
+
+function stopAnimation() {
+    if (animationRequestId) cancelAnimationFrame(animationRequestId);
+    isPlaying = false;
+    currentAnimation = null;
+}
+
+function setAnimationTime(time) {
+    if (!currentAnimation) return;
+    currentAnimationTime = Math.min(time, currentAnimation.duration);
+    document.getElementById('currentTime').innerText = currentAnimationTime.toFixed(2);
+    applyAnimation(currentAnimation, currentAnimationTime);
+    drawTimeline();
+}
+
+function drawTimeline() {
+    if (!timelineCtx) return;
+    timelineCtx.clearRect(0,0,timelineCanvas.width,timelineCanvas.height);
+    timelineCtx.strokeStyle = '#666';
+    for (let i=0;i<=10;i++) { let x = i * timelineCanvas.width / 10; timelineCtx.beginPath(); timelineCtx.moveTo(x,0); timelineCtx.lineTo(x,timelineCanvas.height); timelineCtx.stroke(); }
+    if (currentAnimation) {
+        for (let track of currentAnimation.tracks) {
+            for (let kf of track.keyframes) {
+                let x = (kf.time / currentAnimation.duration) * timelineCanvas.width;
+                timelineCtx.fillStyle = '#ffaa44';
+                timelineCtx.fillRect(x-2,0,4,timelineCanvas.height);
+            }
+        }
+        let currentX = (currentAnimationTime / currentAnimation.duration) * timelineCanvas.width;
+        timelineCtx.fillStyle = '#ff5722';
+        timelineCtx.fillRect(currentX-1,0,2,timelineCanvas.height);
+    }
+}
+
+function initTimeline() {
+    timelineCanvas = document.getElementById('timelineCanvas');
+    timelineCtx = timelineCanvas.getContext('2d');
+    timelineCanvas.addEventListener('mousedown', (e) => { let rect = timelineCanvas.getBoundingClientRect(); let x = e.clientX - rect.left; let time = (x / timelineCanvas.width) * currentAnimationDuration; setAnimationTime(time); isDraggingTimeline = true; });
+    window.addEventListener('mouseup', () => { isDraggingTimeline = false; });
+    window.addEventListener('mousemove', (e) => { if (isDraggingTimeline && currentAnimation) { let rect = timelineCanvas.getBoundingClientRect(); let x = Math.min(Math.max(e.clientX - rect.left,0),timelineCanvas.width); let time = (x / timelineCanvas.width) * currentAnimationDuration; setAnimationTime(time); } });
+}
+
+function updateAnimationSelect() {
+    const select = document.getElementById('animationSelect');
+    if (!select) return;
+    select.innerHTML = '<option value="">-- Анимация --</option>';
+    animations.forEach(anim => { let opt = document.createElement('option'); opt.value = anim.id; opt.textContent = anim.name; select.appendChild(opt); });
+}
+
+async function saveGameLocal() {
+    if (!window.currentUser) { alert('Не авторизован'); return; }
+    const gameName = prompt('Название игры:');
+    if (!gameName) return;
+    const gameData = { blocks: editorObjects.map(obj => serializeObject(obj)), animations, gui: guiElements };
+    const result = await API.saveGame(gameName, window.currentUser.username, gameData);
+    if (result.id) alert('Сохранено!');
+    else alert('Ошибка сохранения');
+}
+
+function serializeObject(obj) {
+    if (!obj.threeObject) return null;
+    return {
+        type: obj.type, id: obj.id, name: obj.name,
+        position: { x: obj.threeObject.position.x, y: obj.threeObject.position.y, z: obj.threeObject.position.z },
+        rotation: { x: obj.threeObject.rotation.x, y: obj.threeObject.rotation.y, z: obj.threeObject.rotation.z },
+        scale: { x: obj.threeObject.scale.x, y: obj.threeObject.scale.y, z: obj.threeObject.scale.z },
+        userData: obj.userData
+    };
+}
+
+function deserializeObject(data) {
+    if (data.type === 'folder') {
+        return { id: data.id, name: data.name, type: 'folder', parentId: data.parentId, childrenIds: [], threeObject: null };
+    }
+    if (data.type === 'npc') {
+        const geometry = new THREE.BoxGeometry(0.8, 1.2, 0.8);
+        const material = new THREE.MeshStandardMaterial({ color: 0x88aa88 });
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.position.copy(data.position);
+        mesh.rotation.copy(data.rotation);
+        mesh.scale.copy(data.scale);
+        mesh.userData = data.userData;
+        return { id: data.id, name: data.name, type: 'npc', parentId: data.parentId, childrenIds: [], threeObject: mesh, userData: data.userData };
+    }
+    const mesh = createBlockMesh(data.userData.shape || 'cube', data.scale, data.userData.color, data.userData.opacity);
+    mesh.position.copy(data.position);
+    mesh.rotation.copy(data.rotation);
+    mesh.scale.copy(data.scale);
+    mesh.userData = data.userData;
+    return { id: data.id, name: data.name, type: data.type || 'block', parentId: data.parentId, childrenIds: [], threeObject: mesh, userData: data.userData };
+}
+
+function loadGameIntoEditor(gameData) {
+    clearEditor();
+    if (gameData.blocks) gameData.blocks.forEach(blockData => { let obj = deserializeObject(blockData); if (obj) addObject(obj); });
+    if (gameData.animations) animations = gameData.animations;
+    if (gameData.gui) guiElements = gameData.gui;
+    selectObject(null);
+}
+
+function clearEditor() {
+    editorObjects.forEach(obj => { if (obj.threeObject) editorScene.remove(obj.threeObject); });
+    editorObjects = [];
+    selectedObjects = [];
+    animations = [];
+    guiElements = [];
+    npcs = [];
+    if (transformControls.object) transformControls.detach();
+    renderExplorer();
+    updatePropertiesPanel();
+    renderNpcList();
+    renderGUIList();
+}
+
+function initEditor() {
+    if (editorActive) return;
+    const container = document.getElementById('editorCanvasContainer');
+    container.innerHTML = '';
+    editorScene = new THREE.Scene();
+    editorScene.background = new THREE.Color(0x1a1d24);
+    editorScene.fog = new THREE.FogExp2(0x1a1d24, 0.008);
+    editorCamera = new THREE.PerspectiveCamera(45, container.clientWidth/container.clientHeight, 0.1, 1000);
+    editorCamera.position.set(15, 12, 15);
+    editorRenderer = new THREE.WebGLRenderer({ antialias: true });
+    editorRenderer.setSize(container.clientWidth, container.clientHeight);
+    editorRenderer.shadowMap.enabled = true;
+    container.appendChild(editorRenderer.domElement);
+    editorControls = new OrbitControls(editorCamera, editorRenderer.domElement);
+    editorControls.enableDamping = true;
+    transformControls = new TransformControls(editorCamera, editorRenderer.domElement);
+    transformControls.addEventListener('dragging-changed', (event) => { editorControls.enabled = !event.value; });
+    transformControls.addEventListener('objectChange', () => { if (selectedObjects.length) updatePropertiesPanel(); });
+    editorScene.add(transformControls);
 
     const ambient = new THREE.AmbientLight(0x404060);
-    gameScene.add(ambient);
+    editorScene.add(ambient);
     const dirLight = new THREE.DirectionalLight(0xfff5d1, 1.2);
     dirLight.position.set(5,10,7);
     dirLight.castShadow = true;
-    gameScene.add(dirLight);
-    const pointLight = new THREE.PointLight(0xffaa66, 0.8, 20);
-    pointLight.position.set(0,3,0);
-    gameScene.add(pointLight);
+    editorScene.add(dirLight);
+    const fillLight = new THREE.PointLight(0x4466cc, 0.5);
+    fillLight.position.set(2,3,4);
+    editorScene.add(fillLight);
+    const gridHelper = new THREE.GridHelper(100, 20, 0x88aaff, 0x335588);
+    editorScene.add(gridHelper);
 
-    collisionBlocks = [];
-    const platformGeometry = new THREE.BoxGeometry(MAP_SIZE, 1, MAP_SIZE);
-    const platformMaterial = new THREE.MeshStandardMaterial({ color: 0x6B8E23, roughness: 0.7 });
-    platformMesh = new THREE.Mesh(platformGeometry, platformMaterial);
-    platformMesh.position.set(0, -0.5, 0);
-    platformMesh.receiveShadow = true;
-    gameScene.add(platformMesh);
-    collisionBlocks.push(platformMesh);
+    // Создаём папки
+    folders.forEach(f => {
+        editorObjects.push({ id: f, name: f, type: 'folder', parentId: null, childrenIds: [], threeObject: null });
+    });
 
-    if (gameData && gameData.blocks) {
-        gameData.blocks.forEach(block => {
-            const pos = getBlockPosition(block);
-            const rot = getBlockRotation(block);
-            const scale = getBlockScale(block);
-            const mesh = createMesh(block.shape || 'cube', scale, block.color, block.opacity);
-            mesh.position.set(pos.x, pos.y, pos.z);
-            mesh.rotation.set(rot.x, rot.y, rot.z);
-            mesh.userData = { collision: block.userData?.collision !== false };
-            gameScene.add(mesh);
-            collisionBlocks.push(mesh);
-        });
-    }
-
-    const playerMat = new THREE.MeshStandardMaterial({ color: 0x3a86ff });
-    const playerMesh = new THREE.Mesh(new THREE.BoxGeometry(PLAYER_SIZE, PLAYER_HEIGHT, PLAYER_SIZE), playerMat);
-    playerMesh.castShadow = true;
-    placeOnPlatform(playerMesh, platformMesh);
-    gameScene.add(playerMesh);
-    gamePlayer = playerMesh;
-
-    const keyState = { w: false, s: false, a: false, d: false };
-    let jumpRequest = false;
-    const handleKey = (e, val) => {
-        if(!gameActive || isDead) return;
-        switch(e.key) {
-            case 'w': keyState.w = val; break;
-            case 's': keyState.s = val; break;
-            case 'a': keyState.a = val; break;
-            case 'd': keyState.d = val; break;
-            case ' ': case 'Space': jumpRequest = val; e.preventDefault(); break;
-        }
-    };
-    window.addEventListener('keydown', e=>handleKey(e,true));
-    window.addEventListener('keyup', e=>handleKey(e,false));
-
-    let velY = 0;
-    const GRAVITY = 15;
-    const JUMP_FORCE = 7;
-    let onGround = false;
-    let lastTime = performance.now() / 1000;
-
-    function update() {
-        if(!gameActive || isDead) return;
-        const now = performance.now() / 1000;
-        let dt = Math.min(0.033, now - lastTime);
-        if (dt <= 0) dt = 0.016;
-        lastTime = now;
-        let mx = (keyState.d ? 1 : 0) - (keyState.a ? 1 : 0);
-        let mz = (keyState.s ? 1 : 0) - (keyState.w ? 1 : 0);
-        if (joystickActive) { mx += joystickVector.x; mz += joystickVector.z; }
-        const len = Math.hypot(mx, mz);
-        if (len > 1) { mx /= len; mz /= len; }
-        if (mx !== 0 || mz !== 0) gamePlayer.rotation.y = Math.atan2(mx, mz);
-        let speed = moveSpeed * dt;
-        let newPos = gamePlayer.position.clone();
-        newPos.x += mx * speed;
-        newPos.z += mz * speed;
-        velY -= GRAVITY * dt;
-        newPos.y += velY * dt;
-        const collisionResult = collide(dt, newPos, velY, collisionBlocks);
-        newPos = collisionResult.pos;
-        velY = collisionResult.velY;
-        onGround = collisionResult.onGround;
-        if(newPos.y < -5) { placeOnPlatform(gamePlayer, platformMesh); newPos.copy(gamePlayer.position); velY = 0; onGround = true; }
-        let shouldJump = jumpRequest || mobileJump;
-        if(onGround && shouldJump) { velY = JUMP_FORCE; jumpRequest = false; mobileJump = false; }
-        gamePlayer.position.copy(newPos);
-        sendPosition({x: gamePlayer.position.x, y: gamePlayer.position.y, z: gamePlayer.position.z});
-        const targetPos = gamePlayer.position.clone();
-        gameCamera.position.x = targetPos.x;
-        gameCamera.position.z = targetPos.z + 5;
-        gameCamera.position.y = targetPos.y + 2;
-        gameCamera.lookAt(targetPos);
-        pointLight.position.set(gamePlayer.position.x, gamePlayer.position.y+1, gamePlayer.position.z);
-    }
-
-    function animate() { if(!gameActive) return; gameAnimationId = requestAnimationFrame(animate); update(); effectComposer.render(); }
-    gameActive = true;
-    animate();
-    document.getElementById('loadingScreen').style.display = 'none';
-
-    const exitBtn = document.querySelector('#customGameScreen .exit-game');
-    if (exitBtn) exitBtn.onclick = () => {
-        gameActive = false;
-        if(gameAnimationId) cancelAnimationFrame(gameAnimationId);
-        leaveGame();
-        document.getElementById('customGameScreen').classList.add('hidden');
+    document.getElementById('modeMoveBtn').onclick = () => { transformControls.setMode('translate'); document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active')); document.getElementById('modeMoveBtn').classList.add('active'); };
+    document.getElementById('modeRotateBtn').onclick = () => { transformControls.setMode('rotate'); document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active')); document.getElementById('modeRotateBtn').classList.add('active'); };
+    document.getElementById('modeScaleBtn').onclick = () => { transformControls.setMode('scale'); document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active')); document.getElementById('modeScaleBtn').classList.add('active'); };
+    document.getElementById('addCubeBtn').onclick = addDefaultBlock;
+    document.getElementById('deleteBtn').onclick = () => { if (selectedObjects.length) deleteObject(selectedObjects[0]); else alert('Выберите объект'); };
+    document.getElementById('duplicateBtn').onclick = () => { if (selectedObjects.length) duplicateObject(selectedObjects[0]); else alert('Выберите объект'); };
+    document.getElementById('groupBtn').onclick = groupSelected;
+    document.getElementById('saveGameBtn').onclick = saveGameLocal;
+    document.getElementById('publishGameBtn').onclick = () => { alert('Публикация через API'); saveGameLocal(); };
+    document.getElementById('exitEditorBtn').onclick = () => {
+        document.getElementById('editorScreen').classList.add('hidden');
         document.getElementById('mainMenuScreen').classList.remove('hidden');
-        if (mobileControls) mobileControls.style.display = 'none';
-        requestGamesList();
+        if (editorActive) { editorActive = false; cancelAnimationFrame(editorAnimationId); }
     };
-    attachMobileEvents();
-}
 
-async function startLocalGameSession(gameData, gameName) { startGameSession(gameData, gameName); }
-function createRemotePlayer() { return new THREE.Mesh(new THREE.BoxGeometry(PLAYER_SIZE, PLAYER_HEIGHT, PLAYER_SIZE), new THREE.MeshStandardMaterial({ color: 0xffaa44 })); }
-
-async function renderGamesList() {
-    const container = document.getElementById('gamesList');
-    if (!container) return;
-    const games = await API.getGames();
-    container.innerHTML = '';
-    if (!games.length) { container.innerHTML='<p>Нет созданных игр</p>'; attachMobileEvents(); return; }
-    games.forEach(game => {
-        const card = document.createElement('div');
-        card.className = 'game-card';
-        card.innerHTML = `<div class="game-image">🎲</div><div class="game-info"><div class="game-title">${game.name}</div><div class="game-author">👤 ${game.author}</div><button class="play-btn" data-id="${game.id}">Играть</button></div>`;
-        container.appendChild(card);
+    document.querySelectorAll('.block-option').forEach(opt => {
+        opt.addEventListener('click', () => {
+            document.querySelectorAll('.block-option').forEach(o => o.classList.remove('selected'));
+            opt.classList.add('selected');
+            const type = opt.dataset.type;
+            if (type === 'wood') currentColor = '#8B5A2B';
+            else if (type === 'stone') currentColor = '#808080';
+            else if (type === 'concrete') currentColor = '#B0B0B0';
+            else if (type === 'dirt') currentColor = '#6B4C3B';
+            document.getElementById('blockColorPicker').value = currentColor;
+        });
     });
-    document.querySelectorAll('.play-btn').forEach(btn => btn.addEventListener('click', () => joinGame(btn.dataset.id)));
-    attachMobileEvents();
-}
+    document.querySelector('.block-option').classList.add('selected');
+    document.getElementById('blockColorPicker').value = currentColor;
 
-async function renderMyProjects() {
-    if (!currentUser) return;
-    const container = document.getElementById('myProjectsList');
-    if (!container) return;
-    const allGames = await API.getGames();
-    const myGames = allGames.filter(g => g.author === currentUser.username);
-    container.innerHTML = '';
-    if (!myGames.length) { container.innerHTML='<p>Нет проектов</p>'; attachMobileEvents(); return; }
-    myGames.forEach(game => {
-        const card = document.createElement('div');
-        card.className = 'project-card';
-        card.innerHTML = `<div class="game-title">${game.name}</div><div><button class="play-btn-small" data-id="${game.id}">Играть</button><button class="edit-btn-small" data-id="${game.id}">Редактировать</button><button class="delete-btn-small" data-id="${game.id}">Удалить</button></div>`;
-        container.appendChild(card);
+    document.getElementById('addParticleBtn').onclick = () => addParticleSystem({ name:'Particles', count:100, color:0xffaa44, size:0.2 });
+    document.getElementById('vfxFireBtn').onclick = () => addParticlePreset('fire');
+    document.getElementById('vfxWaterBtn').onclick = () => addParticlePreset('water');
+    document.getElementById('vfxAirBtn').onclick = () => addParticlePreset('air');
+    document.getElementById('vfxSmokeBtn').onclick = () => addParticlePreset('smoke');
+
+    document.getElementById('newAnimationBtn').onclick = () => { let name = prompt('Название анимации'); if (name) createAnimation(name); };
+    document.getElementById('recordAnimationBtn').onclick = () => { if (!selectedObjects.length) { alert('Выберите объект'); return; } recording = true; recordTarget = selectedObjects[0]; recordedKeyframes = []; recordStartTime = performance.now()/1000; alert('Запись начата'); };
+    document.getElementById('playAnimationBtn').onclick = () => { let select = document.getElementById('animationSelect'); let animId = select.value; if (!animId) { alert('Выберите анимацию'); return; } playAnimation(animId); };
+    document.getElementById('stopAnimationBtn').onclick = () => { if (recording) { recording = false; if (recordTarget && recordedKeyframes.length) { let animName = prompt('Название анимации', 'Animation'); if (animName) { let newAnim = createAnimation(animName); let framesByProp = {}; recordedKeyframes.forEach(kf => { if (!framesByProp[kf.property]) framesByProp[kf.property] = []; framesByProp[kf.property].push({ time: kf.time, value: kf.value }); }); for (let prop in framesByProp) { newAnim.tracks.push({ targetId: recordTarget.id, property: prop, keyframes: framesByProp[prop] }); } updateAnimationSelect(); } } recordedKeyframes = []; recordTarget = null; } else { stopAnimation(); } };
+    transformControls.addEventListener('objectChange', () => { if (recording && recordTarget && transformControls.object === recordTarget.threeObject) { let pos = recordTarget.threeObject.position.clone(); let rot = recordTarget.threeObject.rotation.clone(); let scale = recordTarget.threeObject.scale.clone(); recordProperty('position', pos); recordProperty('rotation', rot); recordProperty('scale', scale); } });
+    function recordProperty(property, value) { if (!recording || !recordTarget) return; let time = performance.now()/1000 - recordStartTime; recordedKeyframes.push({ time, property, value: value.clone ? value.clone() : value }); }
+    initTimeline();
+
+    document.getElementById('addButtonBtn').onclick = () => addGUIElement('button', { name:'Button', text:'Click', x:100, y:100, width:120, height:40, action:'alert("Hello")' });
+    document.getElementById('addPanelBtn').onclick = () => addGUIElement('panel', { name:'Panel', text:'Panel', x:100, y:200, width:200, height:150 });
+    document.getElementById('addTextBtn').onclick = () => addGUIElement('text', { name:'Text', text:'Hello', x:100, y:300, width:200, height:30, fontSize:14 });
+
+    document.getElementById('createNpcBtn').onclick = () => createNPC();
+    document.getElementById('saveNpcBtn').onclick = saveNPCProperties;
+    document.getElementById('applyScriptBtn').onclick = () => { if (!selectedObjects.length) { alert('Выберите объект'); return; } let script = document.getElementById('blockScriptEditor').value; selectedObjects[0].userData.script = script; alert('Скрипт сохранён'); };
+
+    // Вкладки внизу
+    const bottomTabs = document.querySelectorAll('.bottom-tab');
+    const tabContents = {
+        blocks: document.getElementById('blocksTab'),
+        vfx: document.getElementById('vfxTab'),
+        animations: document.getElementById('animationsTab'),
+        scripts: document.getElementById('scriptsTab'),
+        gui: document.getElementById('guiTab'),
+        npc: document.getElementById('npcTab')
+    };
+    bottomTabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            bottomTabs.forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            const tabId = tab.dataset.tab;
+            Object.values(tabContents).forEach(content => content.classList.add('hidden'));
+            if (tabContents[tabId]) tabContents[tabId].classList.remove('hidden');
+        });
     });
-    document.querySelectorAll('.play-btn-small').forEach(btn => btn.addEventListener('click', async () => { const id = parseInt(btn.dataset.id); const game = (await API.getGames()).find(g => g.id === id); if (game) startLocalGameSession(JSON.parse(game.data), game.name); }));
-    document.querySelectorAll('.edit-btn-small').forEach(btn => btn.addEventListener('click', async () => { const id = parseInt(btn.dataset.id); const game = (await API.getGames()).find(g => g.id === id); if (game) { const mod = await import('./editor.js'); mod.openEditor(game); } }));
-    document.querySelectorAll('.delete-btn-small').forEach(btn => btn.addEventListener('click', async () => { const id = parseInt(btn.dataset.id); if (confirm('Удалить?')) { await API.deleteGame(id, currentUser.username); renderMyProjects(); } }));
-    attachMobileEvents();
+
+    function animateEditor() { if (!editorActive) return; editorAnimationId = requestAnimationFrame(animateEditor); editorControls.update(); editorRenderer.render(editorScene, editorCamera); }
+    editorActive = true; animateEditor();
+    window.addEventListener('resize', () => { editorCamera.aspect = container.clientWidth / container.clientHeight; editorCamera.updateProjectionMatrix(); editorRenderer.setSize(container.clientWidth, container.clientHeight); });
 }
 
-function renderShop() {
-    const container = document.getElementById('shopItemsList');
-    if (!container) return;
-    container.innerHTML = '';
-    shopItems.forEach(item => {
-        const div = document.createElement('div');
-        div.className = 'shop-item';
-        div.innerHTML = `<div>${item.id==='skin_gold'?'👑':item.id==='pickaxe'?'⛏️':'✨'}</div><h3>${item.name}</h3><div class="price">${item.price} 🪙</div><button class="buy-btn" data-id="${item.id}" data-price="${item.price}">Купить</button>`;
-        container.appendChild(div);
-    });
-    document.querySelectorAll('.buy-btn').forEach(btn => btn.addEventListener('click', () => { const price = parseInt(btn.dataset.price); if (spendCoins(price)) { alert(`Куплено ${btn.dataset.id}`); renderShop(); } else alert("Недостаточно монет!"); }));
-    attachMobileEvents();
-}
-
-function renderFriendsList() {
-    if (!currentUser) return;
-    const container = document.getElementById('friendsList');
-    if (!container) return;
-    container.innerHTML = '';
-    (currentUser.friends || []).forEach(friend => {
-        const div = document.createElement('div');
-        div.className = 'friend-item';
-        div.innerHTML = `<span>${friend}</span><button class="removeFriendBtn" data-friend="${friend}">❌</button>`;
-        container.appendChild(div);
-    });
-    document.querySelectorAll('.removeFriendBtn').forEach(btn => btn.addEventListener('click', () => { const friend = btn.dataset.friend; currentUser.friends = currentUser.friends.filter(f => f !== friend); renderFriendsList(); }));
-    attachMobileEvents();
-}
-
-function addFriend() {
-    if (!currentUser) return;
-    const friendName = document.getElementById('friendSearch').value.trim();
-    if (!friendName || friendName === currentUser.username) return;
-    if (currentUser.friends.includes(friendName)) { alert("Уже в друзьях"); return; }
-    currentUser.friends.push(friendName);
-    renderFriendsList();
-    document.getElementById('friendSearch').value = '';
-    alert(`Друг ${friendName} добавлен`);
-}
-
-async function renderChat() {
-    const container = document.getElementById('chatMessages');
-    if (!container) return;
-    const messages = await API.getChatMessages();
-    container.innerHTML = '';
-    messages.forEach(msg => { const div = document.createElement('div'); div.innerHTML = `<span style="color:#ffaa44;">[${msg.time}]</span> <b>${msg.username}:</b> ${msg.text}`; container.appendChild(div); });
-    container.scrollTop = container.scrollHeight;
-}
-
-async function sendChatMessage() {
-    if (!currentUser) return;
-    const text = document.getElementById('chatInput').value.trim();
-    if (!text) return;
-    await API.sendChatMessage(currentUser.username, text, new Date().toLocaleTimeString());
-    document.getElementById('chatInput').value = '';
-    renderChat();
-}
-
-function startChatPolling() {
-    if (chatPollingInterval) clearInterval(chatPollingInterval);
-    chatPollingInterval = setInterval(() => { renderChat(); }, 3000);
-}
-
-async function renderReports() {
-    const container = document.getElementById('reportsList');
-    if (!container) return;
-    const reportsData = await API.getReports();
-    container.innerHTML = '';
-    reportsData.forEach(r => { const div = document.createElement('div'); div.style.background = 'rgba(30,38,58,0.8)'; div.style.margin = '8px 0'; div.style.padding = '8px'; div.style.borderRadius = '12px'; div.innerHTML = `<b>${r.username}</b> (${r.time}): ${r.text}`; container.appendChild(div); });
-}
-
-async function showReportDialog() {
-    if (!currentUser) return;
-    const text = prompt('Опишите проблему:');
-    if (!text) return;
-    await API.sendReport(currentUser.username, text, new Date().toLocaleString());
-    alert('Спасибо за отчёт!');
-    renderReports();
-}
-
-function applySettings() { moveSpeed = parseFloat(document.getElementById('moveSpeed').value); }
-function addCoins(amount) { if (!currentUser) return; coins += amount; document.getElementById('coinValue').innerText = coins; }
-function spendCoins(amount) { if (coins >= amount) { coins -= amount; document.getElementById('coinValue').innerText = coins; return true; } return false; }
-
-async function updateUIafterAuth() {
-    if (!currentUser) return;
-    document.getElementById('usernameDisplay').innerText = currentUser.username + (currentUser.isGuest ? ' (гость)' : '');
-    document.getElementById('userCoins').innerText = currentUser.coins;
-    coins = currentUser.coins;
-    document.getElementById('coinValue').innerText = coins;
-    await renderGamesList();
-    await renderMyProjects();
-    renderShop();
-    renderFriendsList();
-    await renderChat();
-    await renderReports();
-    startChatPolling();
-    connectToServer();
-}
-
-function logout() {
-    if(gameActive) { gameActive=false; if(gameAnimationId) cancelAnimationFrame(gameAnimationId); }
-    if(ws) ws.close();
-    if (chatPollingInterval) clearInterval(chatPollingInterval);
-    currentUser = null;
-    sessionStorage.removeItem('blockverse_session');
-    window.location.href = 'login.html';
-}
-
-function attachMobileEvents() {
-    const sel = '.btn, .nav-btn, .play-btn, .buy-btn, .tool-btn, .block-option, .exit-game, .play-btn-small, .edit-btn-small, .delete-btn-small, #earnCoinsBtn, #addFriendBtn, #sendChatBtn, #reportBugBtn, #connectToServerBtn';
-    document.querySelectorAll(sel).forEach(el => {
-        if(el.hasAttribute('data-touch-fixed')) return;
-        el.setAttribute('data-touch-fixed','true');
-        el.addEventListener('touchstart', (e) => { if(e.defaultPrevented) return; if(el.tagName==='INPUT'||el.tagName==='TEXTAREA') return; e.preventDefault(); el.click(); }, { passive:false });
-    });
-}
-
-setInterval(attachMobileEvents,1500);
-attachMobileEvents();
-
-document.getElementById('showGamesBtn').onclick = () => { document.getElementById('gamesPanel').style.display='block'; document.getElementById('myProjectsPanel').style.display='none'; document.getElementById('shopPanel').style.display='none'; document.getElementById('socialPanel').style.display='none'; document.getElementById('settingsPanel').style.display='none'; renderGamesList(); };
-document.getElementById('showMyProjectsBtn').onclick = () => { document.getElementById('gamesPanel').style.display='none'; document.getElementById('myProjectsPanel').style.display='block'; document.getElementById('shopPanel').style.display='none'; document.getElementById('socialPanel').style.display='none'; document.getElementById('settingsPanel').style.display='none'; renderMyProjects(); };
-document.getElementById('showShopBtn').onclick = () => { document.getElementById('gamesPanel').style.display='none'; document.getElementById('myProjectsPanel').style.display='none'; document.getElementById('shopPanel').style.display='block'; document.getElementById('socialPanel').style.display='none'; document.getElementById('settingsPanel').style.display='none'; renderShop(); };
-document.getElementById('showSocialBtn').onclick = () => { document.getElementById('gamesPanel').style.display='none'; document.getElementById('myProjectsPanel').style.display='none'; document.getElementById('shopPanel').style.display='none'; document.getElementById('socialPanel').style.display='block'; document.getElementById('settingsPanel').style.display='none'; renderFriendsList(); renderChat(); };
-document.getElementById('showSettingsBtn').onclick = () => { document.getElementById('gamesPanel').style.display='none'; document.getElementById('myProjectsPanel').style.display='none'; document.getElementById('shopPanel').style.display='none'; document.getElementById('socialPanel').style.display='none'; document.getElementById('settingsPanel').style.display='block'; };
-document.getElementById('createGameBtn').onclick = async () => { const mod = await import('./editor.js'); mod.openEditor(); };
-document.getElementById('earnCoinsBtn').onclick = () => addCoins(100);
-document.getElementById('addFriendBtn').onclick = addFriend;
-document.getElementById('sendChatBtn').onclick = sendChatMessage;
-document.getElementById('chatInput').addEventListener('keypress', e=>{ if(e.key==='Enter') sendChatMessage(); });
-document.getElementById('logoutBtn').onclick = logout;
-document.getElementById('moveSpeed')?.addEventListener('input', applySettings);
-document.getElementById('reportBugBtn')?.addEventListener('click', showReportDialog);
-document.getElementById('connectToServerBtn')?.addEventListener('click', () => { const sid = document.getElementById('serverIdInput').value.trim(); if(sid) joinGame(sid); else alert('Введите ID'); });
-
-initMobileControls();
-const session = sessionStorage.getItem('blockverse_session');
-if (session) {
-    const data = JSON.parse(session);
-    currentUser = { username: data.username, coins: data.coins, inventory: data.inventory || [], friends: data.friends || [], isGuest: data.isGuest || false };
-    document.getElementById('mainMenuScreen').classList.remove('hidden');
-    updateUIafterAuth();
-} else { window.location.href = 'login.html'; }
+export function openEditor(gameToEdit = null) {
+    document.getElementById('mainMenuScreen').classList.add('hidden');
+    const template = prompt('Выберите шаблон: empty, platformer, racing, rpg', 'empty');
+    document.getElementById('editorScreen').classList.remove('hidden');
+    initEditor();
+    if (template && template !== 'empty') loadTemplate(template);
+                }

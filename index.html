@@ -5,92 +5,484 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>BlockVerse Studio</title>
     <style>
-        * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-tap-highlight-color:transparent; }
-        body { font-family:'Segoe UI','Poppins',system-ui; background:#1e1f24; color:white; overflow:hidden; height:100vh; width:100%; position:fixed; }
-        .screen { position:absolute; top:0; left:0; width:100%; height:100%; overflow-y:auto; padding:20px; }
-        .hidden { display:none; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
 
-        #loadingScreen { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:10000; display:flex; align-items:center; justify-content:center; flex-direction:column; }
-        .spinner { width:50px; height:50px; border:4px solid #ff5722; border-top-color:transparent; border-radius:50%; animation:spin 1s linear infinite; margin-bottom:20px; }
-        @keyframes spin { to { transform:rotate(360deg); } }
+        body {
+            font-family: 'Segoe UI', 'Poppins', system-ui, sans-serif;
+            background: #1e1f24;
+            color: #cccccc;
+            overflow: hidden;
+            height: 100vh;
+            width: 100%;
+            position: fixed;
+        }
 
-        .header { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; margin-bottom:30px; background:rgba(0,0,0,0.6); backdrop-filter:blur(8px); padding:12px 24px; border-radius:60px; }
-        .logo { font-size:28px; font-weight:bold; background:linear-gradient(135deg,#ffaa44,#ff5722); -webkit-background-clip:text; background-clip:text; color:transparent; }
-        .user-info { display:flex; gap:20px; align-items:center; flex-wrap:wrap; }
-        .coin-badge { background:#f0b90b; color:#1e1e2a; padding:6px 14px; border-radius:40px; font-weight:bold; display:flex; align-items:center; gap:6px; }
-        .nav-buttons { display:flex; gap:12px; flex-wrap:wrap; }
-        .nav-btn { background:rgba(255,255,255,0.1); backdrop-filter:blur(4px); padding:8px 20px; border-radius:40px; cursor:pointer; font-weight:500; transition:0.2s; border:1px solid rgba(255,255,255,0.2); }
-        .nav-btn:hover { background:#ff5722; border-color:#ffaa44; }
+        #loadingScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.95);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid #ff5722;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
 
-        .games-grid, .my-projects-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:24px; margin-top:20px; max-height:calc(100vh - 200px); overflow-y:auto; padding-right:10px; }
-        .game-card, .project-card { background:rgba(30,35,55,0.8); backdrop-filter:blur(8px); border-radius:24px; overflow:hidden; cursor:pointer; border:1px solid rgba(255,255,255,0.15); transition:0.2s; }
-        .game-card:hover, .project-card:hover { transform:translateY(-5px); border-color:#ffaa44; }
-        .game-image { height:140px; background:linear-gradient(135deg,#2a3a5a,#1a2a4a); display:flex; align-items:center; justify-content:center; font-size:48px; }
-        .game-info, .project-card { padding:16px; }
-        .game-title { font-size:20px; font-weight:bold; }
-        .game-author { font-size:12px; color:#aaa; margin:4px 0; }
-        .play-btn { background:#ff5722; border:none; padding:8px 16px; border-radius:30px; font-weight:bold; cursor:pointer; margin-top:8px; width:100%; }
+        .screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow-y: auto;
+            padding: 20px;
+        }
+        .hidden { display: none; }
 
-        .studio-layout { display:flex; flex-direction:column; height:100%; background:#1e1f24; }
-        .menu-bar { background:#2c2f36; padding:4px 12px; display:flex; gap:8px; border-bottom:1px solid #3a3e47; }
-        .menu-item { padding:4px 12px; cursor:pointer; font-size:13px; border-radius:4px; }
-        .menu-item:hover { background:#3a3e47; }
-        .toolbar { background:#2c2f36; padding:6px 12px; display:flex; gap:4px; border-bottom:1px solid #3a3e47; }
-        .tool-btn { background:#3a3e47; border:none; color:white; padding:4px 12px; border-radius:4px; cursor:pointer; font-size:12px; }
-        .tool-btn.active { background:#ff5722; }
-        .tool-btn:hover { background:#4a4e55; }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 30px;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(12px);
+            padding: 12px 24px;
+            border-radius: 60px;
+        }
+        .logo {
+            font-size: 28px;
+            font-weight: bold;
+            background: linear-gradient(135deg, #ffaa44, #ff5722);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+        .user-info {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .coin-badge {
+            background: #f0b90b;
+            color: #1e1e2a;
+            padding: 6px 14px;
+            border-radius: 40px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .nav-buttons {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .nav-btn {
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(4px);
+            padding: 8px 20px;
+            border-radius: 40px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: 0.2s;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        .nav-btn:hover {
+            background: #ff5722;
+            border-color: #ffaa44;
+        }
 
-        .main-area { display:flex; flex:1; overflow:hidden; }
-        .explorer-panel { width:260px; background:#2c2f36; border-right:1px solid #3a3e47; display:flex; flex-direction:column; }
-        .explorer-header { padding:8px; font-weight:bold; border-bottom:1px solid #3a3e47; }
-        .explorer-tree { flex:1; overflow-y:auto; padding:4px; }
-        .explorer-item { padding:4px 8px; margin:1px 0; border-radius:4px; cursor:pointer; display:flex; align-items:center; gap:6px; }
-        .explorer-item:hover { background:#3a3e47; }
-        .explorer-item.selected { background:#0e639c; }
-        .explorer-children { margin-left:20px; }
+        .games-grid, .my-projects-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 24px;
+            margin-top: 20px;
+            max-height: calc(100vh - 200px);
+            overflow-y: auto;
+            padding-right: 10px;
+        }
+        .game-card, .project-card {
+            background: rgba(30,35,55,0.8);
+            backdrop-filter: blur(8px);
+            border-radius: 24px;
+            overflow: hidden;
+            cursor: pointer;
+            border: 1px solid rgba(255,255,255,0.15);
+            transition: 0.2s;
+        }
+        .game-card:hover, .project-card:hover {
+            transform: translateY(-5px);
+            border-color: #ffaa44;
+        }
+        .game-image {
+            height: 140px;
+            background: linear-gradient(135deg, #2a3a5a, #1a2a4a);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+        }
+        .game-info, .project-card {
+            padding: 16px;
+        }
+        .game-title {
+            font-size: 20px;
+            font-weight: bold;
+        }
+        .game-author {
+            font-size: 12px;
+            color: #aaa;
+            margin: 4px 0;
+        }
+        .play-btn {
+            background: #ff5722;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 30px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 8px;
+            width: 100%;
+        }
 
-        .viewport-area { flex:1; position:relative; }
-        .editor-canvas { width:100%; height:100%; background:#1a1d24; }
+        /* ROOBLOX STUDIO СТИЛЬ */
+        .studio-layout {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            background: #1e1f24;
+        }
+        .menu-bar {
+            background: #2c2f36;
+            padding: 4px 12px;
+            display: flex;
+            gap: 8px;
+            border-bottom: 1px solid #3a3e47;
+        }
+        .menu-item {
+            padding: 4px 12px;
+            cursor: pointer;
+            font-size: 13px;
+            border-radius: 4px;
+            color: #cccccc;
+        }
+        .menu-item:hover {
+            background: #3a3e47;
+        }
+        .toolbar {
+            background: #2c2f36;
+            padding: 6px 12px;
+            display: flex;
+            gap: 4px;
+            border-bottom: 1px solid #3a3e47;
+            flex-wrap: wrap;
+        }
+        .tool-btn {
+            background: #3a3e47;
+            border: none;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .tool-btn.active {
+            background: #ff5722;
+        }
+        .tool-btn:hover {
+            background: #4a4e55;
+        }
+        .main-area {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+        .explorer-panel {
+            width: 280px;
+            background: #2c2f36;
+            border-right: 1px solid #3a3e47;
+            display: flex;
+            flex-direction: column;
+        }
+        .explorer-header {
+            padding: 8px 12px;
+            font-weight: bold;
+            font-size: 12px;
+            text-transform: uppercase;
+            background: #25282e;
+            border-bottom: 1px solid #3a3e47;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .explorer-header .add-btn {
+            background: #3a3e47;
+            border: none;
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .explorer-tree {
+            flex: 1;
+            overflow-y: auto;
+            padding: 4px;
+        }
+        .explorer-item {
+            padding: 4px 8px;
+            margin: 1px 0;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+        }
+        .explorer-item:hover { background: #3a3e47; }
+        .explorer-item.selected { background: #0e639c; }
+        .explorer-item .controls {
+            display: none;
+            gap: 4px;
+        }
+        .explorer-item:hover .controls { display: flex; }
+        .explorer-item .controls button {
+            background: none;
+            border: none;
+            color: #ccc;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .explorer-children { margin-left: 20px; }
 
-        .properties-panel { width:280px; background:#2c2f36; border-left:1px solid #3a3e47; display:flex; flex-direction:column; }
-        .properties-header { padding:8px; font-weight:bold; border-bottom:1px solid #3a3e47; }
-        .properties-content { flex:1; overflow-y:auto; padding:8px; }
-        .prop-group { margin-bottom:12px; }
-        .prop-group label { display:block; margin-bottom:4px; font-size:11px; color:#aaa; }
-        .prop-group input, .prop-group select, .prop-group textarea { width:100%; background:#1a1f2e; border:1px solid #4a6e8a; border-radius:4px; padding:4px 8px; color:white; font-size:12px; }
+        .viewport-area {
+            flex: 1;
+            position: relative;
+            background: #1a1d24;
+        }
+        .editor-canvas {
+            width: 100%;
+            height: 100%;
+        }
+        .properties-panel {
+            width: 320px;
+            background: #2c2f36;
+            border-left: 1px solid #3a3e47;
+            display: flex;
+            flex-direction: column;
+        }
+        .properties-header {
+            padding: 8px 12px;
+            font-weight: bold;
+            font-size: 12px;
+            text-transform: uppercase;
+            background: #25282e;
+            border-bottom: 1px solid #3a3e47;
+        }
+        .properties-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+        }
+        .prop-group { margin-bottom: 12px; }
+        .prop-group label {
+            display: block;
+            margin-bottom: 4px;
+            font-size: 11px;
+            color: #aaaaaa;
+        }
+        .prop-group input,
+        .prop-group select,
+        .prop-group textarea {
+            width: 100%;
+            background: #1a1f2e;
+            border: 1px solid #3a3e47;
+            border-radius: 4px;
+            padding: 6px 8px;
+            color: white;
+            font-size: 12px;
+        }
+        .bottom-panel {
+            background: #2c2f36;
+            border-top: 1px solid #3a3e47;
+            height: 250px;
+            display: flex;
+            flex-direction: column;
+        }
+        .bottom-tabs {
+            display: flex;
+            gap: 2px;
+            background: #1e1f24;
+            padding: 4px 8px;
+        }
+        .bottom-tab {
+            padding: 6px 16px;
+            cursor: pointer;
+            font-size: 12px;
+            border-radius: 4px 4px 0 0;
+            background: #2c2f36;
+            color: #cccccc;
+        }
+        .bottom-tab.active {
+            background: #0e639c;
+            color: white;
+        }
+        .bottom-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+        }
+        .timeline-canvas {
+            width: 100%;
+            height: 100px;
+            background: #1a1f2e;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .block-palette {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+        .block-option {
+            width: 44px;
+            height: 44px;
+            border-radius: 8px;
+            cursor: pointer;
+            border: 2px solid transparent;
+        }
+        .block-option.selected { border-color: #ffaa44; }
 
-        .bottom-panel { background:#2c2f36; border-top:1px solid #3a3e47; height:200px; display:flex; flex-direction:column; }
-        .bottom-tabs { display:flex; gap:2px; background:#1e1f24; padding:4px 8px; }
-        .bottom-tab { padding:4px 12px; cursor:pointer; font-size:12px; border-radius:4px; }
-        .bottom-tab.active { background:#0e639c; }
-        .bottom-content { flex:1; overflow-y:auto; padding:8px; }
+        /* НОРМАЛЬНАЯ ГИЛЬЗА (ДЖОЙСТИК) */
+        #mobileControls {
+            position: fixed;
+            bottom: 20px;
+            left: 0;
+            right: 0;
+            pointer-events: none;
+            z-index: 1000;
+            display: none;
+        }
+        .joystick-container {
+            position: absolute;
+            bottom: 0;
+            left: 20px;
+            width: 120px;
+            height: 120px;
+            background: rgba(0,0,0,0.4);
+            border-radius: 60px;
+            pointer-events: auto;
+            backdrop-filter: blur(4px);
+            border: 2px solid rgba(255,255,255,0.2);
+        }
+        .joystick-base {
+            width: 100%;
+            height: 100%;
+            border-radius: 60px;
+            background: rgba(255,255,255,0.15);
+        }
+        .joystick-thumb {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            background: rgba(255,255,255,0.9);
+            border-radius: 25px;
+            top: 35px;
+            left: 35px;
+            transition: 0.02s linear;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            cursor: pointer;
+        }
+        .mobile-jump-btn {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 70px;
+            height: 70px;
+            background: rgba(255,87,34,0.9);
+            border: none;
+            border-radius: 35px;
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+            pointer-events: auto;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            transition: 0.05s linear;
+        }
+        .mobile-jump-btn:active {
+            transform: scale(0.95);
+            background: #ff5722;
+        }
 
-        .timeline-canvas { width:100%; height:100px; background:#1a1f2e; border-radius:4px; cursor:pointer; }
-        .block-palette { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
-        .block-option { width:40px; height:40px; border-radius:8px; cursor:pointer; border:2px solid transparent; }
-        .block-option.selected { border-color:#ffaa44; }
+        .exit-editor-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #ff3333;
+            border: none;
+            padding: 4px 12px;
+            border-radius: 4px;
+            color: white;
+            cursor: pointer;
+            z-index: 61;
+            font-size: 12px;
+        }
+        .custom-game-ui {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.6);
+            padding: 4px 12px;
+            border-radius: 20px;
+            z-index: 20;
+            display: flex;
+            gap: 10px;
+            font-size: 12px;
+        }
 
-        #mobileControls { position:fixed; bottom:20px; left:0; right:0; pointer-events:none; z-index:1000; display:none; }
-        .joystick-container { position:absolute; bottom:0; left:20px; width:100px; height:100px; background:rgba(0,0,0,0.5); border-radius:50px; pointer-events:auto; }
-        .joystick-thumb { position:absolute; width:40px; height:40px; background:rgba(255,255,255,0.8); border-radius:20px; top:30px; left:30px; transition:0.05s linear; }
-        .mobile-jump-btn { position:absolute; bottom:20px; right:20px; width:60px; height:60px; background:rgba(255,87,34,0.9); border:none; border-radius:30px; color:white; font-size:16px; font-weight:bold; pointer-events:auto; }
-
-        .exit-editor-btn { position:absolute; top:10px; right:10px; background:#ff3333; border:none; padding:4px 12px; border-radius:4px; color:white; cursor:pointer; z-index:61; font-size:12px; }
-        .custom-game-ui { position:absolute; bottom:10px; left:10px; background:rgba(0,0,0,0.6); padding:4px 12px; border-radius:20px; z-index:20; display:flex; gap:10px; font-size:12px; }
-
-        @media (max-width:768px) {
-            .explorer-panel { width:200px; }
-            .properties-panel { width:220px; }
-            .bottom-panel { height:150px; }
+        @media (max-width: 768px) {
+            .explorer-panel { width: 220px; }
+            .properties-panel { width: 240px; }
+            .bottom-panel { height: 200px; }
+            .tool-btn { padding: 6px 10px; }
+            .menu-item { font-size: 12px; }
+            .joystick-container { width: 100px; height: 100px; }
+            .joystick-thumb { width: 40px; height: 40px; top: 30px; left: 30px; }
+            .mobile-jump-btn { width: 60px; height: 60px; font-size: 14px; }
         }
     </style>
 </head>
 <body>
-<div id="loadingScreen"><div class="spinner"></div><div>Загрузка...</div></div>
+<div id="loadingScreen"><div class="spinner"></div><div>Загрузка BlockVerse Studio...</div></div>
 
 <script>
     if (!sessionStorage.getItem('blockverse_session')) window.location.href = 'login.html';
-    window.addEventListener('load', () => { setTimeout(() => { document.getElementById('loadingScreen').style.display = 'none'; }, 500); });
+    window.addEventListener('load', () => {
+        setTimeout(() => { document.getElementById('loadingScreen').style.display = 'none'; }, 500);
+    });
 </script>
 
 <div id="mainMenuScreen" class="screen">
@@ -137,7 +529,10 @@
         </div>
         <div class="main-area">
             <div class="explorer-panel">
-                <div class="explorer-header">📁 Проводник</div>
+                <div class="explorer-header">
+                    <span>📁 EXPLORER</span>
+                    <button class="add-btn" id="addFolderBtn">+</button>
+                </div>
                 <div id="explorerTree" class="explorer-tree"></div>
             </div>
             <div class="viewport-area">
@@ -145,7 +540,7 @@
                 <button class="exit-editor-btn" id="exitEditorBtn">✖ Выйти</button>
             </div>
             <div class="properties-panel">
-                <div class="properties-header">⚙️ Свойства</div>
+                <div class="properties-header">⚙️ PROPERTIES</div>
                 <div id="propertiesContent" class="properties-content"></div>
             </div>
         </div>
@@ -159,12 +554,63 @@
                 <div class="bottom-tab" data-tab="npc">NPC</div>
             </div>
             <div class="bottom-content">
-                <div id="blocksTab" class="tab-content active"><div class="block-palette"><div class="block-option" data-type="wood" style="background:#8B5A2B;"></div><div class="block-option" data-type="stone" style="background:#808080;"></div><div class="block-option" data-type="concrete" style="background:#B0B0B0;"></div><div class="block-option" data-type="dirt" style="background:#6B4C3B;"></div></div><label>Цвет: <input type="color" id="blockColorPicker"></label><label>Collision: <input type="checkbox" id="blockCollision" checked></label></div>
-                <div id="vfxTab" class="tab-content hidden"><button id="addParticleBtn">➕ Частицы</button><div><button id="vfxFireBtn">🔥 Огонь</button><button id="vfxWaterBtn">💧 Вода</button><button id="vfxAirBtn">💨 Воздух</button><button id="vfxSmokeBtn">🌫️ Дым</button></div></div>
-                <div id="animationsTab" class="tab-content hidden"><div><button id="newAnimationBtn">➕ Создать</button><select id="animationSelect"></select><button id="playAnimationBtn">▶</button><button id="stopAnimationBtn">⏹</button><button id="recordAnimationBtn">🎥 Записать</button></div><canvas id="timelineCanvas" class="timeline-canvas" width="800" height="100"></canvas><div><span id="currentTime">0.00</span><span id="animationDuration">1.00</span></div></div>
-                <div id="scriptsTab" class="tab-content hidden"><textarea id="blockScriptEditor" rows="4" placeholder="// Ваш скрипт"></textarea><button id="applyScriptBtn">Применить</button></div>
-                <div id="guiTab" class="tab-content hidden"><button id="addButtonBtn">➕ Кнопка</button><button id="addPanelBtn">📦 Панель</button><button id="addTextBtn">📝 Текст</button><div id="guiElementsList"></div><div id="guiPreview" class="gui-preview"></div></div>
-                <div id="npcTab" class="tab-content hidden"><button id="createNpcBtn">➕ Создать NPC</button><div id="npcList"></div><div id="npcProperties"><label>Имя: <input id="npcName"></label><label>Поведение: <select id="npcBehavior"><option value="idle">Стоять</option><option value="patrol">Патруль</option><option value="follow">Следовать</option></select></label><label>Скорость: <input id="npcSpeed" type="number" value="2"></label><label>Диалог: <textarea id="npcDialog" rows="2"></textarea></label><button id="saveNpcBtn">Сохранить</button></div></div>
+                <div id="blocksTab" class="tab-content active">
+                    <div class="block-palette">
+                        <div class="block-option" data-type="wood" style="background:#8B5A2B;"></div>
+                        <div class="block-option" data-type="stone" style="background:#808080;"></div>
+                        <div class="block-option" data-type="concrete" style="background:#B0B0B0;"></div>
+                        <div class="block-option" data-type="dirt" style="background:#6B4C3B;"></div>
+                    </div>
+                    <label>Цвет: <input type="color" id="blockColorPicker"></label>
+                    <label>Collision: <input type="checkbox" id="blockCollision" checked></label>
+                </div>
+                <div id="vfxTab" class="tab-content hidden">
+                    <button id="addParticleBtn">➕ Добавить частицы</button>
+                    <div style="margin-top: 8px;">
+                        <button id="vfxFireBtn">🔥 Огонь</button>
+                        <button id="vfxWaterBtn">💧 Вода</button>
+                        <button id="vfxAirBtn">💨 Воздух</button>
+                        <button id="vfxSmokeBtn">🌫️ Дым</button>
+                    </div>
+                </div>
+                <div id="animationsTab" class="tab-content hidden">
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
+                        <button id="newAnimationBtn">➕ Создать анимацию</button>
+                        <select id="animationSelect"></select>
+                        <button id="playAnimationBtn">▶ Воспроизвести</button>
+                        <button id="stopAnimationBtn">⏹ Стоп</button>
+                        <button id="recordAnimationBtn">🎥 Записать</button>
+                    </div>
+                    <canvas id="timelineCanvas" class="timeline-canvas" width="800" height="100"></canvas>
+                    <div style="display: flex; justify-content: space-between; margin-top: 4px;">
+                        <span id="currentTime">0.00</span>
+                        <span id="animationDuration">1.00</span>
+                    </div>
+                </div>
+                <div id="scriptsTab" class="tab-content hidden">
+                    <textarea id="blockScriptEditor" rows="4" placeholder="// Ваш скрипт здесь"></textarea>
+                    <button id="applyScriptBtn" style="margin-top: 8px;">Применить скрипт</button>
+                </div>
+                <div id="guiTab" class="tab-content hidden">
+                    <div style="display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;">
+                        <button id="addButtonBtn">➕ Кнопка</button>
+                        <button id="addPanelBtn">📦 Панель</button>
+                        <button id="addTextBtn">📝 Текст</button>
+                    </div>
+                    <div id="guiElementsList" style="max-height: 100px; overflow-y: auto; background: #1a1f2e; border-radius: 4px; padding: 8px; margin-bottom: 8px;"></div>
+                    <div id="guiPreview" style="background: #1a1f2e; border-radius: 4px; min-height: 80px; position: relative; padding: 8px;"></div>
+                </div>
+                <div id="npcTab" class="tab-content hidden">
+                    <button id="createNpcBtn">➕ Создать NPC</button>
+                    <div id="npcList" style="max-height: 120px; overflow-y: auto; margin-top: 8px;"></div>
+                    <div id="npcProperties" style="background: #1a1f2e; border-radius: 4px; padding: 8px; margin-top: 8px;">
+                        <label>Имя: <input type="text" id="npcName" style="width: 100%;"></label>
+                        <label>Поведение: <select id="npcBehavior"><option value="idle">Стоять</option><option value="patrol">Патруль</option><option value="follow">Следовать</option></select></label>
+                        <label>Скорость: <input type="number" id="npcSpeed" value="2" step="0.5"></label>
+                        <label>Диалог: <textarea id="npcDialog" rows="2"></textarea></label>
+                        <button id="saveNpcBtn" style="margin-top: 8px;">Сохранить NPC</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -177,14 +623,22 @@
 </div>
 
 <div id="mobileControls">
-    <div class="joystick-container" id="joystickContainer"><div class="joystick-base"></div><div class="joystick-thumb" id="joystickThumb"></div></div>
+    <div class="joystick-container" id="joystickContainer">
+        <div class="joystick-base"></div>
+        <div class="joystick-thumb" id="joystickThumb"></div>
+    </div>
     <button class="mobile-jump-btn" id="mobileJumpBtn">ПРЫЖОК</button>
 </div>
 
 <script type="importmap">
-    { "imports": { "three": "https://unpkg.com/three@0.128.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.128.0/examples/jsm/" } }
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.128.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.128.0/examples/jsm/"
+        }
+    }
 </script>
 <script type="module" src="platform.js"></script>
 <script type="module" src="editor.js"></script>
 </body>
-</html>
+    </html>

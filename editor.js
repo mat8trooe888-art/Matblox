@@ -32,7 +32,7 @@ let currentAnimationDuration = 1;
 let guiElements = [];
 let npcs = [];
 let selectedNpc = null;
-let currentGameId = null; // ID редактируемой игры
+let currentGameId = null;
 
 function generateId() { return Date.now() + '-' + Math.random().toString(36).substr(2, 8); }
 
@@ -537,7 +537,11 @@ function updateAnimationSelect() {
 
 // ========== СОХРАНЕНИЕ И ПУБЛИКАЦИЯ ==========
 async function saveGame(isPublished = false) {
-    if (!window.currentUser) { alert('Вы не авторизованы'); return; }
+    // Проверяем авторизацию через глобальный window.currentUser
+    if (!window.currentUser) {
+        alert('Вы не авторизованы. Пожалуйста, войдите в аккаунт.');
+        return;
+    }
     
     const gameName = prompt('Название игры:', currentGameId ? 'Моя игра' : 'Новая игра');
     if (!gameName) return;
@@ -559,10 +563,8 @@ async function saveGame(isPublished = false) {
     
     let result;
     if (currentGameId && !isPublished) {
-        // Обновляем существующую игру
         result = await API.updateGame(currentGameId, gameName, description, gameData);
     } else {
-        // Создаём новую игру
         result = await API.saveGame(gameName, window.currentUser.username, gameData, description);
         if (result.id) currentGameId = result.id;
     }
@@ -641,7 +643,6 @@ function clearEditor() {
     guiElements = [];
     npcs = [];
     if (transformControls.object) transformControls.detach();
-    // Создаём папки
     folders.forEach(f => {
         editorObjects.push({ id: f, name: f, type: 'folder', parentId: null, childrenIds: [], threeObject: null });
     });
@@ -772,4 +773,4 @@ export function openEditor(gameToEdit = null) {
     } else if (template && template !== 'empty') {
         loadTemplate(template);
     }
-    }
+            }

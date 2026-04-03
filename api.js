@@ -14,7 +14,6 @@ async function checkAPI() {
 }
 checkAPI();
 
-// ========== LOCALSTORAGE FALLBACK ==========
 function getLocalUsers() { return JSON.parse(localStorage.getItem('blockverse_users')) || []; }
 function saveLocalUsers(users) { localStorage.setItem('blockverse_users', JSON.stringify(users)); }
 function getLocalGames() { return JSON.parse(localStorage.getItem('blockverse_games')) || []; }
@@ -24,7 +23,6 @@ function saveLocalChat(chat) { localStorage.setItem('blockverse_chat', JSON.stri
 function getLocalReports() { return JSON.parse(localStorage.getItem('blockverse_reports')) || []; }
 function saveLocalReports(reports) { localStorage.setItem('blockverse_reports', JSON.stringify(reports.slice(-50))); }
 
-// ========== API ФУНКЦИИ ==========
 export async function register(username, password) {
     if (apiAvailable) {
         try {
@@ -88,6 +86,29 @@ export async function saveGame(name, author, data, description = '') {
     games.push({ id, name, author, desc: description, data });
     saveLocalGames(games);
     return { id };
+}
+
+export async function updateGame(id, name, description, data) {
+    if (apiAvailable) {
+        try {
+            const res = await fetch(`${API_BASE}/games/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, description, data })
+            });
+            return await res.json();
+        } catch { apiAvailable = false; }
+    }
+    const games = getLocalGames();
+    const index = games.findIndex(g => g.id == id);
+    if (index !== -1) {
+        games[index].name = name;
+        games[index].desc = description;
+        games[index].data = data;
+        saveLocalGames(games);
+        return { success: true };
+    }
+    return { error: 'Game not found' };
 }
 
 export async function deleteGame(id, author) {
@@ -172,4 +193,4 @@ export async function getReports() {
         } catch { apiAvailable = false; }
     }
     return getLocalReports();
-    }
+}

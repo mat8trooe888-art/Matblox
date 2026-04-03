@@ -140,7 +140,7 @@ function createGameOnServer(name, data) {
     if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({type:'create_game',gameName:name,author:currentUser.username,gameData:data}));
     } else {
-        alert('WebSocket не доступен, используйте локальный режим');
+        alert('WebSocket не доступен');
     }
 }
 

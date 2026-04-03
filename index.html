@@ -10,12 +10,10 @@
         .screen { position:absolute; top:0; left:0; width:100%; height:100%; overflow-y:auto; padding:20px; }
         .hidden { display:none; }
 
-        /* Экран загрузки */
         #loadingScreen { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:10000; display:flex; align-items:center; justify-content:center; flex-direction:column; }
         .spinner { width:50px; height:50px; border:4px solid #ff5722; border-top-color:transparent; border-radius:50%; animation:spin 1s linear infinite; margin-bottom:20px; }
         @keyframes spin { to { transform:rotate(360deg); } }
 
-        /* Главное меню */
         .header { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; margin-bottom:30px; background:rgba(0,0,0,0.6); backdrop-filter:blur(8px); padding:12px 24px; border-radius:60px; }
         .logo { font-size:28px; font-weight:bold; background:linear-gradient(135deg,#ffaa44,#ff5722); -webkit-background-clip:text; background-clip:text; color:transparent; }
         .user-info { display:flex; gap:20px; align-items:center; flex-wrap:wrap; }
@@ -33,7 +31,6 @@
         .game-author { font-size:12px; color:#aaa; margin:4px 0; }
         .play-btn { background:#ff5722; border:none; padding:8px 16px; border-radius:30px; font-weight:bold; cursor:pointer; margin-top:8px; width:100%; }
 
-        /* Roblox Studio конструктор */
         .studio-layout { display:flex; flex-direction:column; height:100%; background:#1e1f24; }
         .menu-bar { background:#2c2f36; padding:4px 12px; display:flex; gap:8px; border-bottom:1px solid #3a3e47; }
         .menu-item { padding:4px 12px; cursor:pointer; font-size:13px; border-radius:4px; }
@@ -73,7 +70,6 @@
         .block-option { width:40px; height:40px; border-radius:8px; cursor:pointer; border:2px solid transparent; }
         .block-option.selected { border-color:#ffaa44; }
 
-        /* Мобильное управление */
         #mobileControls { position:fixed; bottom:20px; left:0; right:0; pointer-events:none; z-index:1000; display:none; }
         .joystick-container { position:absolute; bottom:0; left:20px; width:100px; height:100px; background:rgba(0,0,0,0.5); border-radius:50px; pointer-events:auto; }
         .joystick-thumb { position:absolute; width:40px; height:40px; background:rgba(255,255,255,0.8); border-radius:20px; top:30px; left:30px; transition:0.05s linear; }
@@ -97,7 +93,6 @@
     window.addEventListener('load', () => { setTimeout(() => { document.getElementById('loadingScreen').style.display = 'none'; }, 500); });
 </script>
 
-<!-- Главное меню -->
 <div id="mainMenuScreen" class="screen">
     <div class="header">
         <div class="logo">🎮 BlockVerse Studio</div>
@@ -122,7 +117,6 @@
     <div id="settingsPanel" style="display:none;"><h2>⚙️ Настройки</h2><label>Скорость: <input type="range" id="moveSpeed" min="2" max="6" step="0.5" value="4"></label><button id="reportBugBtn">Сообщить о проблеме</button><div id="reportsList"></div></div>
 </div>
 
-<!-- Roblox Studio конструктор -->
 <div id="editorScreen" class="screen hidden">
     <div class="studio-layout">
         <div class="menu-bar">
@@ -193,4 +187,4 @@
 <script type="module" src="platform.js"></script>
 <script type="module" src="editor.js"></script>
 </body>
-            </html>
+</html>

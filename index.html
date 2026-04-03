@@ -58,6 +58,7 @@
         }
         .hidden { display: none; }
 
+        /* Главное меню */
         .header {
             display: flex;
             justify-content: space-between;
@@ -143,28 +144,10 @@
             justify-content: center;
             font-size: 48px;
         }
-        .game-info, .project-card {
-            padding: 16px;
-        }
-        .game-title {
-            font-size: 20px;
-            font-weight: bold;
-        }
-        .game-author {
-            font-size: 12px;
-            color: #aaa;
-            margin: 4px 0;
-        }
-        .play-btn {
-            background: #ff5722;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 30px;
-            font-weight: bold;
-            cursor: pointer;
-            margin-top: 8px;
-            width: 100%;
-        }
+        .game-info, .project-card { padding: 16px; }
+        .game-title { font-size: 20px; font-weight: bold; }
+        .game-author { font-size: 12px; color: #aaa; margin: 4px 0; }
+        .play-btn { background: #ff5722; border: none; padding: 8px 16px; border-radius: 30px; font-weight: bold; cursor: pointer; margin-top: 8px; width: 100%; }
 
         /* ROOBLOX STUDIO СТИЛЬ */
         .studio-layout {
@@ -187,9 +170,7 @@
             border-radius: 4px;
             color: #cccccc;
         }
-        .menu-item:hover {
-            background: #3a3e47;
-        }
+        .menu-item:hover { background: #3a3e47; }
         .toolbar {
             background: #2c2f36;
             padding: 6px 12px;
@@ -207,12 +188,8 @@
             cursor: pointer;
             font-size: 12px;
         }
-        .tool-btn.active {
-            background: #ff5722;
-        }
-        .tool-btn:hover {
-            background: #4a4e55;
-        }
+        .tool-btn.active { background: #ff5722; }
+        .tool-btn:hover { background: #4a4e55; }
         .main-area {
             display: flex;
             flex: 1;
@@ -313,9 +290,7 @@
             font-size: 11px;
             color: #aaaaaa;
         }
-        .prop-group input,
-        .prop-group select,
-        .prop-group textarea {
+        .prop-group input, .prop-group select, .prop-group textarea {
             width: 100%;
             background: #1a1f2e;
             border: 1px solid #3a3e47;
@@ -376,7 +351,7 @@
         }
         .block-option.selected { border-color: #ffaa44; }
 
-        /* НОРМАЛЬНАЯ ГИЛЬЗА (ДЖОЙСТИК) */
+        /* Мобильное управление */
         #mobileControls {
             position: fixed;
             bottom: 20px;
@@ -397,12 +372,6 @@
             pointer-events: auto;
             backdrop-filter: blur(4px);
             border: 2px solid rgba(255,255,255,0.2);
-        }
-        .joystick-base {
-            width: 100%;
-            height: 100%;
-            border-radius: 60px;
-            background: rgba(255,255,255,0.15);
         }
         .joystick-thumb {
             position: absolute;
@@ -436,7 +405,6 @@
             transform: scale(0.95);
             background: #ff5722;
         }
-
         .exit-editor-btn {
             position: absolute;
             top: 10px;
@@ -462,7 +430,6 @@
             gap: 10px;
             font-size: 12px;
         }
-
         @media (max-width: 768px) {
             .explorer-panel { width: 220px; }
             .properties-panel { width: 240px; }
@@ -529,10 +496,7 @@
         </div>
         <div class="main-area">
             <div class="explorer-panel">
-                <div class="explorer-header">
-                    <span>📁 EXPLORER</span>
-                    <button class="add-btn" id="addFolderBtn">+</button>
-                </div>
+                <div class="explorer-header"><span>📁 EXPLORER</span><button class="add-btn" id="addFolderBtn">+</button></div>
                 <div id="explorerTree" class="explorer-tree"></div>
             </div>
             <div class="viewport-area">
@@ -552,6 +516,7 @@
                 <div class="bottom-tab" data-tab="scripts">Скрипты</div>
                 <div class="bottom-tab" data-tab="gui">GUI</div>
                 <div class="bottom-tab" data-tab="npc">NPC</div>
+                <div class="bottom-tab" data-tab="lighting">Освещение</div>
             </div>
             <div class="bottom-content">
                 <div id="blocksTab" class="tab-content active">
@@ -566,50 +531,38 @@
                 </div>
                 <div id="vfxTab" class="tab-content hidden">
                     <button id="addParticleBtn">➕ Добавить частицы</button>
-                    <div style="margin-top: 8px;">
-                        <button id="vfxFireBtn">🔥 Огонь</button>
-                        <button id="vfxWaterBtn">💧 Вода</button>
-                        <button id="vfxAirBtn">💨 Воздух</button>
-                        <button id="vfxSmokeBtn">🌫️ Дым</button>
-                    </div>
+                    <div><button id="vfxFireBtn">🔥 Огонь</button><button id="vfxWaterBtn">💧 Вода</button><button id="vfxAirBtn">💨 Воздух</button><button id="vfxSmokeBtn">🌫️ Дым</button></div>
                 </div>
                 <div id="animationsTab" class="tab-content hidden">
-                    <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
-                        <button id="newAnimationBtn">➕ Создать анимацию</button>
-                        <select id="animationSelect"></select>
-                        <button id="playAnimationBtn">▶ Воспроизвести</button>
-                        <button id="stopAnimationBtn">⏹ Стоп</button>
-                        <button id="recordAnimationBtn">🎥 Записать</button>
-                    </div>
+                    <div><button id="newAnimationBtn">➕ Создать</button><select id="animationSelect"></select><button id="playAnimationBtn">▶</button><button id="stopAnimationBtn">⏹</button><button id="recordAnimationBtn">🎥 Записать</button></div>
                     <canvas id="timelineCanvas" class="timeline-canvas" width="800" height="100"></canvas>
-                    <div style="display: flex; justify-content: space-between; margin-top: 4px;">
-                        <span id="currentTime">0.00</span>
-                        <span id="animationDuration">1.00</span>
-                    </div>
+                    <div><span id="currentTime">0.00</span><span id="animationDuration">1.00</span></div>
                 </div>
                 <div id="scriptsTab" class="tab-content hidden">
-                    <textarea id="blockScriptEditor" rows="4" placeholder="// Ваш скрипт здесь"></textarea>
-                    <button id="applyScriptBtn" style="margin-top: 8px;">Применить скрипт</button>
+                    <textarea id="blockScriptEditor" rows="4" placeholder="// Ваш скрипт"></textarea>
+                    <button id="applyScriptBtn">Применить</button>
                 </div>
                 <div id="guiTab" class="tab-content hidden">
-                    <div style="display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;">
-                        <button id="addButtonBtn">➕ Кнопка</button>
-                        <button id="addPanelBtn">📦 Панель</button>
-                        <button id="addTextBtn">📝 Текст</button>
-                    </div>
-                    <div id="guiElementsList" style="max-height: 100px; overflow-y: auto; background: #1a1f2e; border-radius: 4px; padding: 8px; margin-bottom: 8px;"></div>
-                    <div id="guiPreview" style="background: #1a1f2e; border-radius: 4px; min-height: 80px; position: relative; padding: 8px;"></div>
+                    <div><button id="addButtonBtn">➕ Кнопка</button><button id="addPanelBtn">📦 Панель</button><button id="addTextBtn">📝 Текст</button></div>
+                    <div id="guiElementsList" style="max-height:100px; overflow-y:auto; background:#1a1f2e; margin:8px 0; padding:8px;"></div>
+                    <div id="guiPreview" style="background:#1a1f2e; min-height:80px; padding:8px; position:relative;"></div>
                 </div>
                 <div id="npcTab" class="tab-content hidden">
                     <button id="createNpcBtn">➕ Создать NPC</button>
-                    <div id="npcList" style="max-height: 120px; overflow-y: auto; margin-top: 8px;"></div>
-                    <div id="npcProperties" style="background: #1a1f2e; border-radius: 4px; padding: 8px; margin-top: 8px;">
-                        <label>Имя: <input type="text" id="npcName" style="width: 100%;"></label>
+                    <div id="npcList" style="max-height:120px; overflow-y:auto; margin-top:8px;"></div>
+                    <div id="npcProperties" style="background:#1a1f2e; padding:8px; margin-top:8px;">
+                        <label>Имя: <input id="npcName" style="width:100%"></label>
                         <label>Поведение: <select id="npcBehavior"><option value="idle">Стоять</option><option value="patrol">Патруль</option><option value="follow">Следовать</option></select></label>
-                        <label>Скорость: <input type="number" id="npcSpeed" value="2" step="0.5"></label>
+                        <label>Скорость: <input id="npcSpeed" type="number" value="2"></label>
                         <label>Диалог: <textarea id="npcDialog" rows="2"></textarea></label>
-                        <button id="saveNpcBtn" style="margin-top: 8px;">Сохранить NPC</button>
+                        <button id="saveNpcBtn">Сохранить</button>
                     </div>
+                </div>
+                <div id="lightingTab" class="tab-content hidden">
+                    <label>Цвет неба: <input type="color" id="skyColor" value="#1a1d24"></label>
+                    <label>Интенсивность солнца: <input type="range" id="sunIntensity" min="0" max="2" step="0.1" value="1.2"></label>
+                    <label>Время суток: <input type="range" id="timeOfDay" min="0" max="24" step="0.1" value="12"></label>
+                    <button id="animateSkyBtn">Анимировать небо</button>
                 </div>
             </div>
         </div>
@@ -623,20 +576,12 @@
 </div>
 
 <div id="mobileControls">
-    <div class="joystick-container" id="joystickContainer">
-        <div class="joystick-base"></div>
-        <div class="joystick-thumb" id="joystickThumb"></div>
-    </div>
+    <div class="joystick-container" id="joystickContainer"><div class="joystick-base"></div><div class="joystick-thumb" id="joystickThumb"></div></div>
     <button class="mobile-jump-btn" id="mobileJumpBtn">ПРЫЖОК</button>
 </div>
 
 <script type="importmap">
-    {
-        "imports": {
-            "three": "https://unpkg.com/three@0.128.0/build/three.module.js",
-            "three/addons/": "https://unpkg.com/three@0.128.0/examples/jsm/"
-        }
-    }
+    { "imports": { "three": "https://unpkg.com/three@0.128.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.128.0/examples/jsm/" } }
 </script>
 <script type="module" src="platform.js"></script>
 <script type="module" src="editor.js"></script>

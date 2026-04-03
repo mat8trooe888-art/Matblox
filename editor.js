@@ -502,10 +502,7 @@ function updateAnimationSelect() {
 }
 
 async function saveGame(isPublished = false) {
-    if (!window.currentUser) {
-        alert('Вы не авторизованы');
-        return;
-    }
+    if (!window.currentUser) { alert('Вы не авторизованы'); return; }
     const gameName = prompt('Название игры:', currentGameId ? 'Моя игра' : 'Новая игра');
     if (!gameName) return;
     const description = prompt('Описание игры:', '');
@@ -702,6 +699,11 @@ function initEditor() {
     document.getElementById('saveNpcBtn').onclick = saveNPCProperties;
     document.getElementById('applyScriptBtn').onclick = () => { if (!selectedObjects.length) { alert('Выберите объект'); return; } let script = document.getElementById('blockScriptEditor').value; selectedObjects[0].userData.script = script; alert('Скрипт сохранён'); };
 
+    document.getElementById('skyColor').addEventListener('change', (e) => { editorScene.background = new THREE.Color(e.target.value); });
+    document.getElementById('sunIntensity').addEventListener('change', (e) => { dirLight.intensity = parseFloat(e.target.value); });
+    document.getElementById('timeOfDay').addEventListener('change', (e) => { let time = parseFloat(e.target.value); let angle = (time / 24) * Math.PI * 2; dirLight.position.set(Math.cos(angle)*10, Math.sin(angle)*10, 5); });
+    document.getElementById('animateSkyBtn').addEventListener('click', () => { let t=0; setInterval(() => { t = (t+0.1)%24; document.getElementById('timeOfDay').value = t; let angle = (t / 24) * Math.PI * 2; dirLight.position.set(Math.cos(angle)*10, Math.sin(angle)*10, 5); editorScene.background = new THREE.Color().setHSL(0.6 + t/48, 0.8, 0.5); }, 100); });
+
     const bottomTabs = document.querySelectorAll('.bottom-tab');
     const tabContents = {
         blocks: document.getElementById('blocksTab'),
@@ -709,7 +711,8 @@ function initEditor() {
         animations: document.getElementById('animationsTab'),
         scripts: document.getElementById('scriptsTab'),
         gui: document.getElementById('guiTab'),
-        npc: document.getElementById('npcTab')
+        npc: document.getElementById('npcTab'),
+        lighting: document.getElementById('lightingTab')
     };
     bottomTabs.forEach(tab => {
         tab.addEventListener('click', () => {
@@ -734,4 +737,4 @@ export function openEditor(gameToEdit = null) {
     if (gameToEdit && gameToEdit.data) {
         loadGameIntoEditor(gameToEdit.data);
     }
-        }
+    }

@@ -572,6 +572,7 @@ function logout() {
     if(ws) ws.close();
     if (chatPollingInterval) clearInterval(chatPollingInterval);
     currentUser = null;
+    window.currentUser = null;
     sessionStorage.removeItem('blockverse_session');
     window.location.href = 'login.html';
 }
@@ -608,6 +609,7 @@ const session = sessionStorage.getItem('blockverse_session');
 if (session) {
     const data = JSON.parse(session);
     currentUser = { username: data.username, coins: data.coins, inventory: data.inventory || [], friends: data.friends || [], isGuest: data.isGuest || false };
+    window.currentUser = currentUser;
     document.getElementById('mainMenuScreen').classList.remove('hidden');
     updateUIafterAuth();
 } else { window.location.href = 'login.html'; }

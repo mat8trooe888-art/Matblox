@@ -3,9 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>BlockVerse — конструктор и игра</title>
-    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
-    <script>eruda.init();</script>
+    <title>BlockVerse Studio</title>
     <style>
         * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-tap-highlight-color:transparent; }
         body { font-family:'Segoe UI','Poppins',system-ui; background:#1e1f24; color:white; overflow:hidden; height:100vh; width:100%; position:fixed; }
@@ -26,52 +24,54 @@
         .nav-btn { background:rgba(255,255,255,0.1); backdrop-filter:blur(4px); padding:8px 20px; border-radius:40px; cursor:pointer; font-weight:500; transition:0.2s; border:1px solid rgba(255,255,255,0.2); }
         .nav-btn:hover { background:#ff5722; border-color:#ffaa44; }
 
-        /* Шаблоны при открытии конструктора */
-        .templates-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:20px; margin-top:20px; }
-        .template-card { background:rgba(30,35,55,0.8); border-radius:16px; padding:16px; cursor:pointer; text-align:center; transition:0.2s; }
-        .template-card:hover { transform:scale(1.02); border-color:#ffaa44; border:1px solid #ffaa44; }
+        .games-grid, .my-projects-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:24px; margin-top:20px; max-height:calc(100vh - 200px); overflow-y:auto; padding-right:10px; }
+        .game-card, .project-card { background:rgba(30,35,55,0.8); backdrop-filter:blur(8px); border-radius:24px; overflow:hidden; cursor:pointer; border:1px solid rgba(255,255,255,0.15); transition:0.2s; }
+        .game-card:hover, .project-card:hover { transform:translateY(-5px); border-color:#ffaa44; }
+        .game-image { height:140px; background:linear-gradient(135deg,#2a3a5a,#1a2a4a); display:flex; align-items:center; justify-content:center; font-size:48px; }
+        .game-info, .project-card { padding:16px; }
+        .game-title { font-size:20px; font-weight:bold; }
+        .game-author { font-size:12px; color:#aaa; margin:4px 0; }
+        .play-btn { background:#ff5722; border:none; padding:8px 16px; border-radius:30px; font-weight:bold; cursor:pointer; margin-top:8px; width:100%; }
 
-        /* Конструктор (новая компоновка) */
-        .editor-layout { display:flex; flex-direction:column; height:100%; }
-        .top-toolbar { background:#2c2f36; border-bottom:1px solid #4a4e55; padding:6px 12px; display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
-        .tool-group { display:flex; gap:2px; background:#3a3e47; border-radius:30px; padding:2px 6px; }
-        .tool-group button { background:none; border:none; color:white; padding:4px 10px; border-radius:30px; cursor:pointer; font-size:12px; }
-        .tool-group button.active { background:#ff5722; }
-        .tabs-container { background:#2c2f36; border-bottom:1px solid #4a4e55; padding:4px 12px; display:flex; gap:6px; flex-wrap:wrap; }
-        .tab { background:#3a3e47; padding:4px 12px; border-radius:30px; cursor:pointer; font-size:12px; }
-        .tab.active { background:#ff5722; }
+        /* Roblox Studio конструктор */
+        .studio-layout { display:flex; flex-direction:column; height:100%; background:#1e1f24; }
+        .menu-bar { background:#2c2f36; padding:4px 12px; display:flex; gap:8px; border-bottom:1px solid #3a3e47; }
+        .menu-item { padding:4px 12px; cursor:pointer; font-size:13px; border-radius:4px; }
+        .menu-item:hover { background:#3a3e47; }
+        .toolbar { background:#2c2f36; padding:6px 12px; display:flex; gap:4px; border-bottom:1px solid #3a3e47; }
+        .tool-btn { background:#3a3e47; border:none; color:white; padding:4px 12px; border-radius:4px; cursor:pointer; font-size:12px; }
+        .tool-btn.active { background:#ff5722; }
+        .tool-btn:hover { background:#4a4e55; }
 
-        .editor-main { display:flex; flex:1; overflow:hidden; }
-        .viewport-area { flex:1; position:relative; }
-        .editor-canvas { width:100%; height:100%; background:#1e1f24; }
-        .right-panel { width:280px; background:#2c2f36; display:flex; flex-direction:column; border-left:1px solid #4a4e55; }
-        .explorer-panel { flex:1; overflow-y:auto; border-bottom:1px solid #4a4e55; }
-        .properties-panel { height:35%; overflow-y:auto; }
-        .panel-header { padding:6px 10px; background:#1e1f24; font-weight:bold; border-bottom:1px solid #4a4e55; font-size:12px; cursor:ns-resize; }
-
-        .explorer-tree { padding:6px; }
-        .explorer-item { padding:3px 6px; margin:1px 0; border-radius:4px; cursor:pointer; display:flex; align-items:center; gap:6px; }
+        .main-area { display:flex; flex:1; overflow:hidden; }
+        .explorer-panel { width:260px; background:#2c2f36; border-right:1px solid #3a3e47; display:flex; flex-direction:column; }
+        .explorer-header { padding:8px; font-weight:bold; border-bottom:1px solid #3a3e47; }
+        .explorer-tree { flex:1; overflow-y:auto; padding:4px; }
+        .explorer-item { padding:4px 8px; margin:1px 0; border-radius:4px; cursor:pointer; display:flex; align-items:center; gap:6px; }
         .explorer-item:hover { background:#3a3e47; }
         .explorer-item.selected { background:#0e639c; }
         .explorer-children { margin-left:20px; }
 
-        .properties-content { padding:10px; overflow-y:auto; }
-        .prop-group { margin-bottom:10px; }
-        .prop-group label { display:block; margin-bottom:3px; font-size:11px; color:#aaa; }
-        .prop-group input, .prop-group select, .prop-group textarea { width:100%; background:#1a1f2e; border:1px solid #4a6e8a; border-radius:20px; padding:5px 8px; color:white; font-size:11px; }
+        .viewport-area { flex:1; position:relative; }
+        .editor-canvas { width:100%; height:100%; background:#1a1d24; }
 
-        /* Подразделы (появляются внизу) */
-        .sub-panels { background:rgba(0,0,0,0.7); backdrop-filter:blur(8px); border-top:1px solid rgba(255,255,255,0.2); padding:8px; display:none; position:relative; z-index:10; }
-        .sub-panels.active { display:block; }
-        .block-palette { display:flex; gap:8px; flex-wrap:wrap; }
+        .properties-panel { width:280px; background:#2c2f36; border-left:1px solid #3a3e47; display:flex; flex-direction:column; }
+        .properties-header { padding:8px; font-weight:bold; border-bottom:1px solid #3a3e47; }
+        .properties-content { flex:1; overflow-y:auto; padding:8px; }
+        .prop-group { margin-bottom:12px; }
+        .prop-group label { display:block; margin-bottom:4px; font-size:11px; color:#aaa; }
+        .prop-group input, .prop-group select, .prop-group textarea { width:100%; background:#1a1f2e; border:1px solid #4a6e8a; border-radius:4px; padding:4px 8px; color:white; font-size:12px; }
+
+        .bottom-panel { background:#2c2f36; border-top:1px solid #3a3e47; height:200px; display:flex; flex-direction:column; }
+        .bottom-tabs { display:flex; gap:2px; background:#1e1f24; padding:4px 8px; }
+        .bottom-tab { padding:4px 12px; cursor:pointer; font-size:12px; border-radius:4px; }
+        .bottom-tab.active { background:#0e639c; }
+        .bottom-content { flex:1; overflow-y:auto; padding:8px; }
+
+        .timeline-canvas { width:100%; height:100px; background:#1a1f2e; border-radius:4px; cursor:pointer; }
+        .block-palette { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
         .block-option { width:40px; height:40px; border-radius:8px; cursor:pointer; border:2px solid transparent; }
-
-        /* Таймлайн (внизу под окном) */
-        .timeline-container { background:#1a1f2e; border-radius:8px; padding:6px; margin-top:6px; }
-        .timeline-canvas { width:100%; height:80px; background:#2c2f36; border-radius:6px; cursor:pointer; }
-
-        /* GUI превью */
-        .gui-preview { background:rgba(44,47,54,0.8); border-radius:8px; padding:6px; margin-top:6px; min-height:80px; position:relative; }
+        .block-option.selected { border-color:#ffaa44; }
 
         /* Мобильное управление */
         #mobileControls { position:fixed; bottom:20px; left:0; right:0; pointer-events:none; z-index:1000; display:none; }
@@ -79,14 +79,13 @@
         .joystick-thumb { position:absolute; width:40px; height:40px; background:rgba(255,255,255,0.8); border-radius:20px; top:30px; left:30px; transition:0.05s linear; }
         .mobile-jump-btn { position:absolute; bottom:20px; right:20px; width:60px; height:60px; background:rgba(255,87,34,0.9); border:none; border-radius:30px; color:white; font-size:16px; font-weight:bold; pointer-events:auto; }
 
-        .exit-editor-btn, .exit-game { position:absolute; top:10px; right:10px; background:#ff3333; border:none; padding:4px 12px; border-radius:40px; color:white; cursor:pointer; z-index:61; font-size:12px; }
-        .status-bar { position:absolute; bottom:10px; right:10px; background:rgba(0,0,0,0.6); padding:4px 10px; border-radius:20px; font-size:11px; z-index:30; }
+        .exit-editor-btn { position:absolute; top:10px; right:10px; background:#ff3333; border:none; padding:4px 12px; border-radius:4px; color:white; cursor:pointer; z-index:61; font-size:12px; }
+        .custom-game-ui { position:absolute; bottom:10px; left:10px; background:rgba(0,0,0,0.6); padding:4px 12px; border-radius:20px; z-index:20; display:flex; gap:10px; font-size:12px; }
 
         @media (max-width:768px) {
-            .right-panel { width:240px; }
-            .tabs-container { justify-content:center; }
-            .editor-main { flex-direction:column; }
-            .right-panel { width:100%; height:30%; border-left:none; border-top:1px solid rgba(255,255,255,0.2); }
+            .explorer-panel { width:200px; }
+            .properties-panel { width:220px; }
+            .bottom-panel { height:150px; }
         }
     </style>
 </head>
@@ -101,88 +100,80 @@
 <!-- Главное меню -->
 <div id="mainMenuScreen" class="screen">
     <div class="header">
-        <div class="logo">🌟 BlockVerse</div>
+        <div class="logo">🎮 BlockVerse Studio</div>
         <div class="user-info">
-            <div class="coin-badge">🪙 <span id="userCoins">0</span> монет</div>
+            <div class="coin-badge">🪙 <span id="userCoins">0</span></div>
             <div id="usernameDisplay"></div>
             <div class="nav-buttons">
                 <div class="nav-btn" id="showGamesBtn">🎮 Игры</div>
-                <div class="nav-btn" id="showMyProjectsBtn">📁 Мои проекты</div>
+                <div class="nav-btn" id="showMyProjectsBtn">📁 Проекты</div>
                 <div class="nav-btn" id="showShopBtn">🛒 Магазин</div>
                 <div class="nav-btn" id="showSocialBtn">👥 Социальное</div>
                 <div class="nav-btn" id="showSettingsBtn">⚙️ Настройки</div>
-                <div class="nav-btn" id="createGameBtn">🛠️ Конструктор</div>
+                <div class="nav-btn" id="createGameBtn">🛠️ Студия</div>
                 <div class="nav-btn" id="logoutBtn">🚪 Выйти</div>
             </div>
         </div>
     </div>
     <div id="gamesPanel"><h2>🔥 Игровые серверы</h2><div class="server-join"><input id="serverIdInput" placeholder="ID сервера"><button id="connectToServerBtn">🔗 Подключиться</button></div><div id="gamesList" class="games-grid"></div></div>
     <div id="myProjectsPanel" style="display:none;"><h2>📁 Мои проекты</h2><div id="myProjectsList" class="my-projects-grid"></div></div>
-    <div id="shopPanel" style="display:none;"><h2>✨ Магазин предметов</h2><div id="shopItemsList" class="shop-grid"></div><div style="text-align:center;"><button id="earnCoinsBtn">➕ Получить 100 монет</button></div></div>
-    <div id="socialPanel" style="display:none;"><div class="social-panels"><div class="panel"><h3>Мои друзья</h3><div id="friendsList" class="friend-list"></div><div class="chat-input"><input id="friendSearch" placeholder="Имя"><button id="addFriendBtn">➕ Добавить</button></div></div><div class="panel"><h3>Глобальный чат</h3><div id="chatMessages" class="chat-messages"></div><div class="chat-input"><input id="chatInput" placeholder="Сообщение..."><button id="sendChatBtn">📨 Отправить</button></div></div></div></div>
-    <div id="settingsPanel" style="display:none;"><h2>⚙️ Настройки</h2><div><label>Скорость движения:</label><input type="range" id="moveSpeed" min="2" max="6" step="0.5" value="4"></div><button id="reportBugBtn">📝 Сообщить о проблеме</button><div id="reportsList"></div></div>
+    <div id="shopPanel" style="display:none;"><h2>✨ Магазин</h2><div id="shopItemsList" class="shop-grid"></div><div><button id="earnCoinsBtn">➕ 100 монет</button></div></div>
+    <div id="socialPanel" style="display:none;"><div><div><h3>Друзья</h3><div id="friendsList"></div><input id="friendSearch" placeholder="Имя"><button id="addFriendBtn">Добавить</button></div><div><h3>Чат</h3><div id="chatMessages"></div><input id="chatInput"><button id="sendChatBtn">Отправить</button></div></div></div>
+    <div id="settingsPanel" style="display:none;"><h2>⚙️ Настройки</h2><label>Скорость: <input type="range" id="moveSpeed" min="2" max="6" step="0.5" value="4"></label><button id="reportBugBtn">Сообщить о проблеме</button><div id="reportsList"></div></div>
 </div>
 
-<!-- Конструктор (новая компоновка) -->
+<!-- Roblox Studio конструктор -->
 <div id="editorScreen" class="screen hidden">
-    <div class="editor-layout">
-        <div class="top-toolbar">
-            <div class="tool-group">
-                <button id="modeMoveBtn" class="active">Переместить</button>
-                <button id="modeRotateBtn">Печать</button>
-                <button id="modeScaleBtn">Модель</button>
-            </div>
-            <div class="tool-group">
-                <button id="addCubeBtn">Кубика</button>
-                <button id="deleteBtn">Сдача</button>
-                <button id="duplicateBtn">Кол-во</button>
-                <button id="groupBtn">Букет</button>
-                <button id="saveGameBtn">Сохранить</button>
-            </div>
+    <div class="studio-layout">
+        <div class="menu-bar">
+            <div class="menu-item">Файл</div>
+            <div class="menu-item">Правка</div>
+            <div class="menu-item">Вид</div>
+            <div class="menu-item" id="saveGameBtn">Сохранить</div>
+            <div class="menu-item" id="publishGameBtn">Опубликовать</div>
         </div>
-        <div class="tabs-container">
-            <div class="tab active" data-tab="blocks">Блоки</div>
-            <div class="tab" data-tab="vfx">VFX</div>
-            <div class="tab" data-tab="animations">Анимации</div>
-            <div class="tab" data-tab="scripts">Скрипты</div>
-            <div class="tab" data-tab="gui">GUI</div>
-            <div class="tab" data-tab="npc">NPC</div>
-            <div class="tab" data-tab="lighting">Освещение</div>
+        <div class="toolbar">
+            <button class="tool-btn" id="modeMoveBtn">📦 Переместить</button>
+            <button class="tool-btn" id="modeRotateBtn">🔄 Повернуть</button>
+            <button class="tool-btn" id="modeScaleBtn">📏 Масштаб</button>
+            <button class="tool-btn" id="addCubeBtn">➕ Куб</button>
+            <button class="tool-btn" id="deleteBtn">🗑 Удалить</button>
+            <button class="tool-btn" id="duplicateBtn">📋 Дублировать</button>
+            <button class="tool-btn" id="groupBtn">📁 Группа</button>
         </div>
-
-        <!-- Подразделы (появляются внизу) -->
-        <div id="subpanelBlocks" class="sub-panels active"><div class="block-palette"><div class="block-option" data-type="wood" style="background:#8B5A2B;"></div><div class="block-option" data-type="stone" style="background:#808080;"></div><div class="block-option" data-type="concrete" style="background:#B0B0B0;"></div><div class="block-option" data-type="dirt" style="background:#6B4C3B;"></div></div><div style="margin-top:8px;"><label>Цвет: <input type="color" id="blockColorPicker" value="#8B5A2B"></label><label>Anchor: <input type="checkbox" id="blockAnchor"></label><label>Collision: <input type="checkbox" id="blockCollision" checked></label></div></div>
-        <div id="subpanelVfx" class="sub-panels"><div>✨ Системы частиц</div><button id="addParticleBtn">➕ Добавить частицы</button><div style="margin-top:8px;"><button id="vfxFireBtn">🔥 Огонь</button><button id="vfxWaterBtn">💧 Вода</button><button id="vfxAirBtn">💨 Воздух</button><button id="vfxSmokeBtn">🌫️ Дым</button></div></div>
-        <div id="subpanelAnimations" class="sub-panels"><div style="display:flex; gap:6px; flex-wrap:wrap;"><button id="newAnimationBtn">➕ Создать</button><select id="animationSelect"><option>-- Выберите анимацию --</option></select><button id="playAnimationBtn">▶</button><button id="stopAnimationBtn">⏹</button><button id="recordAnimationBtn">🎥 Записать</button></div><div class="timeline-container"><canvas id="timelineCanvas" class="timeline-canvas" width="1000" height="80"></canvas><div style="display:flex; justify-content:space-between;"><span id="currentTime">0.00</span><span id="animationDuration">1.00</span></div></div><div id="keyframeList" style="max-height:80px; overflow-y:auto; background:#1a1f2e; border-radius:6px; margin-top:6px; padding:4px;"></div></div>
-        <div id="subpanelScripts" class="sub-panels"><div>📜 Скрипт для выбранного объекта</div><textarea id="blockScriptEditor" class="code-editor" rows="3" placeholder='// Ваш скрипт здесь'></textarea><button id="applyScriptBtn">💾 Применить</button></div>
-        <div id="subpanelGui" class="sub-panels"><div>🎨 GUI Элементы</div><div style="display:flex; gap:6px; flex-wrap:wrap;"><button id="addButtonBtn">➕ Кнопка</button><button id="addPanelBtn">📦 Панель</button><button id="addTextBtn">📝 Текст</button></div><div id="guiElementsList" style="max-height:100px; overflow-y:auto; background:#1a1f2e; border-radius:12px; margin:6px 0; padding:6px;"></div><div class="gui-preview" id="guiPreview"></div></div>
-        <div id="subpanelNpc" class="sub-panels"><div><button id="createNpcBtn">➕ Создать NPC</button><button id="importModelBtn">📁 Импорт GLTF</button></div><div id="npcList" style="max-height:120px; overflow-y:auto;"></div><div id="npcProperties" style="background:#1a1f2e; border-radius:12px; padding:6px; margin-top:6px;"><h4>Свойства NPC</h4><label>Имя: <input type="text" id="npcName" style="width:100%"></label><label>Поведение: <select id="npcBehavior"><option value="idle">Стоять</option><option value="patrol">Патрулировать</option><option value="follow">Следовать</option></select></label><label>Скорость: <input type="number" id="npcSpeed" value="2" step="0.5"></label><label>Диалог: <textarea id="npcDialog" rows="2" placeholder="Привет!"></textarea></label><button id="saveNpcBtn">Сохранить</button></div></div>
-        <div id="subpanelLighting" class="sub-panels"><div>🌞 Настройки освещения</div><label>Цвет неба: <input type="color" id="skyColor" value="#87CEEB"></label><label>Интенсивность солнца: <input type="range" id="sunIntensity" min="0" max="2" step="0.1" value="1.2"></label><button id="animateSkyBtn">Анимировать небо</button></div>
-
-        <div class="editor-main">
+        <div class="main-area">
+            <div class="explorer-panel">
+                <div class="explorer-header">📁 Проводник</div>
+                <div id="explorerTree" class="explorer-tree"></div>
+            </div>
             <div class="viewport-area">
                 <div id="editorCanvasContainer" class="editor-canvas"></div>
                 <button class="exit-editor-btn" id="exitEditorBtn">✖ Выйти</button>
-                <div class="status-bar" id="editorStatus">Готово</div>
             </div>
-            <div class="right-panel">
-                <div class="explorer-panel"><div class="panel-header">📁 Проводник</div><div id="explorerTree" class="explorer-tree"></div></div>
-                <div class="properties-panel"><div class="panel-header">⚙️ Свойства</div><div id="propertiesContent" class="properties-content"></div></div>
+            <div class="properties-panel">
+                <div class="properties-header">⚙️ Свойства</div>
+                <div id="propertiesContent" class="properties-content"></div>
+            </div>
+        </div>
+        <div class="bottom-panel">
+            <div class="bottom-tabs">
+                <div class="bottom-tab active" data-tab="blocks">Блоки</div>
+                <div class="bottom-tab" data-tab="vfx">VFX</div>
+                <div class="bottom-tab" data-tab="animations">Анимации</div>
+                <div class="bottom-tab" data-tab="scripts">Скрипты</div>
+                <div class="bottom-tab" data-tab="gui">GUI</div>
+                <div class="bottom-tab" data-tab="npc">NPC</div>
+            </div>
+            <div class="bottom-content">
+                <div id="blocksTab" class="tab-content active"><div class="block-palette"><div class="block-option" data-type="wood" style="background:#8B5A2B;"></div><div class="block-option" data-type="stone" style="background:#808080;"></div><div class="block-option" data-type="concrete" style="background:#B0B0B0;"></div><div class="block-option" data-type="dirt" style="background:#6B4C3B;"></div></div><label>Цвет: <input type="color" id="blockColorPicker"></label><label>Collision: <input type="checkbox" id="blockCollision" checked></label></div>
+                <div id="vfxTab" class="tab-content hidden"><button id="addParticleBtn">➕ Частицы</button><div><button id="vfxFireBtn">🔥 Огонь</button><button id="vfxWaterBtn">💧 Вода</button><button id="vfxAirBtn">💨 Воздух</button><button id="vfxSmokeBtn">🌫️ Дым</button></div></div>
+                <div id="animationsTab" class="tab-content hidden"><div><button id="newAnimationBtn">➕ Создать</button><select id="animationSelect"></select><button id="playAnimationBtn">▶</button><button id="stopAnimationBtn">⏹</button><button id="recordAnimationBtn">🎥 Записать</button></div><canvas id="timelineCanvas" class="timeline-canvas" width="800" height="100"></canvas><div><span id="currentTime">0.00</span><span id="animationDuration">1.00</span></div></div>
+                <div id="scriptsTab" class="tab-content hidden"><textarea id="blockScriptEditor" rows="4" placeholder="// Ваш скрипт"></textarea><button id="applyScriptBtn">Применить</button></div>
+                <div id="guiTab" class="tab-content hidden"><button id="addButtonBtn">➕ Кнопка</button><button id="addPanelBtn">📦 Панель</button><button id="addTextBtn">📝 Текст</button><div id="guiElementsList"></div><div id="guiPreview" class="gui-preview"></div></div>
+                <div id="npcTab" class="tab-content hidden"><button id="createNpcBtn">➕ Создать NPC</button><div id="npcList"></div><div id="npcProperties"><label>Имя: <input id="npcName"></label><label>Поведение: <select id="npcBehavior"><option value="idle">Стоять</option><option value="patrol">Патруль</option><option value="follow">Следовать</option></select></label><label>Скорость: <input id="npcSpeed" type="number" value="2"></label><label>Диалог: <textarea id="npcDialog" rows="2"></textarea></label><button id="saveNpcBtn">Сохранить</button></div></div>
             </div>
         </div>
     </div>
-</div>
-
-<!-- Экран выбора шаблона при открытии конструктора -->
-<div id="templateScreen" class="screen hidden">
-    <h2 style="margin-bottom:20px;">🛠️ Создать новый проект</h2>
-    <div class="templates-grid">
-        <div class="template-card" data-template="empty"><div style="font-size:48px;">🌍</div><div>Пустой мир</div></div>
-        <div class="template-card" data-template="platformer"><div style="font-size:48px;">🏃</div><div>Платформер</div></div>
-        <div class="template-card" data-template="racing"><div style="font-size:48px;">🏎️</div><div>Гонки</div></div>
-        <div class="template-card" data-template="rpg"><div style="font-size:48px;">⚔️</div><div>RPG</div></div>
-    </div>
-    <button id="cancelTemplateBtn" style="margin-top:20px; background:#333;">Отмена</button>
 </div>
 
 <div id="customGameScreen" class="screen hidden">
@@ -202,4 +193,4 @@
 <script type="module" src="platform.js"></script>
 <script type="module" src="editor.js"></script>
 </body>
-</html>
+            </html>

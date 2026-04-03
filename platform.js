@@ -6,6 +6,10 @@ import * as API from './api.js';
 
 let currentUser = null;
 let chatPollingInterval = null;
+let ws = null;
+let currentGameId = null;
+let myPlayerId = null;
+let remotePlayers = new Map();
 let gameScene = null, gameCamera = null, gameRenderer = null, gamePlayer = null;
 let gameActive = false;
 let gameAnimationId = null;
@@ -34,99 +38,10 @@ window.currentUser = currentUser;
 window.customGames = [];
 window.saveGames = () => {};
 window.renderMyProjects = renderMyProjects;
+window.createGameOnServer = createGameOnServer;
 window.addCoins = addCoins;
 window.spendCoins = spendCoins;
 
-// ========== ЛОКАЛЬНЫЙ МУЛЬТИПЛЕЕР (без внешнего WebSocket) ==========
-// Хранилище активных игр (в памяти)
-let activeGames = new Map();
-let currentGameId = null;
-let remotePlayers = new Map();
-
-// Создать новую игру
-function createLocalGame(gameName, gameData) {
-    const gameId = 'game_' + Date.now() + '_' + Math.random().toString(36).substr(2, 8);
-    activeGames.set(gameId, {
-        id: gameId,
-        name: gameName,
-        author: currentUser?.username || 'Гость',
-        players: 1,
-        gameData: gameData,
-        playersList: [{ id: 'local_' + Date.now(), name: currentUser?.username || 'Игрок', position: { x: 0, y: 1, z: 0 } }]
-    });
-    alert(`Игра "${gameName}" создана! ID: ${gameId}`);
-    renderLocalGamesList();
-    return gameId;
-}
-
-// Получить список активных игр
-function getLocalGamesList() {
-    return Array.from(activeGames.values()).map(g => ({
-        id: g.id,
-        name: g.name,
-        author: g.author,
-        players: g.playersList.length
-    }));
-}
-
-// Присоединиться к игре
-function joinLocalGame(gameId, gameData, playerName) {
-    const game = activeGames.get(gameId);
-    if (!game) {
-        alert('Игра не найдена');
-        return false;
-    }
-    currentGameId = gameId;
-    startLocalMultiplayerSession(game.gameData, game.name, game);
-    return true;
-}
-
-// Рендер списка игр в UI
-function renderLocalGamesList() {
-    const container = document.getElementById('gamesList');
-    if (!container) return;
-    const games = getLocalGamesList();
-    container.innerHTML = '';
-    if (games.length === 0) {
-        container.innerHTML = '<p>Нет активных серверов. Создайте новый!</p>';
-        return;
-    }
-    games.forEach(game => {
-        const card = document.createElement('div');
-        card.className = 'game-card';
-        card.innerHTML = `
-            <div class="game-image">🎲</div>
-            <div class="game-info">
-                <div class="game-title">${game.name}</div>
-                <div class="game-author">👤 ${game.author} | 🟢 ${game.players} игроков</div>
-                <button class="play-btn" data-id="${game.id}">Играть</button>
-            </div>
-        `;
-        container.appendChild(card);
-    });
-    document.querySelectorAll('.play-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const gameId = btn.dataset.id;
-            const game = activeGames.get(gameId);
-            if (game) {
-                joinLocalGame(gameId, game.gameData, currentUser?.username);
-            }
-        });
-    });
-}
-
-// Создать игру из редактора
-function publishGameToMultiplayer(name, data) {
-    if (!currentUser) {
-        alert('Вы не авторизованы');
-        return;
-    }
-    const gameId = createLocalGame(name, data);
-    alert(`Игра "${name}" опубликована! ID: ${gameId}`);
-    renderLocalGamesList();
-}
-
-// ========== МОБИЛЬНОЕ УПРАВЛЕНИЕ ==========
 let joystickActive = false;
 let joystickVector = { x: 0, z: 0 };
 let mobileJump = false;
@@ -136,11 +51,9 @@ function initMobileControls() {
     const joystickThumb = document.getElementById('joystickThumb');
     const jumpBtn = document.getElementById('mobileJumpBtn');
     if (!joystickContainer) return;
-    
     let touchId = null;
     const maxDist = 45;
     let centerX = 35, centerY = 35;
-    
     const onTouchStart = (e) => {
         e.preventDefault();
         const rect = joystickContainer.getBoundingClientRect();
@@ -156,7 +69,6 @@ function initMobileControls() {
         const touchY = touch.clientY - rect.top;
         updateJoystickPosition(touchX, touchY);
     };
-    
     const onTouchMove = (e) => {
         if (!joystickActive) return;
         const rect = joystickContainer.getBoundingClientRect();
@@ -169,7 +81,6 @@ function initMobileControls() {
             }
         }
     };
-    
     const onTouchEnd = () => {
         if (!joystickActive) return;
         joystickActive = false;
@@ -178,7 +89,6 @@ function initMobileControls() {
         joystickThumb.style.left = (centerX - 25) + 'px';
         joystickThumb.style.top = (centerY - 25) + 'px';
     };
-    
     function updateJoystickPosition(x, y) {
         let dx = x - centerX;
         let dy = y - centerY;
@@ -191,35 +101,259 @@ function initMobileControls() {
         joystickThumb.style.top = (centerY + dy - 25) + 'px';
         joystickVector = { x: dx / maxDist, z: dy / maxDist };
     }
-    
     joystickContainer.addEventListener('touchstart', onTouchStart, { passive: false });
     document.addEventListener('touchmove', onTouchMove, { passive: false });
     document.addEventListener('touchend', onTouchEnd);
     document.addEventListener('touchcancel', onTouchEnd);
-    
     if (jumpBtn) {
-        jumpBtn.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            mobileJump = true;
-            jumpBtn.style.transform = 'scale(0.95)';
-        });
-        jumpBtn.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            mobileJump = false;
-            jumpBtn.style.transform = 'scale(1)';
-        });
-        jumpBtn.addEventListener('mousedown', () => { 
-            mobileJump = true;
-            jumpBtn.style.transform = 'scale(0.95)';
-        });
-        jumpBtn.addEventListener('mouseup', () => { 
-            mobileJump = false;
-            jumpBtn.style.transform = 'scale(1)';
-        });
+        jumpBtn.addEventListener('touchstart', (e) => { e.preventDefault(); mobileJump = true; jumpBtn.style.transform = 'scale(0.95)'; });
+        jumpBtn.addEventListener('touchend', (e) => { e.preventDefault(); mobileJump = false; jumpBtn.style.transform = 'scale(1)'; });
+        jumpBtn.addEventListener('mousedown', () => { mobileJump = true; jumpBtn.style.transform = 'scale(0.95)'; });
+        jumpBtn.addEventListener('mouseup', () => { mobileJump = false; jumpBtn.style.transform = 'scale(1)'; });
     }
 }
 
-// ========== КОЛЛИЗИЯ ==========
+function connectToServer() {
+    try {
+        ws = new WebSocket('wss://matrix-5uvi.onrender.com');
+        ws.onopen = () => { console.log('Connected'); requestGamesList(); };
+        ws.onmessage = (e) => {
+            try {
+                const data = JSON.parse(e.data);
+                if (data.type === 'games_list') renderGamesList(data.games);
+                else if (data.type === 'game_created') { alert(`Игра "${data.gameName}" создана! ID: ${data.gameId}`); requestGamesList(); }
+                else if (data.type === 'joined') { myPlayerId = data.playerId; startGameSession(data.gameData, data.gameName); }
+                else if (data.type === 'player_joined') { const p = createRemotePlayer(); p.position.set(data.position.x, data.position.y, data.position.z); gameScene.add(p); remotePlayers.set(data.playerId, p); }
+                else if (data.type === 'player_moved') { const p = remotePlayers.get(data.playerId); if(p) p.position.set(data.position.x, data.position.y, data.position.z); }
+                else if (data.type === 'player_left') { const p = remotePlayers.get(data.playerId); if(p) gameScene.remove(p); remotePlayers.delete(data.playerId); }
+                else if (data.type === 'error') alert(data.message);
+            } catch(e) { console.warn(e); }
+        };
+        ws.onerror = () => { console.warn('WebSocket error, using local mode'); renderLocalGamesList(); };
+    } catch(e) { console.warn('WebSocket failed, using local mode'); renderLocalGamesList(); }
+}
+
+function requestGamesList() { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({type:'get_games_list'})); }
+
+function createGameOnServer(name, data) {
+    if (!currentUser) return;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({type:'create_game',gameName:name,author:currentUser.username,gameData:data}));
+    } else {
+        alert('WebSocket не доступен, используйте локальный режим');
+    }
+}
+
+function joinGame(id) {
+    if (!currentUser) return;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        currentGameId = id;
+        ws.send(JSON.stringify({type:'join_game',gameId:id}));
+    } else {
+        alert('WebSocket не доступен');
+    }
+}
+
+function sendPosition(p) { if (ws && ws.readyState === WebSocket.OPEN && currentGameId) ws.send(JSON.stringify({type:'update_position',position:p})); }
+function leaveGame() { if (ws && ws.readyState === WebSocket.OPEN && currentGameId) ws.send(JSON.stringify({type:'leave_game'})); currentGameId = null; }
+
+let activeLocalGames = new Map();
+function renderLocalGamesList() {
+    const container = document.getElementById('gamesList');
+    if (!container) return;
+    const games = Array.from(activeLocalGames.values());
+    container.innerHTML = '';
+    if (!games.length) { container.innerHTML='<p>Нет активных серверов. Создайте новый!</p>'; attachMobileEvents(); return; }
+    games.forEach(game => {
+        const card = document.createElement('div');
+        card.className = 'game-card';
+        card.innerHTML = `<div class="game-image">🎲</div><div class="game-info"><div class="game-title">${game.name}</div><div class="game-author">👤 ${game.author} | 🟢 ${game.players} игроков</div><button class="play-btn" data-id="${game.id}">Играть</button></div>`;
+        container.appendChild(card);
+    });
+    document.querySelectorAll('.play-btn').forEach(btn => btn.addEventListener('click', () => joinLocalGame(btn.dataset.id)));
+    attachMobileEvents();
+}
+
+function createLocalGame(name, data) {
+    const gameId = 'local_' + Date.now() + '_' + Math.random().toString(36).substr(2, 8);
+    activeLocalGames.set(gameId, { id: gameId, name: name, author: currentUser?.username || 'Гость', players: 1, gameData: data });
+    alert(`Игра "${name}" создана локально! ID: ${gameId}`);
+    renderLocalGamesList();
+    return gameId;
+}
+
+function joinLocalGame(id) {
+    const game = activeLocalGames.get(id);
+    if (game) startLocalGameSession(game.gameData, game.name);
+    else alert('Игра не найдена');
+}
+
+async function renderGamesList() {
+    if (ws && ws.readyState === WebSocket.OPEN) requestGamesList();
+    else renderLocalGamesList();
+}
+
+async function renderMyProjects() {
+    if (!currentUser) return;
+    const container = document.getElementById('myProjectsList');
+    if (!container) return;
+    const allGames = await API.getGames();
+    const myGames = allGames.filter(g => g.author === currentUser.username);
+    container.innerHTML = '';
+    if (!myGames.length) { container.innerHTML='<p>У вас пока нет созданных игр. Перейдите в конструктор, чтобы создать свою первую игру!</p>'; attachMobileEvents(); return; }
+    myGames.forEach(game => {
+        const card = document.createElement('div');
+        card.className = 'project-card';
+        card.innerHTML = `<div class="game-title">${game.name}</div><div class="game-desc" style="font-size:12px;color:#aaa;">${game.description || 'Без описания'}</div><div style="margin-top:12px;display:flex;gap:8px;"><button class="play-btn-small" data-id="${game.id}" style="background:#ff5722;border:none;padding:4px 12px;border-radius:20px;cursor:pointer;">Одиночная игра</button><button class="host-btn-small" data-id="${game.id}" style="background:#4a6e8a;border:none;padding:4px 12px;border-radius:20px;cursor:pointer;">🌐 Мультиплеер (создать сервер)</button><button class="edit-btn-small" data-id="${game.id}" style="background:#ffaa44;border:none;padding:4px 12px;border-radius:20px;cursor:pointer;">Редактировать</button><button class="delete-btn-small" data-id="${game.id}" style="background:#ff3333;border:none;padding:4px 12px;border-radius:20px;cursor:pointer;">Удалить</button></div>`;
+        container.appendChild(card);
+    });
+    document.querySelectorAll('.play-btn-small').forEach(btn => btn.addEventListener('click', async () => { 
+        const id = parseInt(btn.dataset.id); 
+        const game = (await API.getGames()).find(g => g.id === id); 
+        if (game) startLocalGameSession(JSON.parse(game.data), game.name); 
+    }));
+    document.querySelectorAll('.host-btn-small').forEach(btn => btn.addEventListener('click', async () => { 
+        const id = parseInt(btn.dataset.id); 
+        const game = (await API.getGames()).find(g => g.id === id); 
+        if (game) {
+            if (ws && ws.readyState === WebSocket.OPEN) createGameOnServer(game.name, JSON.parse(game.data));
+            else createLocalGame(game.name, JSON.parse(game.data));
+        }
+    }));
+    document.querySelectorAll('.edit-btn-small').forEach(btn => btn.addEventListener('click', async () => { 
+        const id = parseInt(btn.dataset.id); 
+        const game = (await API.getGames()).find(g => g.id === id); 
+        if (game) { 
+            const mod = await import('./editor.js'); 
+            mod.openEditor(game); 
+        } 
+    }));
+    document.querySelectorAll('.delete-btn-small').forEach(btn => btn.addEventListener('click', async () => { 
+        const id = parseInt(btn.dataset.id); 
+        if (confirm('Удалить игру?')) { 
+            await API.deleteGame(id, currentUser.username); 
+            renderMyProjects(); 
+        } 
+    }));
+    attachMobileEvents();
+}
+
+function renderShop() {
+    if (!currentUser) return;
+    const container = document.getElementById('shopItemsList');
+    if (!container) return;
+    container.innerHTML = '';
+    shopItems.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'shop-item';
+        div.innerHTML = `<div style="font-size:48px;">${item.id==='skin_gold'?'👑':item.id==='pickaxe'?'⛏️':'✨'}</div><h3>${item.name}</h3><div class="price">${item.price} 🪙</div><button class="btn buy-btn" data-id="${item.id}" data-price="${item.price}">Купить</button>`;
+        container.appendChild(div);
+    });
+    document.querySelectorAll('.buy-btn').forEach(btn => btn.addEventListener('click', () => { const price = parseInt(btn.dataset.price); if (spendCoins(price)) { alert(`Вы купили ${btn.dataset.id}`); renderShop(); } else alert("Недостаточно монет!"); }));
+    attachMobileEvents();
+}
+
+function renderFriendsList() {
+    if (!currentUser) return;
+    const container = document.getElementById('friendsList');
+    if (!container) return;
+    container.innerHTML = '';
+    (currentUser.friends || []).forEach(friend => {
+        const div = document.createElement('div');
+        div.className = 'friend-item';
+        div.innerHTML = `<span>${friend}</span><div class="friend-actions"><button class="removeFriendBtn" data-friend="${friend}">❌</button></div>`;
+        container.appendChild(div);
+    });
+    document.querySelectorAll('.removeFriendBtn').forEach(btn => btn.addEventListener('click', () => { const friend = btn.dataset.friend; currentUser.friends = currentUser.friends.filter(f => f !== friend); renderFriendsList(); }));
+    attachMobileEvents();
+}
+function addFriend() {
+    if (!currentUser) return;
+    const friendName = document.getElementById('friendSearch').value.trim();
+    if (!friendName || friendName === currentUser.username) return;
+    if (currentUser.friends.includes(friendName)) { alert("Уже в друзьях"); return; }
+    currentUser.friends.push(friendName);
+    renderFriendsList();
+    document.getElementById('friendSearch').value = '';
+    alert(`Друг ${friendName} добавлен`);
+}
+
+async function renderChat() {
+    const container = document.getElementById('chatMessages');
+    if (!container) return;
+    const messages = await API.getChatMessages();
+    container.innerHTML = '';
+    messages.forEach(msg => { const div = document.createElement('div'); div.innerHTML = `<span style="color:#ffaa44;">[${msg.time}]</span> <b>${msg.username}:</b> ${msg.text}`; container.appendChild(div); });
+    container.scrollTop = container.scrollHeight;
+}
+async function sendChatMessage() {
+    if (!currentUser) return;
+    const text = document.getElementById('chatInput').value.trim();
+    if (!text) return;
+    await API.sendChatMessage(currentUser.username, text, new Date().toLocaleTimeString());
+    document.getElementById('chatInput').value = '';
+    renderChat();
+}
+function startChatPolling() {
+    if (chatPollingInterval) clearInterval(chatPollingInterval);
+    chatPollingInterval = setInterval(() => { renderChat(); }, 3000);
+}
+async function renderReports() {
+    const container = document.getElementById('reportsList');
+    if (!container) return;
+    const reportsData = await API.getReports();
+    container.innerHTML = '';
+    reportsData.forEach(r => { const div = document.createElement('div'); div.style.background = 'rgba(30,38,58,0.8)'; div.style.margin = '8px 0'; div.style.padding = '8px'; div.style.borderRadius = '12px'; div.innerHTML = `<b>${r.username}</b> (${r.time}): ${r.text}`; container.appendChild(div); });
+}
+async function showReportDialog() {
+    if (!currentUser) return;
+    const text = prompt('Опишите проблему:');
+    if (!text) return;
+    await API.sendReport(currentUser.username, text, new Date().toLocaleString());
+    alert('Спасибо за отчёт!');
+    renderReports();
+}
+function applySettings() { moveSpeed = parseFloat(document.getElementById('moveSpeed').value); }
+function addCoins(amount) { if (!currentUser) return; coins += amount; document.getElementById('coinValue').innerText = coins; }
+function spendCoins(amount) { if (coins >= amount) { coins -= amount; document.getElementById('coinValue').innerText = coins; return true; } return false; }
+
+async function updateUIafterAuth() {
+    if (!currentUser) return;
+    document.getElementById('usernameDisplay').innerText = currentUser.username + (currentUser.isGuest ? ' (гость)' : '');
+    document.getElementById('userCoins').innerText = currentUser.coins;
+    coins = currentUser.coins;
+    document.getElementById('coinValue').innerText = coins;
+    await renderGamesList();
+    await renderMyProjects();
+    renderShop();
+    renderFriendsList();
+    await renderChat();
+    await renderReports();
+    startChatPolling();
+    connectToServer();
+}
+
+function logout() {
+    if(gameActive) { gameActive=false; if(gameAnimationId) cancelAnimationFrame(gameAnimationId); }
+    if(ws) ws.close();
+    if (chatPollingInterval) clearInterval(chatPollingInterval);
+    currentUser = null;
+    window.currentUser = null;
+    sessionStorage.removeItem('blockverse_session');
+    window.location.href = 'login.html';
+}
+
+function attachMobileEvents() {
+    const sel = '.btn, .nav-btn, .play-btn, .buy-btn, .tool-btn, .block-option, .close-dialog, .exit-game, .publish-btn, .exit-editor-btn, .play-btn-small, .edit-btn-small, .delete-btn-small, .host-btn-small, #earnCoinsBtn, #addFriendBtn, #sendChatBtn, #reportBugBtn, #connectToServerBtn, .host-btn';
+    document.querySelectorAll(sel).forEach(el => {
+        if(el.hasAttribute('data-touch-fixed')) return;
+        el.setAttribute('data-touch-fixed','true');
+        el.addEventListener('touchstart', (e) => { if(e.defaultPrevented) return; if(el.tagName==='INPUT'||el.tagName==='TEXTAREA') return; e.preventDefault(); el.click(); }, { passive:false });
+    });
+}
+setInterval(attachMobileEvents,1500);
+attachMobileEvents();
+
 function getBlockBoundingBox(block) {
     let halfX, halfY, halfZ;
     if (block.geometry) {
@@ -237,45 +371,27 @@ function getBlockBoundingBox(block) {
         halfY = (block.scale?.y || 1) * 0.45;
         halfZ = (block.scale?.z || 1) * 0.45;
     }
-    return { 
-        minX: block.position.x - halfX, 
-        maxX: block.position.x + halfX, 
-        minY: block.position.y - halfY, 
-        maxY: block.position.y + halfY, 
-        minZ: block.position.z - halfZ, 
-        maxZ: block.position.z + halfZ 
-    };
+    return { minX: block.position.x - halfX, maxX: block.position.x + halfX, minY: block.position.y - halfY, maxY: block.position.y + halfY, minZ: block.position.z - halfZ, maxZ: block.position.z + halfZ };
 }
 
 function getPlayerBoundingBox(pos) {
-    return { 
-        minX: pos.x - PLAYER_HALF_SIZE, 
-        maxX: pos.x + PLAYER_HALF_SIZE, 
-        minY: pos.y - PLAYER_HALF_HEIGHT, 
-        maxY: pos.y + PLAYER_HALF_HEIGHT, 
-        minZ: pos.z - PLAYER_HALF_SIZE, 
-        maxZ: pos.z + PLAYER_HALF_SIZE 
-    };
+    return { minX: pos.x - PLAYER_HALF_SIZE, maxX: pos.x + PLAYER_HALF_SIZE, minY: pos.y - PLAYER_HALF_HEIGHT, maxY: pos.y + PLAYER_HALF_HEIGHT, minZ: pos.z - PLAYER_HALF_SIZE, maxZ: pos.z + PLAYER_HALF_SIZE };
 }
 
 function intersectBoxes(a, b) {
-    return a.maxX > b.minX && a.minX < b.maxX && 
-           a.maxY > b.minY && a.minY < b.maxY && 
-           a.maxZ > b.minZ && a.minZ < b.maxZ;
+    return a.maxX > b.minX && a.minX < b.maxX && a.maxY > b.minY && a.minY < b.maxY && a.maxZ > b.minZ && a.minZ < b.maxZ;
 }
 
 function collide(dt, pos, velY, blocks) {
     let newPos = pos.clone();
     let newVelY = velY;
     let onGround = false;
-    
     newPos.y += newVelY * dt;
     let playerBox = getPlayerBoundingBox(newPos);
     for (let block of blocks) {
         if (block.userData?.collision === false) continue;
         const blockBox = getBlockBoundingBox(block);
-        if (playerBox.minX < blockBox.maxX && playerBox.maxX > blockBox.minX &&
-            playerBox.minZ < blockBox.maxZ && playerBox.maxZ > blockBox.minZ) {
+        if (playerBox.minX < blockBox.maxX && playerBox.maxX > blockBox.minX && playerBox.minZ < blockBox.maxZ && playerBox.maxZ > blockBox.minZ) {
             if (newVelY <= 0 && playerBox.minY <= blockBox.maxY + 0.1 && playerBox.minY > blockBox.maxY - 0.2) {
                 newPos.y = blockBox.maxY + PLAYER_HALF_HEIGHT;
                 newVelY = 0;
@@ -286,7 +402,6 @@ function collide(dt, pos, velY, blocks) {
             }
         }
     }
-    
     playerBox = getPlayerBoundingBox(newPos);
     for (let block of blocks) {
         if (block.userData?.collision === false) continue;
@@ -299,7 +414,6 @@ function collide(dt, pos, velY, blocks) {
             playerBox = getPlayerBoundingBox(newPos);
         }
     }
-    
     playerBox = getPlayerBoundingBox(newPos);
     for (let block of blocks) {
         if (block.userData?.collision === false) continue;
@@ -312,13 +426,11 @@ function collide(dt, pos, velY, blocks) {
             playerBox = getPlayerBoundingBox(newPos);
         }
     }
-    
     playerBox = getPlayerBoundingBox(newPos);
     for (let block of blocks) {
         if (block.userData?.collision === false) continue;
         const blockBox = getBlockBoundingBox(block);
-        if (playerBox.minX < blockBox.maxX && playerBox.maxX > blockBox.minX &&
-            playerBox.minZ < blockBox.maxZ && playerBox.maxZ > blockBox.minZ) {
+        if (playerBox.minX < blockBox.maxX && playerBox.maxX > blockBox.minX && playerBox.minZ < blockBox.maxZ && playerBox.maxZ > blockBox.minZ) {
             if (Math.abs(playerBox.minY - blockBox.maxY) < 0.1 && newVelY <= 0) {
                 onGround = true;
                 newVelY = 0;
@@ -421,7 +533,6 @@ function removeFromInventory(itemId) {
 }
 
 let platformMesh;
-
 async function startGameSession(gameData, gameName) {
     document.getElementById('loadingScreen').style.display = 'flex';
     await new Promise(r => setTimeout(r, 100));
@@ -517,43 +628,27 @@ async function startGameSession(gameData, gameName) {
         let dt = Math.min(0.033, now - lastTime);
         if (dt <= 0) dt = 0.016;
         lastTime = now;
-        
         let mx = (keyState.d ? 1 : 0) - (keyState.a ? 1 : 0);
         let mz = (keyState.s ? 1 : 0) - (keyState.w ? 1 : 0);
         if (joystickActive) { mx += joystickVector.x; mz += joystickVector.z; }
         const len = Math.hypot(mx, mz);
         if (len > 1) { mx /= len; mz /= len; }
-        
         if (mx !== 0 || mz !== 0) gamePlayer.rotation.y = Math.atan2(mx, mz);
-        
         let speed = moveSpeed * dt;
         let newPos = gamePlayer.position.clone();
         newPos.x += mx * speed;
         newPos.z += mz * speed;
         velY -= GRAVITY * dt;
         newPos.y += velY * dt;
-        
         const collisionResult = collide(dt, newPos, velY, collisionBlocks);
         newPos = collisionResult.pos;
         velY = collisionResult.velY;
         onGround = collisionResult.onGround;
-        
-        if(newPos.y < -5) { 
-            placeOnPlatform(gamePlayer, platformMesh); 
-            newPos.copy(gamePlayer.position); 
-            velY = 0; 
-            onGround = true; 
-        }
-        
+        if(newPos.y < -5) { placeOnPlatform(gamePlayer, platformMesh); newPos.copy(gamePlayer.position); velY = 0; onGround = true; }
         let shouldJump = jumpRequest || mobileJump;
-        if(onGround && shouldJump) { 
-            velY = JUMP_FORCE; 
-            jumpRequest = false; 
-            mobileJump = false; 
-        }
-        
+        if(onGround && shouldJump) { velY = JUMP_FORCE; jumpRequest = false; mobileJump = false; }
         gamePlayer.position.copy(newPos);
-        
+        sendPosition({x: gamePlayer.position.x, y: gamePlayer.position.y, z: gamePlayer.position.z});
         const targetPos = gamePlayer.position.clone();
         gameCamera.position.x = targetPos.x;
         gameCamera.position.z = targetPos.z + 5;
@@ -562,12 +657,7 @@ async function startGameSession(gameData, gameName) {
         pointLight.position.set(gamePlayer.position.x, gamePlayer.position.y+1, gamePlayer.position.z);
     }
 
-    function animate() { 
-        if(!gameActive) return; 
-        gameAnimationId = requestAnimationFrame(animate); 
-        update(); 
-        effectComposer.render(); 
-    }
+    function animate() { if(!gameActive) return; gameAnimationId = requestAnimationFrame(animate); update(); effectComposer.render(); }
     gameActive = true;
     animate();
     document.getElementById('loadingScreen').style.display = 'none';
@@ -576,290 +666,24 @@ async function startGameSession(gameData, gameName) {
     if (exitBtn) exitBtn.onclick = () => {
         gameActive = false;
         if(gameAnimationId) cancelAnimationFrame(gameAnimationId);
+        leaveGame();
         document.getElementById('customGameScreen').classList.add('hidden');
         document.getElementById('mainMenuScreen').classList.remove('hidden');
         if (mobileControls) mobileControls.style.display = 'none';
+        requestGamesList();
     };
     attachMobileEvents();
 }
 
-async function startLocalMultiplayerSession(gameData, gameName, gameInfo) {
-    await startGameSession(gameData, gameName);
-}
+async function startLocalGameSession(gameData, gameName) { await startGameSession(gameData, gameName); }
+function createRemotePlayer() { return new THREE.Mesh(new THREE.BoxGeometry(PLAYER_SIZE, PLAYER_HEIGHT, PLAYER_SIZE), new THREE.MeshStandardMaterial({ color: 0xffaa44 })); }
 
-async function startLocalGameSession(gameData, gameName) { 
-    await startGameSession(gameData, gameName); 
-}
-
-// ========== UI ФУНКЦИИ ==========
-async function renderGamesList() {
-    renderLocalGamesList();
-}
-
-async function renderMyProjects() {
-    if (!currentUser) return;
-    const container = document.getElementById('myProjectsList');
-    if (!container) return;
-    const allGames = await API.getGames();
-    const myGames = allGames.filter(g => g.author === currentUser.username);
-    container.innerHTML = '';
-    if (!myGames.length) { 
-        container.innerHTML = '<p>Нет проектов</p>'; 
-        attachMobileEvents(); 
-        return; 
-    }
-    myGames.forEach(game => {
-        const card = document.createElement('div');
-        card.className = 'project-card';
-        card.innerHTML = `
-            <div class="game-title">${game.name}</div>
-            <div>
-                <button class="play-btn-small" data-id="${game.id}">Играть</button>
-                <button class="host-btn-small" data-id="${game.id}" style="background:#4a6e8a;">🌐 Создать сервер</button>
-                <button class="edit-btn-small" data-id="${game.id}">Редактировать</button>
-                <button class="delete-btn-small" data-id="${game.id}">Удалить</button>
-            </div>
-        `;
-        container.appendChild(card);
-    });
-    document.querySelectorAll('.play-btn-small').forEach(btn => btn.addEventListener('click', async () => { 
-        const id = parseInt(btn.dataset.id); 
-        const game = (await API.getGames()).find(g => g.id === id); 
-        if (game) startLocalGameSession(JSON.parse(game.data), game.name); 
-    }));
-    document.querySelectorAll('.host-btn-small').forEach(btn => btn.addEventListener('click', async () => { 
-        const id = parseInt(btn.dataset.id); 
-        const game = (await API.getGames()).find(g => g.id === id); 
-        if (game) {
-            const gameId = createLocalGame(game.name, JSON.parse(game.data));
-            alert(`Сервер создан! ID: ${gameId}`);
-        }
-    }));
-    document.querySelectorAll('.edit-btn-small').forEach(btn => btn.addEventListener('click', async () => { 
-        const id = parseInt(btn.dataset.id); 
-        const game = (await API.getGames()).find(g => g.id === id); 
-        if (game) { 
-            const mod = await import('./editor.js'); 
-            mod.openEditor(game); 
-        } 
-    }));
-    document.querySelectorAll('.delete-btn-small').forEach(btn => btn.addEventListener('click', async () => { 
-        const id = parseInt(btn.dataset.id); 
-        if (confirm('Удалить?')) { 
-            await API.deleteGame(id, currentUser.username); 
-            renderMyProjects(); 
-        } 
-    }));
-    attachMobileEvents();
-}
-
-function renderShop() {
-    const container = document.getElementById('shopItemsList');
-    if (!container) return;
-    container.innerHTML = '';
-    shopItems.forEach(item => {
-        const div = document.createElement('div');
-        div.className = 'shop-item';
-        div.innerHTML = `<div>${item.id==='skin_gold'?'👑':item.id==='pickaxe'?'⛏️':'✨'}</div><h3>${item.name}</h3><div class="price">${item.price} 🪙</div><button class="buy-btn" data-id="${item.id}" data-price="${item.price}">Купить</button>`;
-        container.appendChild(div);
-    });
-    document.querySelectorAll('.buy-btn').forEach(btn => btn.addEventListener('click', () => { 
-        const price = parseInt(btn.dataset.price); 
-        if (spendCoins(price)) { 
-            alert(`Куплено ${btn.dataset.id}`); 
-            renderShop(); 
-        } else alert("Недостаточно монет!"); 
-    }));
-    attachMobileEvents();
-}
-
-function renderFriendsList() {
-    if (!currentUser) return;
-    const container = document.getElementById('friendsList');
-    if (!container) return;
-    container.innerHTML = '';
-    (currentUser.friends || []).forEach(friend => {
-        const div = document.createElement('div');
-        div.className = 'friend-item';
-        div.innerHTML = `<span>${friend}</span><button class="removeFriendBtn" data-friend="${friend}">❌</button>`;
-        container.appendChild(div);
-    });
-    document.querySelectorAll('.removeFriendBtn').forEach(btn => btn.addEventListener('click', () => { 
-        const friend = btn.dataset.friend; 
-        currentUser.friends = currentUser.friends.filter(f => f !== friend); 
-        renderFriendsList(); 
-    }));
-    attachMobileEvents();
-}
-
-function addFriend() {
-    if (!currentUser) return;
-    const friendName = document.getElementById('friendSearch').value.trim();
-    if (!friendName || friendName === currentUser.username) return;
-    if (currentUser.friends.includes(friendName)) { alert("Уже в друзьях"); return; }
-    currentUser.friends.push(friendName);
-    renderFriendsList();
-    document.getElementById('friendSearch').value = '';
-    alert(`Друг ${friendName} добавлен`);
-}
-
-async function renderChat() {
-    const container = document.getElementById('chatMessages');
-    if (!container) return;
-    const messages = await API.getChatMessages();
-    container.innerHTML = '';
-    messages.forEach(msg => { 
-        const div = document.createElement('div'); 
-        div.innerHTML = `<span style="color:#ffaa44;">[${msg.time}]</span> <b>${msg.username}:</b> ${msg.text}`; 
-        container.appendChild(div); 
-    });
-    container.scrollTop = container.scrollHeight;
-}
-
-async function sendChatMessage() {
-    if (!currentUser) return;
-    const text = document.getElementById('chatInput').value.trim();
-    if (!text) return;
-    await API.sendChatMessage(currentUser.username, text, new Date().toLocaleTimeString());
-    document.getElementById('chatInput').value = '';
-    renderChat();
-}
-
-function startChatPolling() {
-    if (chatPollingInterval) clearInterval(chatPollingInterval);
-    chatPollingInterval = setInterval(() => { renderChat(); }, 3000);
-}
-
-async function renderReports() {
-    const container = document.getElementById('reportsList');
-    if (!container) return;
-    const reportsData = await API.getReports();
-    container.innerHTML = '';
-    reportsData.forEach(r => { 
-        const div = document.createElement('div'); 
-        div.style.background = 'rgba(30,38,58,0.8)'; 
-        div.style.margin = '8px 0'; 
-        div.style.padding = '8px'; 
-        div.style.borderRadius = '12px'; 
-        div.innerHTML = `<b>${r.username}</b> (${r.time}): ${r.text}`; 
-        container.appendChild(div); 
-    });
-}
-
-async function showReportDialog() {
-    if (!currentUser) return;
-    const text = prompt('Опишите проблему:');
-    if (!text) return;
-    await API.sendReport(currentUser.username, text, new Date().toLocaleString());
-    alert('Спасибо за отчёт!');
-    renderReports();
-}
-
-function applySettings() { 
-    moveSpeed = parseFloat(document.getElementById('moveSpeed').value); 
-}
-
-function addCoins(amount) { 
-    if (!currentUser) return; 
-    coins += amount; 
-    document.getElementById('coinValue').innerText = coins; 
-}
-
-function spendCoins(amount) { 
-    if (coins >= amount) { 
-        coins -= amount; 
-        document.getElementById('coinValue').innerText = coins; 
-        return true; 
-    } 
-    return false; 
-}
-
-async function updateUIafterAuth() {
-    if (!currentUser) return;
-    document.getElementById('usernameDisplay').innerText = currentUser.username + (currentUser.isGuest ? ' (гость)' : '');
-    document.getElementById('userCoins').innerText = currentUser.coins;
-    coins = currentUser.coins;
-    document.getElementById('coinValue').innerText = coins;
-    await renderGamesList();
-    await renderMyProjects();
-    renderShop();
-    renderFriendsList();
-    await renderChat();
-    await renderReports();
-    startChatPolling();
-}
-
-function logout() {
-    if(gameActive) { gameActive=false; if(gameAnimationId) cancelAnimationFrame(gameAnimationId); }
-    if (chatPollingInterval) clearInterval(chatPollingInterval);
-    currentUser = null;
-    window.currentUser = null;
-    sessionStorage.removeItem('blockverse_session');
-    window.location.href = 'login.html';
-}
-
-function attachMobileEvents() {
-    const sel = '.btn, .nav-btn, .play-btn, .buy-btn, .tool-btn, .block-option, .exit-game, .play-btn-small, .edit-btn-small, .delete-btn-small, .host-btn-small, #earnCoinsBtn, #addFriendBtn, #sendChatBtn, #reportBugBtn, #connectToServerBtn';
-    document.querySelectorAll(sel).forEach(el => {
-        if(el.hasAttribute('data-touch-fixed')) return;
-        el.setAttribute('data-touch-fixed','true');
-        el.addEventListener('touchstart', (e) => { 
-            if(e.defaultPrevented) return; 
-            if(el.tagName==='INPUT'||el.tagName==='TEXTAREA') return; 
-            e.preventDefault(); 
-            el.click(); 
-        }, { passive:false });
-    });
-}
-
-setInterval(attachMobileEvents,1500);
-attachMobileEvents();
-
-// ========== НАВИГАЦИЯ ==========
-document.getElementById('showGamesBtn').onclick = () => { 
-    document.getElementById('gamesPanel').style.display='block'; 
-    document.getElementById('myProjectsPanel').style.display='none'; 
-    document.getElementById('shopPanel').style.display='none'; 
-    document.getElementById('socialPanel').style.display='none'; 
-    document.getElementById('settingsPanel').style.display='none'; 
-    renderGamesList(); 
-};
-document.getElementById('showMyProjectsBtn').onclick = () => { 
-    document.getElementById('gamesPanel').style.display='none'; 
-    document.getElementById('myProjectsPanel').style.display='block'; 
-    document.getElementById('shopPanel').style.display='none'; 
-    document.getElementById('socialPanel').style.display='none'; 
-    document.getElementById('settingsPanel').style.display='none'; 
-    renderMyProjects(); 
-};
-document.getElementById('showShopBtn').onclick = () => { 
-    document.getElementById('gamesPanel').style.display='none'; 
-    document.getElementById('myProjectsPanel').style.display='none'; 
-    document.getElementById('shopPanel').style.display='block'; 
-    document.getElementById('socialPanel').style.display='none'; 
-    document.getElementById('settingsPanel').style.display='none'; 
-    renderShop(); 
-};
-document.getElementById('showSocialBtn').onclick = () => { 
-    document.getElementById('gamesPanel').style.display='none'; 
-    document.getElementById('myProjectsPanel').style.display='none'; 
-    document.getElementById('shopPanel').style.display='none'; 
-    document.getElementById('socialPanel').style.display='block'; 
-    document.getElementById('settingsPanel').style.display='none'; 
-    renderFriendsList(); 
-    renderChat(); 
-};
-document.getElementById('showSettingsBtn').onclick = () => { 
-    document.getElementById('gamesPanel').style.display='none'; 
-    document.getElementById('myProjectsPanel').style.display='none'; 
-    document.getElementById('shopPanel').style.display='none'; 
-    document.getElementById('socialPanel').style.display='none'; 
-    document.getElementById('settingsPanel').style.display='block'; 
-};
-document.getElementById('createGameBtn').onclick = async () => { 
-    const mod = await import('./editor.js'); 
-    mod.openEditor(); 
-};
+document.getElementById('showGamesBtn').onclick = () => { document.getElementById('gamesPanel').style.display='block'; document.getElementById('myProjectsPanel').style.display='none'; document.getElementById('shopPanel').style.display='none'; document.getElementById('socialPanel').style.display='none'; document.getElementById('settingsPanel').style.display='none'; renderGamesList(); };
+document.getElementById('showMyProjectsBtn').onclick = () => { document.getElementById('gamesPanel').style.display='none'; document.getElementById('myProjectsPanel').style.display='block'; document.getElementById('shopPanel').style.display='none'; document.getElementById('socialPanel').style.display='none'; document.getElementById('settingsPanel').style.display='none'; renderMyProjects(); };
+document.getElementById('showShopBtn').onclick = () => { document.getElementById('gamesPanel').style.display='none'; document.getElementById('myProjectsPanel').style.display='none'; document.getElementById('shopPanel').style.display='block'; document.getElementById('socialPanel').style.display='none'; document.getElementById('settingsPanel').style.display='none'; renderShop(); };
+document.getElementById('showSocialBtn').onclick = () => { document.getElementById('gamesPanel').style.display='none'; document.getElementById('myProjectsPanel').style.display='none'; document.getElementById('shopPanel').style.display='none'; document.getElementById('socialPanel').style.display='block'; document.getElementById('settingsPanel').style.display='none'; renderFriendsList(); renderChat(); };
+document.getElementById('showSettingsBtn').onclick = () => { document.getElementById('gamesPanel').style.display='none'; document.getElementById('myProjectsPanel').style.display='none'; document.getElementById('shopPanel').style.display='none'; document.getElementById('socialPanel').style.display='none'; document.getElementById('settingsPanel').style.display='block'; };
+document.getElementById('createGameBtn').onclick = async () => { const mod = await import('./editor.js'); mod.openEditor(); };
 document.getElementById('earnCoinsBtn').onclick = () => addCoins(100);
 document.getElementById('addFriendBtn').onclick = addFriend;
 document.getElementById('sendChatBtn').onclick = sendChatMessage;
@@ -867,33 +691,14 @@ document.getElementById('chatInput').addEventListener('keypress', e=>{ if(e.key=
 document.getElementById('logoutBtn').onclick = logout;
 document.getElementById('moveSpeed')?.addEventListener('input', applySettings);
 document.getElementById('reportBugBtn')?.addEventListener('click', showReportDialog);
-document.getElementById('connectToServerBtn')?.addEventListener('click', () => { 
-    const sid = document.getElementById('serverIdInput').value.trim(); 
-    if(sid && activeGames.has(sid)) { 
-        joinLocalGame(sid, null, currentUser?.username); 
-    } else if(sid) {
-        alert('Сервер не найден');
-    } else {
-        alert('Введите ID сервера');
-    }
-});
+document.getElementById('connectToServerBtn')?.addEventListener('click', () => { const sid = document.getElementById('serverIdInput').value.trim(); if(sid) joinGame(sid); else alert('Введите ID'); });
 
-// ========== ИНИЦИАЛИЗАЦИЯ ==========
 initMobileControls();
-
 const session = sessionStorage.getItem('blockverse_session');
 if (session) {
     const data = JSON.parse(session);
-    currentUser = { 
-        username: data.username, 
-        coins: data.coins, 
-        inventory: data.inventory || [], 
-        friends: data.friends || [], 
-        isGuest: data.isGuest || false 
-    };
+    currentUser = { username: data.username, coins: data.coins, inventory: data.inventory || [], friends: data.friends || [], isGuest: data.isGuest || false };
     window.currentUser = currentUser;
     document.getElementById('mainMenuScreen').classList.remove('hidden');
     updateUIafterAuth();
-} else { 
-    window.location.href = 'login.html'; 
-                                }
+} else { window.location.href = 'login.html'; }

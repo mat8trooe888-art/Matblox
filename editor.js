@@ -55,46 +55,6 @@ function createBlockMesh(shape, size = { x: 0.9, y: 0.9, z: 0.9 }, color = 0x8B5
     return mesh;
 }
 
-function loadTemplate(templateType) {
-    clearEditor();
-    if (templateType === 'platformer') {
-        const ground = createBlockMesh('cube', { x: 30, y: 1, z: 30 }, 0x6B8E23, 1);
-        ground.position.set(0, -0.5, 0);
-        addObject({ id: generateId(), name: 'Ground', type: 'block', parentId: 'Workspace', threeObject: ground, userData: { collision: true } });
-        for (let i = -3; i <= 3; i++) {
-            const plat = createBlockMesh('cube', { x: 2, y: 0.5, z: 2 }, 0xaa8866, 1);
-            plat.position.set(i * 2.5, 0.5 + Math.abs(i) * 0.5, 0);
-            addObject({ id: generateId(), name: `Platform_${i}`, type: 'block', parentId: 'Workspace', threeObject: plat, userData: { collision: true } });
-        }
-        const spawn = createBlockMesh('cube', { x: 1, y: 0.5, z: 1 }, 0xff3333, 1);
-        spawn.position.set(0, 0.5, 0);
-        addObject({ id: generateId(), name: 'Spawn', type: 'block', parentId: 'Workspace', threeObject: spawn, userData: { collision: true } });
-    } else if (templateType === 'racing') {
-        const ground = createBlockMesh('cube', { x: 50, y: 1, z: 50 }, 0x555555, 1);
-        ground.position.set(0, -0.5, 0);
-        addObject({ id: generateId(), name: 'Track', type: 'block', parentId: 'Workspace', threeObject: ground, userData: { collision: true } });
-        for (let i = 0; i < 12; i++) {
-            const angle = (i / 12) * Math.PI * 2;
-            const road = createBlockMesh('cube', { x: 2, y: 0.2, z: 2 }, 0xaaaaaa, 1);
-            road.position.set(Math.cos(angle) * 12, -0.3, Math.sin(angle) * 12);
-            addObject({ id: generateId(), name: `Road_${i}`, type: 'block', parentId: 'Workspace', threeObject: road, userData: { collision: true } });
-        }
-    } else if (templateType === 'rpg') {
-        const ground = createBlockMesh('cube', { x: 40, y: 1, z: 40 }, 0x4a7a4a, 1);
-        ground.position.set(0, -0.5, 0);
-        addObject({ id: generateId(), name: 'Grass', type: 'block', parentId: 'Workspace', threeObject: ground, userData: { collision: true } });
-        const house = createBlockMesh('cube', { x: 3, y: 2, z: 3 }, 0xaa8866, 1);
-        house.position.set(6, 0, 6);
-        addObject({ id: generateId(), name: 'House', type: 'block', parentId: 'Workspace', threeObject: house, userData: { collision: true } });
-        const tree = createBlockMesh('cylinder', { x: 1, y: 2, z: 1 }, 0x8B5A2B, 1);
-        tree.position.set(-5, 0, -5);
-        addObject({ id: generateId(), name: 'Tree', type: 'block', parentId: 'Workspace', threeObject: tree, userData: { collision: true } });
-        const spawn = createBlockMesh('cube', { x: 1, y: 0.5, z: 1 }, 0xff3333, 1);
-        spawn.position.set(0, 0.5, 0);
-        addObject({ id: generateId(), name: 'Spawn', type: 'block', parentId: 'Workspace', threeObject: spawn, userData: { collision: true } });
-    }
-}
-
 function addObject(obj) {
     editorObjects.push(obj);
     if (obj.threeObject) editorScene.add(obj.threeObject);
@@ -281,6 +241,12 @@ function applyProps() {
     obj.threeObject.position.set(parseFloat(document.getElementById('propPosX').value), parseFloat(document.getElementById('propPosY').value), parseFloat(document.getElementById('propPosZ').value));
     obj.threeObject.scale.set(parseFloat(document.getElementById('propScaleX').value), parseFloat(document.getElementById('propScaleY').value), parseFloat(document.getElementById('propScaleZ').value));
     renderExplorer();
+}
+
+function createFolder(name) {
+    const folder = { id: generateId(), name: name, type: 'folder', parentId: null, childrenIds: [], threeObject: null };
+    addObject(folder);
+    return folder;
 }
 
 function createNPC(name = "NPC") {
@@ -535,19 +501,14 @@ function updateAnimationSelect() {
     animations.forEach(anim => { let opt = document.createElement('option'); opt.value = anim.id; opt.textContent = anim.name; select.appendChild(opt); });
 }
 
-// ========== СОХРАНЕНИЕ И ПУБЛИКАЦИЯ ==========
 async function saveGame(isPublished = false) {
-    // Проверяем авторизацию через глобальный window.currentUser
     if (!window.currentUser) {
-        alert('Вы не авторизованы. Пожалуйста, войдите в аккаунт.');
+        alert('Вы не авторизованы');
         return;
     }
-    
     const gameName = prompt('Название игры:', currentGameId ? 'Моя игра' : 'Новая игра');
     if (!gameName) return;
-    
-    const description = prompt('Описание игры (необязательно):', '');
-    
+    const description = prompt('Описание игры:', '');
     const gameData = {
         blocks: editorObjects.filter(obj => obj.type !== 'folder' && obj.threeObject).map(obj => serializeObject(obj)),
         animations: animations,
@@ -560,7 +521,6 @@ async function saveGame(isPublished = false) {
             position: { x: npc.threeObject.position.x, y: npc.threeObject.position.y, z: npc.threeObject.position.z }
         }))
     };
-    
     let result;
     if (currentGameId && !isPublished) {
         result = await API.updateGame(currentGameId, gameName, description, gameData);
@@ -568,7 +528,6 @@ async function saveGame(isPublished = false) {
         result = await API.saveGame(gameName, window.currentUser.username, gameData, description);
         if (result.id) currentGameId = result.id;
     }
-    
     if (result.success || result.id) {
         alert(isPublished ? 'Игра опубликована!' : 'Игра сохранена!');
         if (window.renderMyProjects) window.renderMyProjects();
@@ -701,6 +660,11 @@ function initEditor() {
         if (editorActive) { editorActive = false; cancelAnimationFrame(editorAnimationId); }
     };
 
+    document.getElementById('addFolderBtn').onclick = () => {
+        const name = prompt('Название папки:', 'Новая папка');
+        if (name) createFolder(name);
+    };
+
     document.querySelectorAll('.block-option').forEach(opt => {
         opt.addEventListener('click', () => {
             document.querySelectorAll('.block-option').forEach(o => o.classList.remove('selected'));
@@ -765,12 +729,9 @@ function initEditor() {
 export function openEditor(gameToEdit = null) {
     currentGameId = gameToEdit?.id || null;
     document.getElementById('mainMenuScreen').classList.add('hidden');
-    const template = prompt('Выберите шаблон: empty, platformer, racing, rpg', 'empty');
     document.getElementById('editorScreen').classList.remove('hidden');
     initEditor();
     if (gameToEdit && gameToEdit.data) {
         loadGameIntoEditor(gameToEdit.data);
-    } else if (template && template !== 'empty') {
-        loadTemplate(template);
     }
-            }
+        }

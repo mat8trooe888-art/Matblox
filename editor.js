@@ -13,7 +13,6 @@ let currentOpacity = 1;
 let editorActive = false;
 let editorAnimationId = null;
 
-// Папки (как в Roblox Studio)
 let folders = ['Workspace', 'Lighting', 'ServerStorage', 'StarterGui'];
 
 let animations = [];
@@ -33,6 +32,7 @@ let currentAnimationDuration = 1;
 let guiElements = [];
 let npcs = [];
 let selectedNpc = null;
+let currentGameId = null; // ID редактируемой игры
 
 function generateId() { return Date.now() + '-' + Math.random().toString(36).substr(2, 8); }
 
@@ -58,17 +58,14 @@ function createBlockMesh(shape, size = { x: 0.9, y: 0.9, z: 0.9 }, color = 0x8B5
 function loadTemplate(templateType) {
     clearEditor();
     if (templateType === 'platformer') {
-        // Земля
         const ground = createBlockMesh('cube', { x: 30, y: 1, z: 30 }, 0x6B8E23, 1);
         ground.position.set(0, -0.5, 0);
         addObject({ id: generateId(), name: 'Ground', type: 'block', parentId: 'Workspace', threeObject: ground, userData: { collision: true } });
-        // Платформы
         for (let i = -3; i <= 3; i++) {
             const plat = createBlockMesh('cube', { x: 2, y: 0.5, z: 2 }, 0xaa8866, 1);
             plat.position.set(i * 2.5, 0.5 + Math.abs(i) * 0.5, 0);
             addObject({ id: generateId(), name: `Platform_${i}`, type: 'block', parentId: 'Workspace', threeObject: plat, userData: { collision: true } });
         }
-        // Спавн
         const spawn = createBlockMesh('cube', { x: 1, y: 0.5, z: 1 }, 0xff3333, 1);
         spawn.position.set(0, 0.5, 0);
         addObject({ id: generateId(), name: 'Spawn', type: 'block', parentId: 'Workspace', threeObject: spawn, userData: { collision: true } });
@@ -96,12 +93,6 @@ function loadTemplate(templateType) {
         spawn.position.set(0, 0.5, 0);
         addObject({ id: generateId(), name: 'Spawn', type: 'block', parentId: 'Workspace', threeObject: spawn, userData: { collision: true } });
     }
-}
-
-function createFolder(name) {
-    const folder = { id: generateId(), name: name, type: 'folder', parentId: 'Workspace', childrenIds: [], threeObject: null };
-    addObject(folder);
-    return folder;
 }
 
 function addObject(obj) {
@@ -544,20 +535,51 @@ function updateAnimationSelect() {
     animations.forEach(anim => { let opt = document.createElement('option'); opt.value = anim.id; opt.textContent = anim.name; select.appendChild(opt); });
 }
 
-async function saveGameLocal() {
-    if (!window.currentUser) { alert('Не авторизован'); return; }
-    const gameName = prompt('Название игры:');
+// ========== СОХРАНЕНИЕ И ПУБЛИКАЦИЯ ==========
+async function saveGame(isPublished = false) {
+    if (!window.currentUser) { alert('Вы не авторизованы'); return; }
+    
+    const gameName = prompt('Название игры:', currentGameId ? 'Моя игра' : 'Новая игра');
     if (!gameName) return;
-    const gameData = { blocks: editorObjects.map(obj => serializeObject(obj)), animations, gui: guiElements };
-    const result = await API.saveGame(gameName, window.currentUser.username, gameData);
-    if (result.id) alert('Сохранено!');
-    else alert('Ошибка сохранения');
+    
+    const description = prompt('Описание игры (необязательно):', '');
+    
+    const gameData = {
+        blocks: editorObjects.filter(obj => obj.type !== 'folder' && obj.threeObject).map(obj => serializeObject(obj)),
+        animations: animations,
+        gui: guiElements,
+        npcs: npcs.map(npc => ({
+            name: npc.userData.name,
+            behavior: npc.userData.behavior,
+            speed: npc.userData.speed,
+            dialog: npc.userData.dialog,
+            position: { x: npc.threeObject.position.x, y: npc.threeObject.position.y, z: npc.threeObject.position.z }
+        }))
+    };
+    
+    let result;
+    if (currentGameId && !isPublished) {
+        // Обновляем существующую игру
+        result = await API.updateGame(currentGameId, gameName, description, gameData);
+    } else {
+        // Создаём новую игру
+        result = await API.saveGame(gameName, window.currentUser.username, gameData, description);
+        if (result.id) currentGameId = result.id;
+    }
+    
+    if (result.success || result.id) {
+        alert(isPublished ? 'Игра опубликована!' : 'Игра сохранена!');
+        if (window.renderMyProjects) window.renderMyProjects();
+        if (window.renderGamesList) window.renderGamesList();
+    } else {
+        alert('Ошибка: ' + (result.error || 'Неизвестная ошибка'));
+    }
 }
 
 function serializeObject(obj) {
     if (!obj.threeObject) return null;
     return {
-        type: obj.type, id: obj.id, name: obj.name,
+        type: obj.type, id: obj.id, name: obj.name, parentId: obj.parentId,
         position: { x: obj.threeObject.position.x, y: obj.threeObject.position.y, z: obj.threeObject.position.z },
         rotation: { x: obj.threeObject.rotation.x, y: obj.threeObject.rotation.y, z: obj.threeObject.rotation.z },
         scale: { x: obj.threeObject.scale.x, y: obj.threeObject.scale.y, z: obj.threeObject.scale.z },
@@ -566,9 +588,6 @@ function serializeObject(obj) {
 }
 
 function deserializeObject(data) {
-    if (data.type === 'folder') {
-        return { id: data.id, name: data.name, type: 'folder', parentId: data.parentId, childrenIds: [], threeObject: null };
-    }
     if (data.type === 'npc') {
         const geometry = new THREE.BoxGeometry(0.8, 1.2, 0.8);
         const material = new THREE.MeshStandardMaterial({ color: 0x88aa88 });
@@ -589,10 +608,29 @@ function deserializeObject(data) {
 
 function loadGameIntoEditor(gameData) {
     clearEditor();
-    if (gameData.blocks) gameData.blocks.forEach(blockData => { let obj = deserializeObject(blockData); if (obj) addObject(obj); });
+    if (gameData.blocks) {
+        gameData.blocks.forEach(blockData => {
+            if (blockData && blockData.type !== 'folder') {
+                let obj = deserializeObject(blockData);
+                if (obj) addObject(obj);
+            }
+        });
+    }
     if (gameData.animations) animations = gameData.animations;
     if (gameData.gui) guiElements = gameData.gui;
+    if (gameData.npcs) {
+        gameData.npcs.forEach(npcData => {
+            const npc = createNPC(npcData.name);
+            npc.userData.behavior = npcData.behavior;
+            npc.userData.speed = npcData.speed;
+            npc.userData.dialog = npcData.dialog;
+            npc.threeObject.position.copy(npcData.position);
+        });
+    }
     selectObject(null);
+    updateAnimationSelect();
+    renderGUIList();
+    renderNpcList();
 }
 
 function clearEditor() {
@@ -603,6 +641,10 @@ function clearEditor() {
     guiElements = [];
     npcs = [];
     if (transformControls.object) transformControls.detach();
+    // Создаём папки
+    folders.forEach(f => {
+        editorObjects.push({ id: f, name: f, type: 'folder', parentId: null, childrenIds: [], threeObject: null });
+    });
     renderExplorer();
     updatePropertiesPanel();
     renderNpcList();
@@ -641,10 +683,7 @@ function initEditor() {
     const gridHelper = new THREE.GridHelper(100, 20, 0x88aaff, 0x335588);
     editorScene.add(gridHelper);
 
-    // Создаём папки
-    folders.forEach(f => {
-        editorObjects.push({ id: f, name: f, type: 'folder', parentId: null, childrenIds: [], threeObject: null });
-    });
+    clearEditor();
 
     document.getElementById('modeMoveBtn').onclick = () => { transformControls.setMode('translate'); document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active')); document.getElementById('modeMoveBtn').classList.add('active'); };
     document.getElementById('modeRotateBtn').onclick = () => { transformControls.setMode('rotate'); document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active')); document.getElementById('modeRotateBtn').classList.add('active'); };
@@ -653,8 +692,8 @@ function initEditor() {
     document.getElementById('deleteBtn').onclick = () => { if (selectedObjects.length) deleteObject(selectedObjects[0]); else alert('Выберите объект'); };
     document.getElementById('duplicateBtn').onclick = () => { if (selectedObjects.length) duplicateObject(selectedObjects[0]); else alert('Выберите объект'); };
     document.getElementById('groupBtn').onclick = groupSelected;
-    document.getElementById('saveGameBtn').onclick = saveGameLocal;
-    document.getElementById('publishGameBtn').onclick = () => { alert('Публикация через API'); saveGameLocal(); };
+    document.getElementById('saveGameBtn').onclick = () => saveGame(false);
+    document.getElementById('publishGameBtn').onclick = () => saveGame(true);
     document.getElementById('exitEditorBtn').onclick = () => {
         document.getElementById('editorScreen').classList.add('hidden');
         document.getElementById('mainMenuScreen').classList.remove('hidden');
@@ -698,7 +737,6 @@ function initEditor() {
     document.getElementById('saveNpcBtn').onclick = saveNPCProperties;
     document.getElementById('applyScriptBtn').onclick = () => { if (!selectedObjects.length) { alert('Выберите объект'); return; } let script = document.getElementById('blockScriptEditor').value; selectedObjects[0].userData.script = script; alert('Скрипт сохранён'); };
 
-    // Вкладки внизу
     const bottomTabs = document.querySelectorAll('.bottom-tab');
     const tabContents = {
         blocks: document.getElementById('blocksTab'),
@@ -724,9 +762,14 @@ function initEditor() {
 }
 
 export function openEditor(gameToEdit = null) {
+    currentGameId = gameToEdit?.id || null;
     document.getElementById('mainMenuScreen').classList.add('hidden');
     const template = prompt('Выберите шаблон: empty, platformer, racing, rpg', 'empty');
     document.getElementById('editorScreen').classList.remove('hidden');
     initEditor();
-    if (template && template !== 'empty') loadTemplate(template);
-            }
+    if (gameToEdit && gameToEdit.data) {
+        loadGameIntoEditor(gameToEdit.data);
+    } else if (template && template !== 'empty') {
+        loadTemplate(template);
+    }
+    }

@@ -43,6 +43,7 @@ window.createGameOnServer = createGameOnServer;
 window.addCoins = addCoins;
 window.spendCoins = spendCoins;
 
+// ========== МОБИЛЬНОЕ УПРАВЛЕНИЕ (НОРМАЛЬНАЯ ГИЛЬЗА) ==========
 let joystickActive = false;
 let joystickVector = { x: 0, z: 0 };
 let mobileJump = false;
@@ -52,17 +53,32 @@ function initMobileControls() {
     const joystickThumb = document.getElementById('joystickThumb');
     const jumpBtn = document.getElementById('mobileJumpBtn');
     if (!joystickContainer) return;
+    
     let touchId = null;
-    const maxDist = 40;
+    const maxDist = 45;
+    let centerX = 35, centerY = 35;
+    
     const onTouchStart = (e) => {
         e.preventDefault();
         const rect = joystickContainer.getBoundingClientRect();
         const touch = e.touches[0];
         touchId = touch.identifier;
         joystickActive = true;
+        
+        // Вычисляем центр джойстика
+        centerX = rect.width / 2;
+        centerY = rect.height / 2;
+        
+        // Позиционируем thumb по центру
         joystickThumb.style.transition = 'none';
-        updateJoystickPosition(touch.clientX - rect.left, touch.clientY - rect.top);
+        joystickThumb.style.left = (centerX - 25) + 'px';
+        joystickThumb.style.top = (centerY - 25) + 'px';
+        
+        const touchX = touch.clientX - rect.left;
+        const touchY = touch.clientY - rect.top;
+        updateJoystickPosition(touchX, touchY);
     };
+    
     const onTouchMove = (e) => {
         if (!joystickActive) return;
         const rect = joystickContainer.getBoundingClientRect();
@@ -75,38 +91,57 @@ function initMobileControls() {
             }
         }
     };
+    
     const onTouchEnd = () => {
         if (!joystickActive) return;
         joystickActive = false;
         joystickVector = { x: 0, z: 0 };
         joystickThumb.style.transition = '0.1s';
-        joystickThumb.style.left = '30px';
-        joystickThumb.style.top = '30px';
+        joystickThumb.style.left = (centerX - 25) + 'px';
+        joystickThumb.style.top = (centerY - 25) + 'px';
     };
+    
     function updateJoystickPosition(x, y) {
-        let dx = x - 30;
-        let dy = y - 30;
+        let dx = x - centerX;
+        let dy = y - centerY;
         const dist = Math.hypot(dx, dy);
         if (dist > maxDist) {
             dx = dx * maxDist / dist;
             dy = dy * maxDist / dist;
         }
-        joystickThumb.style.left = (30 + dx) + 'px';
-        joystickThumb.style.top = (30 + dy) + 'px';
+        joystickThumb.style.left = (centerX + dx - 25) + 'px';
+        joystickThumb.style.top = (centerY + dy - 25) + 'px';
         joystickVector = { x: dx / maxDist, z: dy / maxDist };
     }
+    
     joystickContainer.addEventListener('touchstart', onTouchStart, { passive: false });
     document.addEventListener('touchmove', onTouchMove, { passive: false });
     document.addEventListener('touchend', onTouchEnd);
     document.addEventListener('touchcancel', onTouchEnd);
+    
     if (jumpBtn) {
-        jumpBtn.addEventListener('touchstart', (e) => { e.preventDefault(); mobileJump = true; });
-        jumpBtn.addEventListener('touchend', (e) => { e.preventDefault(); mobileJump = false; });
-        jumpBtn.addEventListener('mousedown', () => { mobileJump = true; });
-        jumpBtn.addEventListener('mouseup', () => { mobileJump = false; });
+        jumpBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            mobileJump = true;
+            jumpBtn.style.transform = 'scale(0.95)';
+        });
+        jumpBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            mobileJump = false;
+            jumpBtn.style.transform = 'scale(1)';
+        });
+        jumpBtn.addEventListener('mousedown', () => { 
+            mobileJump = true;
+            jumpBtn.style.transform = 'scale(0.95)';
+        });
+        jumpBtn.addEventListener('mouseup', () => { 
+            mobileJump = false;
+            jumpBtn.style.transform = 'scale(1)';
+        });
     }
 }
 
+// ========== КОЛЛИЗИЯ ==========
 function getBlockBoundingBox(block) {
     let halfX, halfY, halfZ;
     if (block.geometry) {
@@ -124,27 +159,46 @@ function getBlockBoundingBox(block) {
         halfY = (block.scale?.y || 1) * 0.45;
         halfZ = (block.scale?.z || 1) * 0.45;
     }
-    return { minX: block.position.x - halfX, maxX: block.position.x + halfX, minY: block.position.y - halfY, maxY: block.position.y + halfY, minZ: block.position.z - halfZ, maxZ: block.position.z + halfZ };
+    return { 
+        minX: block.position.x - halfX, 
+        maxX: block.position.x + halfX, 
+        minY: block.position.y - halfY, 
+        maxY: block.position.y + halfY, 
+        minZ: block.position.z - halfZ, 
+        maxZ: block.position.z + halfZ 
+    };
 }
 
 function getPlayerBoundingBox(pos) {
-    return { minX: pos.x - PLAYER_HALF_SIZE, maxX: pos.x + PLAYER_HALF_SIZE, minY: pos.y - PLAYER_HALF_HEIGHT, maxY: pos.y + PLAYER_HALF_HEIGHT, minZ: pos.z - PLAYER_HALF_SIZE, maxZ: pos.z + PLAYER_HALF_SIZE };
+    return { 
+        minX: pos.x - PLAYER_HALF_SIZE, 
+        maxX: pos.x + PLAYER_HALF_SIZE, 
+        minY: pos.y - PLAYER_HALF_HEIGHT, 
+        maxY: pos.y + PLAYER_HALF_HEIGHT, 
+        minZ: pos.z - PLAYER_HALF_SIZE, 
+        maxZ: pos.z + PLAYER_HALF_SIZE 
+    };
 }
 
 function intersectBoxes(a, b) {
-    return a.maxX > b.minX && a.minX < b.maxX && a.maxY > b.minY && a.minY < b.maxY && a.maxZ > b.minZ && a.minZ < b.maxZ;
+    return a.maxX > b.minX && a.minX < b.maxX && 
+           a.maxY > b.minY && a.minY < b.maxY && 
+           a.maxZ > b.minZ && a.minZ < b.maxZ;
 }
 
 function collide(dt, pos, velY, blocks) {
     let newPos = pos.clone();
     let newVelY = velY;
     let onGround = false;
+    
+    // Шаг по Y
     newPos.y += newVelY * dt;
     let playerBox = getPlayerBoundingBox(newPos);
     for (let block of blocks) {
         if (block.userData?.collision === false) continue;
         const blockBox = getBlockBoundingBox(block);
-        if (playerBox.minX < blockBox.maxX && playerBox.maxX > blockBox.minX && playerBox.minZ < blockBox.maxZ && playerBox.maxZ > blockBox.minZ) {
+        if (playerBox.minX < blockBox.maxX && playerBox.maxX > blockBox.minX &&
+            playerBox.minZ < blockBox.maxZ && playerBox.maxZ > blockBox.minZ) {
             if (newVelY <= 0 && playerBox.minY <= blockBox.maxY + 0.1 && playerBox.minY > blockBox.maxY - 0.2) {
                 newPos.y = blockBox.maxY + PLAYER_HALF_HEIGHT;
                 newVelY = 0;
@@ -155,6 +209,8 @@ function collide(dt, pos, velY, blocks) {
             }
         }
     }
+    
+    // Шаг по X
     playerBox = getPlayerBoundingBox(newPos);
     for (let block of blocks) {
         if (block.userData?.collision === false) continue;
@@ -167,6 +223,8 @@ function collide(dt, pos, velY, blocks) {
             playerBox = getPlayerBoundingBox(newPos);
         }
     }
+    
+    // Шаг по Z
     playerBox = getPlayerBoundingBox(newPos);
     for (let block of blocks) {
         if (block.userData?.collision === false) continue;
@@ -179,11 +237,14 @@ function collide(dt, pos, velY, blocks) {
             playerBox = getPlayerBoundingBox(newPos);
         }
     }
+    
+    // Повторная проверка пола
     playerBox = getPlayerBoundingBox(newPos);
     for (let block of blocks) {
         if (block.userData?.collision === false) continue;
         const blockBox = getBlockBoundingBox(block);
-        if (playerBox.minX < blockBox.maxX && playerBox.maxX > blockBox.minX && playerBox.minZ < blockBox.maxZ && playerBox.maxZ > blockBox.minZ) {
+        if (playerBox.minX < blockBox.maxX && playerBox.maxX > blockBox.minX &&
+            playerBox.minZ < blockBox.maxZ && playerBox.maxZ > blockBox.minZ) {
             if (Math.abs(playerBox.minY - blockBox.maxY) < 0.1 && newVelY <= 0) {
                 onGround = true;
                 newVelY = 0;
@@ -238,6 +299,7 @@ function getBlockScale(block) {
     return { x: 1, y: 1, z: 1 };
 }
 
+// ========== СИСТЕМА ЗДОРОВЬЯ И СМЕРТИ ==========
 function takeDamage(amount) {
     if (isDead) return;
     health -= amount;
@@ -286,6 +348,8 @@ function removeFromInventory(itemId) {
 }
 
 let platformMesh;
+
+// ========== ИГРОВАЯ ЛОГИКА ==========
 async function startGameSession(gameData, gameName) {
     document.getElementById('loadingScreen').style.display = 'flex';
     await new Promise(r => setTimeout(r, 100));
@@ -381,27 +445,44 @@ async function startGameSession(gameData, gameName) {
         let dt = Math.min(0.033, now - lastTime);
         if (dt <= 0) dt = 0.016;
         lastTime = now;
+        
         let mx = (keyState.d ? 1 : 0) - (keyState.a ? 1 : 0);
         let mz = (keyState.s ? 1 : 0) - (keyState.w ? 1 : 0);
         if (joystickActive) { mx += joystickVector.x; mz += joystickVector.z; }
         const len = Math.hypot(mx, mz);
         if (len > 1) { mx /= len; mz /= len; }
+        
         if (mx !== 0 || mz !== 0) gamePlayer.rotation.y = Math.atan2(mx, mz);
+        
         let speed = moveSpeed * dt;
         let newPos = gamePlayer.position.clone();
         newPos.x += mx * speed;
         newPos.z += mz * speed;
         velY -= GRAVITY * dt;
         newPos.y += velY * dt;
+        
         const collisionResult = collide(dt, newPos, velY, collisionBlocks);
         newPos = collisionResult.pos;
         velY = collisionResult.velY;
         onGround = collisionResult.onGround;
-        if(newPos.y < -5) { placeOnPlatform(gamePlayer, platformMesh); newPos.copy(gamePlayer.position); velY = 0; onGround = true; }
+        
+        if(newPos.y < -5) { 
+            placeOnPlatform(gamePlayer, platformMesh); 
+            newPos.copy(gamePlayer.position); 
+            velY = 0; 
+            onGround = true; 
+        }
+        
         let shouldJump = jumpRequest || mobileJump;
-        if(onGround && shouldJump) { velY = JUMP_FORCE; jumpRequest = false; mobileJump = false; }
+        if(onGround && shouldJump) { 
+            velY = JUMP_FORCE; 
+            jumpRequest = false; 
+            mobileJump = false; 
+        }
+        
         gamePlayer.position.copy(newPos);
         sendPosition({x: gamePlayer.position.x, y: gamePlayer.position.y, z: gamePlayer.position.z});
+        
         const targetPos = gamePlayer.position.clone();
         gameCamera.position.x = targetPos.x;
         gameCamera.position.z = targetPos.z + 5;
@@ -410,7 +491,12 @@ async function startGameSession(gameData, gameName) {
         pointLight.position.set(gamePlayer.position.x, gamePlayer.position.y+1, gamePlayer.position.z);
     }
 
-    function animate() { if(!gameActive) return; gameAnimationId = requestAnimationFrame(animate); update(); effectComposer.render(); }
+    function animate() { 
+        if(!gameActive) return; 
+        gameAnimationId = requestAnimationFrame(animate); 
+        update(); 
+        effectComposer.render(); 
+    }
     gameActive = true;
     animate();
     document.getElementById('loadingScreen').style.display = 'none';
@@ -428,9 +514,15 @@ async function startGameSession(gameData, gameName) {
     attachMobileEvents();
 }
 
-async function startLocalGameSession(gameData, gameName) { startGameSession(gameData, gameName); }
-function createRemotePlayer() { return new THREE.Mesh(new THREE.BoxGeometry(PLAYER_SIZE, PLAYER_HEIGHT, PLAYER_SIZE), new THREE.MeshStandardMaterial({ color: 0xffaa44 })); }
+async function startLocalGameSession(gameData, gameName) { 
+    startGameSession(gameData, gameName); 
+}
 
+function createRemotePlayer() { 
+    return new THREE.Mesh(new THREE.BoxGeometry(PLAYER_SIZE, PLAYER_HEIGHT, PLAYER_SIZE), new THREE.MeshStandardMaterial({ color: 0xffaa44 })); 
+}
+
+// ========== UI ФУНКЦИИ ==========
 async function renderGamesList() {
     const container = document.getElementById('gamesList');
     if (!container) return;
@@ -461,9 +553,26 @@ async function renderMyProjects() {
         card.innerHTML = `<div class="game-title">${game.name}</div><div><button class="play-btn-small" data-id="${game.id}">Играть</button><button class="edit-btn-small" data-id="${game.id}">Редактировать</button><button class="delete-btn-small" data-id="${game.id}">Удалить</button></div>`;
         container.appendChild(card);
     });
-    document.querySelectorAll('.play-btn-small').forEach(btn => btn.addEventListener('click', async () => { const id = parseInt(btn.dataset.id); const game = (await API.getGames()).find(g => g.id === id); if (game) startLocalGameSession(JSON.parse(game.data), game.name); }));
-    document.querySelectorAll('.edit-btn-small').forEach(btn => btn.addEventListener('click', async () => { const id = parseInt(btn.dataset.id); const game = (await API.getGames()).find(g => g.id === id); if (game) { const mod = await import('./editor.js'); mod.openEditor(game); } }));
-    document.querySelectorAll('.delete-btn-small').forEach(btn => btn.addEventListener('click', async () => { const id = parseInt(btn.dataset.id); if (confirm('Удалить?')) { await API.deleteGame(id, currentUser.username); renderMyProjects(); } }));
+    document.querySelectorAll('.play-btn-small').forEach(btn => btn.addEventListener('click', async () => { 
+        const id = parseInt(btn.dataset.id); 
+        const game = (await API.getGames()).find(g => g.id === id); 
+        if (game) startLocalGameSession(JSON.parse(game.data), game.name); 
+    }));
+    document.querySelectorAll('.edit-btn-small').forEach(btn => btn.addEventListener('click', async () => { 
+        const id = parseInt(btn.dataset.id); 
+        const game = (await API.getGames()).find(g => g.id === id); 
+        if (game) { 
+            const mod = await import('./editor.js'); 
+            mod.openEditor(game); 
+        } 
+    }));
+    document.querySelectorAll('.delete-btn-small').forEach(btn => btn.addEventListener('click', async () => { 
+        const id = parseInt(btn.dataset.id); 
+        if (confirm('Удалить?')) { 
+            await API.deleteGame(id, currentUser.username); 
+            renderMyProjects(); 
+        } 
+    }));
     attachMobileEvents();
 }
 
@@ -477,7 +586,13 @@ function renderShop() {
         div.innerHTML = `<div>${item.id==='skin_gold'?'👑':item.id==='pickaxe'?'⛏️':'✨'}</div><h3>${item.name}</h3><div class="price">${item.price} 🪙</div><button class="buy-btn" data-id="${item.id}" data-price="${item.price}">Купить</button>`;
         container.appendChild(div);
     });
-    document.querySelectorAll('.buy-btn').forEach(btn => btn.addEventListener('click', () => { const price = parseInt(btn.dataset.price); if (spendCoins(price)) { alert(`Куплено ${btn.dataset.id}`); renderShop(); } else alert("Недостаточно монет!"); }));
+    document.querySelectorAll('.buy-btn').forEach(btn => btn.addEventListener('click', () => { 
+        const price = parseInt(btn.dataset.price); 
+        if (spendCoins(price)) { 
+            alert(`Куплено ${btn.dataset.id}`); 
+            renderShop(); 
+        } else alert("Недостаточно монет!"); 
+    }));
     attachMobileEvents();
 }
 
@@ -492,7 +607,11 @@ function renderFriendsList() {
         div.innerHTML = `<span>${friend}</span><button class="removeFriendBtn" data-friend="${friend}">❌</button>`;
         container.appendChild(div);
     });
-    document.querySelectorAll('.removeFriendBtn').forEach(btn => btn.addEventListener('click', () => { const friend = btn.dataset.friend; currentUser.friends = currentUser.friends.filter(f => f !== friend); renderFriendsList(); }));
+    document.querySelectorAll('.removeFriendBtn').forEach(btn => btn.addEventListener('click', () => { 
+        const friend = btn.dataset.friend; 
+        currentUser.friends = currentUser.friends.filter(f => f !== friend); 
+        renderFriendsList(); 
+    }));
     attachMobileEvents();
 }
 
@@ -512,7 +631,11 @@ async function renderChat() {
     if (!container) return;
     const messages = await API.getChatMessages();
     container.innerHTML = '';
-    messages.forEach(msg => { const div = document.createElement('div'); div.innerHTML = `<span style="color:#ffaa44;">[${msg.time}]</span> <b>${msg.username}:</b> ${msg.text}`; container.appendChild(div); });
+    messages.forEach(msg => { 
+        const div = document.createElement('div'); 
+        div.innerHTML = `<span style="color:#ffaa44;">[${msg.time}]</span> <b>${msg.username}:</b> ${msg.text}`; 
+        container.appendChild(div); 
+    });
     container.scrollTop = container.scrollHeight;
 }
 
@@ -535,7 +658,15 @@ async function renderReports() {
     if (!container) return;
     const reportsData = await API.getReports();
     container.innerHTML = '';
-    reportsData.forEach(r => { const div = document.createElement('div'); div.style.background = 'rgba(30,38,58,0.8)'; div.style.margin = '8px 0'; div.style.padding = '8px'; div.style.borderRadius = '12px'; div.innerHTML = `<b>${r.username}</b> (${r.time}): ${r.text}`; container.appendChild(div); });
+    reportsData.forEach(r => { 
+        const div = document.createElement('div'); 
+        div.style.background = 'rgba(30,38,58,0.8)'; 
+        div.style.margin = '8px 0'; 
+        div.style.padding = '8px'; 
+        div.style.borderRadius = '12px'; 
+        div.innerHTML = `<b>${r.username}</b> (${r.time}): ${r.text}`; 
+        container.appendChild(div); 
+    });
 }
 
 async function showReportDialog() {
@@ -547,9 +678,24 @@ async function showReportDialog() {
     renderReports();
 }
 
-function applySettings() { moveSpeed = parseFloat(document.getElementById('moveSpeed').value); }
-function addCoins(amount) { if (!currentUser) return; coins += amount; document.getElementById('coinValue').innerText = coins; }
-function spendCoins(amount) { if (coins >= amount) { coins -= amount; document.getElementById('coinValue').innerText = coins; return true; } return false; }
+function applySettings() { 
+    moveSpeed = parseFloat(document.getElementById('moveSpeed').value); 
+}
+
+function addCoins(amount) { 
+    if (!currentUser) return; 
+    coins += amount; 
+    document.getElementById('coinValue').innerText = coins; 
+}
+
+function spendCoins(amount) { 
+    if (coins >= amount) { 
+        coins -= amount; 
+        document.getElementById('coinValue').innerText = coins; 
+        return true; 
+    } 
+    return false; 
+}
 
 async function updateUIafterAuth() {
     if (!currentUser) return;
@@ -582,19 +728,63 @@ function attachMobileEvents() {
     document.querySelectorAll(sel).forEach(el => {
         if(el.hasAttribute('data-touch-fixed')) return;
         el.setAttribute('data-touch-fixed','true');
-        el.addEventListener('touchstart', (e) => { if(e.defaultPrevented) return; if(el.tagName==='INPUT'||el.tagName==='TEXTAREA') return; e.preventDefault(); el.click(); }, { passive:false });
+        el.addEventListener('touchstart', (e) => { 
+            if(e.defaultPrevented) return; 
+            if(el.tagName==='INPUT'||el.tagName==='TEXTAREA') return; 
+            e.preventDefault(); 
+            el.click(); 
+        }, { passive:false });
     });
 }
 
 setInterval(attachMobileEvents,1500);
 attachMobileEvents();
 
-document.getElementById('showGamesBtn').onclick = () => { document.getElementById('gamesPanel').style.display='block'; document.getElementById('myProjectsPanel').style.display='none'; document.getElementById('shopPanel').style.display='none'; document.getElementById('socialPanel').style.display='none'; document.getElementById('settingsPanel').style.display='none'; renderGamesList(); };
-document.getElementById('showMyProjectsBtn').onclick = () => { document.getElementById('gamesPanel').style.display='none'; document.getElementById('myProjectsPanel').style.display='block'; document.getElementById('shopPanel').style.display='none'; document.getElementById('socialPanel').style.display='none'; document.getElementById('settingsPanel').style.display='none'; renderMyProjects(); };
-document.getElementById('showShopBtn').onclick = () => { document.getElementById('gamesPanel').style.display='none'; document.getElementById('myProjectsPanel').style.display='none'; document.getElementById('shopPanel').style.display='block'; document.getElementById('socialPanel').style.display='none'; document.getElementById('settingsPanel').style.display='none'; renderShop(); };
-document.getElementById('showSocialBtn').onclick = () => { document.getElementById('gamesPanel').style.display='none'; document.getElementById('myProjectsPanel').style.display='none'; document.getElementById('shopPanel').style.display='none'; document.getElementById('socialPanel').style.display='block'; document.getElementById('settingsPanel').style.display='none'; renderFriendsList(); renderChat(); };
-document.getElementById('showSettingsBtn').onclick = () => { document.getElementById('gamesPanel').style.display='none'; document.getElementById('myProjectsPanel').style.display='none'; document.getElementById('shopPanel').style.display='none'; document.getElementById('socialPanel').style.display='none'; document.getElementById('settingsPanel').style.display='block'; };
-document.getElementById('createGameBtn').onclick = async () => { const mod = await import('./editor.js'); mod.openEditor(); };
+// ========== НАВИГАЦИЯ ==========
+document.getElementById('showGamesBtn').onclick = () => { 
+    document.getElementById('gamesPanel').style.display='block'; 
+    document.getElementById('myProjectsPanel').style.display='none'; 
+    document.getElementById('shopPanel').style.display='none'; 
+    document.getElementById('socialPanel').style.display='none'; 
+    document.getElementById('settingsPanel').style.display='none'; 
+    renderGamesList(); 
+};
+document.getElementById('showMyProjectsBtn').onclick = () => { 
+    document.getElementById('gamesPanel').style.display='none'; 
+    document.getElementById('myProjectsPanel').style.display='block'; 
+    document.getElementById('shopPanel').style.display='none'; 
+    document.getElementById('socialPanel').style.display='none'; 
+    document.getElementById('settingsPanel').style.display='none'; 
+    renderMyProjects(); 
+};
+document.getElementById('showShopBtn').onclick = () => { 
+    document.getElementById('gamesPanel').style.display='none'; 
+    document.getElementById('myProjectsPanel').style.display='none'; 
+    document.getElementById('shopPanel').style.display='block'; 
+    document.getElementById('socialPanel').style.display='none'; 
+    document.getElementById('settingsPanel').style.display='none'; 
+    renderShop(); 
+};
+document.getElementById('showSocialBtn').onclick = () => { 
+    document.getElementById('gamesPanel').style.display='none'; 
+    document.getElementById('myProjectsPanel').style.display='none'; 
+    document.getElementById('shopPanel').style.display='none'; 
+    document.getElementById('socialPanel').style.display='block'; 
+    document.getElementById('settingsPanel').style.display='none'; 
+    renderFriendsList(); 
+    renderChat(); 
+};
+document.getElementById('showSettingsBtn').onclick = () => { 
+    document.getElementById('gamesPanel').style.display='none'; 
+    document.getElementById('myProjectsPanel').style.display='none'; 
+    document.getElementById('shopPanel').style.display='none'; 
+    document.getElementById('socialPanel').style.display='none'; 
+    document.getElementById('settingsPanel').style.display='block'; 
+};
+document.getElementById('createGameBtn').onclick = async () => { 
+    const mod = await import('./editor.js'); 
+    mod.openEditor(); 
+};
 document.getElementById('earnCoinsBtn').onclick = () => addCoins(100);
 document.getElementById('addFriendBtn').onclick = addFriend;
 document.getElementById('sendChatBtn').onclick = sendChatMessage;
@@ -602,14 +792,28 @@ document.getElementById('chatInput').addEventListener('keypress', e=>{ if(e.key=
 document.getElementById('logoutBtn').onclick = logout;
 document.getElementById('moveSpeed')?.addEventListener('input', applySettings);
 document.getElementById('reportBugBtn')?.addEventListener('click', showReportDialog);
-document.getElementById('connectToServerBtn')?.addEventListener('click', () => { const sid = document.getElementById('serverIdInput').value.trim(); if(sid) joinGame(sid); else alert('Введите ID'); });
+document.getElementById('connectToServerBtn')?.addEventListener('click', () => { 
+    const sid = document.getElementById('serverIdInput').value.trim(); 
+    if(sid) joinGame(sid); 
+    else alert('Введите ID'); 
+});
 
+// ========== ИНИЦИАЛИЗАЦИЯ ==========
 initMobileControls();
+
 const session = sessionStorage.getItem('blockverse_session');
 if (session) {
     const data = JSON.parse(session);
-    currentUser = { username: data.username, coins: data.coins, inventory: data.inventory || [], friends: data.friends || [], isGuest: data.isGuest || false };
+    currentUser = { 
+        username: data.username, 
+        coins: data.coins, 
+        inventory: data.inventory || [], 
+        friends: data.friends || [], 
+        isGuest: data.isGuest || false 
+    };
     window.currentUser = currentUser;
     document.getElementById('mainMenuScreen').classList.remove('hidden');
     updateUIafterAuth();
-} else { window.location.href = 'login.html'; }
+} else { 
+    window.location.href = 'login.html'; 
+            }

@@ -480,16 +480,76 @@ function renderShop() {
     attachMobileEvents();
 }
 
-function renderFriendsList() { /* как раньше */ }
-function addFriend() { /* как раньше */ }
-async function renderChat() { /* как раньше */ }
-async function sendChatMessage() { /* как раньше */ }
-function startChatPolling() { /* как раньше */ }
-async function renderReports() { /* как раньше */ }
-async function showReportDialog() { /* как раньше */ }
+function renderFriendsList() {
+    if (!currentUser) return;
+    const container = document.getElementById('friendsList');
+    if (!container) return;
+    container.innerHTML = '';
+    (currentUser.friends || []).forEach(friend => {
+        const div = document.createElement('div');
+        div.className = 'friend-item';
+        div.innerHTML = `<span>${friend}</span><button class="removeFriendBtn" data-friend="${friend}">❌</button>`;
+        container.appendChild(div);
+    });
+    document.querySelectorAll('.removeFriendBtn').forEach(btn => btn.addEventListener('click', () => { const friend = btn.dataset.friend; currentUser.friends = currentUser.friends.filter(f => f !== friend); renderFriendsList(); }));
+    attachMobileEvents();
+}
+
+function addFriend() {
+    if (!currentUser) return;
+    const friendName = document.getElementById('friendSearch').value.trim();
+    if (!friendName || friendName === currentUser.username) return;
+    if (currentUser.friends.includes(friendName)) { alert("Уже в друзьях"); return; }
+    currentUser.friends.push(friendName);
+    renderFriendsList();
+    document.getElementById('friendSearch').value = '';
+    alert(`Друг ${friendName} добавлен`);
+}
+
+async function renderChat() {
+    const container = document.getElementById('chatMessages');
+    if (!container) return;
+    const messages = await API.getChatMessages();
+    container.innerHTML = '';
+    messages.forEach(msg => { const div = document.createElement('div'); div.innerHTML = `<span style="color:#ffaa44;">[${msg.time}]</span> <b>${msg.username}:</b> ${msg.text}`; container.appendChild(div); });
+    container.scrollTop = container.scrollHeight;
+}
+
+async function sendChatMessage() {
+    if (!currentUser) return;
+    const text = document.getElementById('chatInput').value.trim();
+    if (!text) return;
+    await API.sendChatMessage(currentUser.username, text, new Date().toLocaleTimeString());
+    document.getElementById('chatInput').value = '';
+    renderChat();
+}
+
+function startChatPolling() {
+    if (chatPollingInterval) clearInterval(chatPollingInterval);
+    chatPollingInterval = setInterval(() => { renderChat(); }, 3000);
+}
+
+async function renderReports() {
+    const container = document.getElementById('reportsList');
+    if (!container) return;
+    const reportsData = await API.getReports();
+    container.innerHTML = '';
+    reportsData.forEach(r => { const div = document.createElement('div'); div.style.background = 'rgba(30,38,58,0.8)'; div.style.margin = '8px 0'; div.style.padding = '8px'; div.style.borderRadius = '12px'; div.innerHTML = `<b>${r.username}</b> (${r.time}): ${r.text}`; container.appendChild(div); });
+}
+
+async function showReportDialog() {
+    if (!currentUser) return;
+    const text = prompt('Опишите проблему:');
+    if (!text) return;
+    await API.sendReport(currentUser.username, text, new Date().toLocaleString());
+    alert('Спасибо за отчёт!');
+    renderReports();
+}
+
 function applySettings() { moveSpeed = parseFloat(document.getElementById('moveSpeed').value); }
 function addCoins(amount) { if (!currentUser) return; coins += amount; document.getElementById('coinValue').innerText = coins; }
 function spendCoins(amount) { if (coins >= amount) { coins -= amount; document.getElementById('coinValue').innerText = coins; return true; } return false; }
+
 async function updateUIafterAuth() {
     if (!currentUser) return;
     document.getElementById('usernameDisplay').innerText = currentUser.username + (currentUser.isGuest ? ' (гость)' : '');
@@ -505,6 +565,7 @@ async function updateUIafterAuth() {
     startChatPolling();
     connectToServer();
 }
+
 function logout() {
     if(gameActive) { gameActive=false; if(gameAnimationId) cancelAnimationFrame(gameAnimationId); }
     if(ws) ws.close();
@@ -513,6 +574,7 @@ function logout() {
     sessionStorage.removeItem('blockverse_session');
     window.location.href = 'login.html';
 }
+
 function attachMobileEvents() {
     const sel = '.btn, .nav-btn, .play-btn, .buy-btn, .tool-btn, .block-option, .exit-game, .play-btn-small, .edit-btn-small, .delete-btn-small, #earnCoinsBtn, #addFriendBtn, #sendChatBtn, #reportBugBtn, #connectToServerBtn';
     document.querySelectorAll(sel).forEach(el => {
@@ -521,6 +583,7 @@ function attachMobileEvents() {
         el.addEventListener('touchstart', (e) => { if(e.defaultPrevented) return; if(el.tagName==='INPUT'||el.tagName==='TEXTAREA') return; e.preventDefault(); el.click(); }, { passive:false });
     });
 }
+
 setInterval(attachMobileEvents,1500);
 attachMobileEvents();
 

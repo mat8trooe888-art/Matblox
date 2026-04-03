@@ -14,7 +14,6 @@ let currentOpacity = 1;
 let editorActive = false;
 let editorAnimationId = null;
 
-// Системные папки
 const systemFolders = [
     { id: 'workspace', name: 'Workspace', icon: '🌐' },
     { id: 'lighting', name: 'Lighting', icon: '☀️' },
@@ -22,7 +21,6 @@ const systemFolders = [
     { id: 'starterGui', name: 'StarterGui', icon: '🖥️' }
 ];
 
-// Анимации
 let animations = [];
 let currentAnimation = null;
 let isPlaying = false;
@@ -37,10 +35,7 @@ let currentAnimationTime = 0;
 let isDraggingTimeline = false;
 let currentAnimationDuration = 1;
 
-// GUI
 let guiElements = [];
-
-// NPC
 let npcs = [];
 let selectedNpc = null;
 
@@ -65,11 +60,9 @@ function createBlockMesh(shape, size = { x: 0.9, y: 0.9, z: 0.9 }, color = 0x8B5
     return mesh;
 }
 
-// Шаблоны
 function loadTemplate(templateType) {
     clearEditor();
     if (templateType === 'platformer') {
-        // Добавляем платформы
         const ground = createBlockMesh('cube', { x: 20, y: 1, z: 20 }, 0x6B8E23, 1);
         ground.position.set(0, -0.5, 0);
         addObject({ id: generateId(), name: 'Земля', type: 'block', parentId: 'workspace', threeObject: ground, userData: { type: 'block', shape: 'cube', color: '#6B8E23', opacity: 1, collision: true } });
@@ -79,7 +72,6 @@ function loadTemplate(templateType) {
             addObject({ id: generateId(), name: 'Платформа', type: 'block', parentId: 'workspace', threeObject: plat, userData: { type: 'block', shape: 'cube', color: '#aa8866', opacity: 1, collision: true } });
         }
     } else if (templateType === 'racing') {
-        // Круговая трасса
         for (let i = 0; i < 12; i++) {
             const angle = (i / 12) * Math.PI * 2;
             const road = createBlockMesh('cube', { x: 2, y: 0.2, z: 2 }, 0x555555, 1);
@@ -97,10 +89,8 @@ function loadTemplate(templateType) {
         tree.position.set(-4, 0, -4);
         addObject({ id: generateId(), name: 'Дерево', type: 'block', parentId: 'workspace', threeObject: tree, userData: { type: 'block', shape: 'cylinder', color: '#8B5A2B', opacity: 1, collision: true } });
     }
-    // empty – ничего не добавляем
 }
 
-// VFX
 function createParticleSystem(config) {
     const geometry = new THREE.BufferGeometry();
     const count = config.count || 100;
@@ -136,7 +126,6 @@ function addParticlePreset(type) {
     addParticleSystem(presets[type]);
 }
 
-// NPC
 function createNPC(name = "NPC") {
     const geometry = new THREE.BoxGeometry(0.8, 1.2, 0.8);
     const material = new THREE.MeshStandardMaterial({ color: 0x88aa88 });
@@ -182,7 +171,6 @@ function saveNPCProperties() {
     renderExplorer();
 }
 
-// GUI
 function addGUIElement(type, properties) {
     const id = generateId();
     const element = { id, type, name: properties.name || `${type}_${guiElements.length+1}`, x: properties.x || 100, y: properties.y || 100, width: properties.width || 200, height: properties.height || 50, text: properties.text || (type === 'button' ? 'Кнопка' : type === 'panel' ? 'Панель' : 'Текст'), color: properties.color || '#4a6e8a', fontSize: properties.fontSize || 14, action: properties.action || '' };
@@ -246,7 +234,6 @@ function updateGUIPreview() {
     });
 }
 
-// Анимации
 function createAnimation(name) {
     const id = generateId();
     const anim = { id, name, duration: 1, tracks: [] };
@@ -361,7 +348,6 @@ function updateAnimationSelect() {
     animations.forEach(anim => { let opt = document.createElement('option'); opt.value = anim.id; opt.textContent = anim.name; select.appendChild(opt); });
 }
 
-// Общие функции
 function addObject(obj) {
     editorObjects.push(obj);
     if (obj.threeObject) editorScene.add(obj.threeObject);
@@ -549,7 +535,6 @@ function applyProps() {
     renderExplorer();
 }
 
-// Сохранение
 async function saveGameLocal() {
     if (!window.currentUser) { alert('Не авторизован'); return; }
     const gameName = prompt('Название игры');
@@ -611,7 +596,6 @@ function createSystemFolders() {
     }
 }
 
-// Инициализация
 function initEditor() {
     if (editorActive) return;
     const container = document.getElementById('editorCanvasContainer');
@@ -647,7 +631,6 @@ function initEditor() {
     createSystemFolders();
     loadTemplate('empty');
 
-    // Кнопки
     document.getElementById('modeMoveBtn').onclick = () => { transformControls.setMode('translate'); currentTransformMode='translate'; document.getElementById('modeMoveBtn').classList.add('active'); document.getElementById('modeRotateBtn').classList.remove('active'); document.getElementById('modeScaleBtn').classList.remove('active'); };
     document.getElementById('modeRotateBtn').onclick = () => { transformControls.setMode('rotate'); currentTransformMode='rotate'; document.getElementById('modeRotateBtn').classList.add('active'); document.getElementById('modeMoveBtn').classList.remove('active'); document.getElementById('modeScaleBtn').classList.remove('active'); };
     document.getElementById('modeScaleBtn').onclick = () => { transformControls.setMode('scale'); currentTransformMode='scale'; document.getElementById('modeScaleBtn').classList.add('active'); document.getElementById('modeMoveBtn').classList.remove('active'); document.getElementById('modeRotateBtn').classList.remove('active'); };
@@ -677,14 +660,12 @@ function initEditor() {
     document.querySelector('.block-option').classList.add('selected');
     document.getElementById('blockColorPicker')?.addEventListener('change', e => { currentColor = e.target.value; });
 
-    // VFX
     document.getElementById('addParticleBtn')?.addEventListener('click', () => addParticleSystem({ name:'Новая система', count:100, color:0xffaa44, size:0.2, speedY:2, spread:1, lifetime:1 }));
     document.getElementById('vfxFireBtn')?.addEventListener('click', () => addParticlePreset('fire'));
     document.getElementById('vfxWaterBtn')?.addEventListener('click', () => addParticlePreset('water'));
     document.getElementById('vfxAirBtn')?.addEventListener('click', () => addParticlePreset('air'));
     document.getElementById('vfxSmokeBtn')?.addEventListener('click', () => addParticlePreset('smoke'));
 
-    // Анимации
     document.getElementById('newAnimationBtn')?.addEventListener('click', () => { let name = prompt('Название анимации', 'Анимация '+(animations.length+1)); if (name) createAnimation(name); });
     document.getElementById('recordAnimationBtn')?.addEventListener('click', () => { if (!selectedObjects.length) { alert('Выберите объект'); return; } recording = true; recordTarget = selectedObjects[0]; recordedKeyframes = []; recordStartTime = performance.now()/1000; alert('Запись начата'); });
     document.getElementById('playAnimationBtn')?.addEventListener('click', () => { let select = document.getElementById('animationSelect'); let animId = select.value; if (!animId) { alert('Выберите анимацию'); return; } playAnimation(animId); });
@@ -693,22 +674,18 @@ function initEditor() {
     function recordProperty(property, value) { if (!recording || !recordTarget) return; let time = performance.now()/1000 - recordStartTime; recordedKeyframes.push({ time, property, value: value.clone ? value.clone() : value }); }
     initTimeline();
 
-    // GUI
     document.getElementById('addButtonBtn')?.addEventListener('click', () => addGUIElement('button', { name:'Кнопка', text:'Кнопка', x:100, y:100, width:120, height:40, action:'alert("Hello")' }));
     document.getElementById('addPanelBtn')?.addEventListener('click', () => addGUIElement('panel', { name:'Панель', text:'Панель', x:100, y:200, width:200, height:150 }));
     document.getElementById('addTextBtn')?.addEventListener('click', () => addGUIElement('text', { name:'Текст', text:'Привет!', x:100, y:300, width:200, height:30, fontSize:14 }));
 
-    // NPC
     document.getElementById('createNpcBtn')?.addEventListener('click', () => createNPC());
     document.getElementById('importModelBtn')?.addEventListener('click', () => alert('Импорт GLTF в разработке'));
     document.getElementById('saveNpcBtn')?.addEventListener('click', saveNPCProperties);
 
-    // Освещение
     document.getElementById('skyColor')?.addEventListener('change', (e) => { editorScene.background = new THREE.Color(e.target.value); });
     document.getElementById('sunIntensity')?.addEventListener('change', (e) => { dirLight.intensity = parseFloat(e.target.value); });
     document.getElementById('animateSkyBtn')?.addEventListener('click', () => { let t=0; setInterval(() => { t = (t+0.02)%1; editorScene.background = new THREE.Color().setHSL(0.6 + t*0.2, 0.8, 0.5); }, 100); });
 
-    // Вкладки
     const tabs = document.querySelectorAll('.tab');
     const subpanels = {
         blocks: document.getElementById('subpanelBlocks'),
@@ -754,4 +731,4 @@ export function openEditor() {
         templateScreen.classList.add('hidden');
         document.getElementById('mainMenuScreen').classList.remove('hidden');
     };
-                 }
+                                                       }

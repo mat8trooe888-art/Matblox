@@ -12,10 +12,10 @@ let currentColor = '#8B5A2B';
 let currentOpacity = 1;
 let editorActive = false;
 let editorAnimationId = null;
+let currentGameId = null;
 
 let folders = ['Workspace', 'Lighting', 'ServerStorage', 'StarterGui'];
 
-// Анимации
 let animations = [];
 let currentAnimation = null;
 let isPlaying = false;
@@ -30,22 +30,9 @@ let currentAnimationTime = 0;
 let isDraggingTimeline = false;
 let currentAnimationDuration = 1;
 
-// GUI
 let guiElements = [];
-
-// NPC
 let npcs = [];
 let selectedNpc = null;
-let currentGameId = null;
-
-// VFX
-let particleSystems = [];
-
-// Освещение
-let sunLight, ambientLight;
-
-// Библиотека ассетов
-let assetLibrary = [];
 
 function generateId() { return Date.now() + '-' + Math.random().toString(36).substr(2, 8); }
 
@@ -387,7 +374,6 @@ function addParticleSystem(config) {
     const ps = createParticleSystem(config);
     const obj = { id: generateId(), name: config.name, type: 'particle', parentId: 'Workspace', childrenIds: [], threeObject: ps, userData: { config } };
     addObject(obj);
-    particleSystems.push(obj);
     return obj;
 }
 
@@ -515,27 +501,6 @@ function updateAnimationSelect() {
     animations.forEach(anim => { let opt = document.createElement('option'); opt.value = anim.id; opt.textContent = anim.name; select.appendChild(opt); });
 }
 
-function updateLighting() {
-    if (!sunLight) return;
-    const brightness = parseFloat(document.getElementById('lightBrightness').value);
-    const color = document.getElementById('lightColor').value;
-    const tech = document.getElementById('lightTech').value;
-    const globalShadows = document.getElementById('globalShadows').checked;
-    const atmosDensity = parseFloat(document.getElementById('atmosDensity').value);
-    const atmosColor = document.getElementById('atmosColor').value;
-    sunLight.intensity = brightness;
-    sunLight.color.set(color);
-    sunLight.castShadow = globalShadows;
-    if (tech === 'voxel') {
-        sunLight.shadow.mapSize.width = 2048;
-        sunLight.shadow.mapSize.height = 2048;
-    } else {
-        sunLight.shadow.mapSize.width = 1024;
-        sunLight.shadow.mapSize.height = 1024;
-    }
-    editorScene.fog = new THREE.FogExp2(new THREE.Color(atmosColor), atmosDensity);
-}
-
 async function saveGame(isPublished = false) {
     if (!window.currentUser) { alert('Вы не авторизованы'); return; }
     const gameName = prompt('Название игры:', currentGameId ? 'Моя игра' : 'Новая игра');
@@ -633,7 +598,6 @@ function clearEditor() {
     animations = [];
     guiElements = [];
     npcs = [];
-    particleSystems = [];
     if (transformControls.object) transformControls.detach();
     folders.forEach(f => {
         editorObjects.push({ id: f, name: f, type: 'folder', parentId: null, childrenIds: [], threeObject: null });
@@ -664,12 +628,12 @@ function initEditor() {
     transformControls.addEventListener('objectChange', () => { if (selectedObjects.length) updatePropertiesPanel(); });
     editorScene.add(transformControls);
 
-    ambientLight = new THREE.AmbientLight(0x404060);
-    editorScene.add(ambientLight);
-    sunLight = new THREE.DirectionalLight(0xfff5d1, 1.2);
-    sunLight.position.set(5,10,7);
-    sunLight.castShadow = true;
-    editorScene.add(sunLight);
+    const ambient = new THREE.AmbientLight(0x404060);
+    editorScene.add(ambient);
+    const dirLight = new THREE.DirectionalLight(0xfff5d1, 1.2);
+    dirLight.position.set(5,10,7);
+    dirLight.castShadow = true;
+    editorScene.add(dirLight);
     const fillLight = new THREE.PointLight(0x4466cc, 0.5);
     fillLight.position.set(2,3,4);
     editorScene.add(fillLight);
@@ -735,16 +699,6 @@ function initEditor() {
     document.getElementById('saveNpcBtn').onclick = saveNPCProperties;
     document.getElementById('applyScriptBtn').onclick = () => { if (!selectedObjects.length) { alert('Выберите объект'); return; } let script = document.getElementById('blockScriptEditor').value; selectedObjects[0].userData.script = script; alert('Скрипт сохранён'); };
 
-    // Освещение
-    document.getElementById('lightBrightness').addEventListener('input', updateLighting);
-    document.getElementById('lightColor').addEventListener('input', updateLighting);
-    document.getElementById('lightTech').addEventListener('change', updateLighting);
-    document.getElementById('globalShadows').addEventListener('change', updateLighting);
-    document.getElementById('atmosDensity').addEventListener('input', updateLighting);
-    document.getElementById('atmosColor').addEventListener('input', updateLighting);
-    updateLighting();
-
-    // Вкладки
     const bottomTabs = document.querySelectorAll('.bottom-tab');
     const tabContents = {
         blocks: document.getElementById('blocksTab'),
@@ -752,9 +706,7 @@ function initEditor() {
         animations: document.getElementById('animationsTab'),
         scripts: document.getElementById('scriptsTab'),
         gui: document.getElementById('guiTab'),
-        npc: document.getElementById('npcTab'),
-        lighting: document.getElementById('lightingTab'),
-        assets: document.getElementById('assetsTab')
+        npc: document.getElementById('npcTab')
     };
     bottomTabs.forEach(tab => {
         tab.addEventListener('click', () => {
@@ -765,96 +717,6 @@ function initEditor() {
             if (tabContents[tabId]) tabContents[tabId].classList.remove('hidden');
         });
     });
-
-    // Библиотека ассетов (заглушка)
-    document.getElementById('assetModelBtn').onclick = () => alert('Импорт 3D моделей будет позже');
-    document.getElementById('assetTextureBtn').onclick = () => alert('Импорт текстур будет позже');
-    document.getElementById('assetSoundBtn').onclick = () => alert('Импорт звуков будет позже');
-
-    // VFX Editor Modal
-    const vfxModal = document.getElementById('vfxEditorModal');
-    document.getElementById('openVfxEditor').onclick = () => { vfxModal.style.display = 'flex'; refreshEmitterList(); };
-    document.getElementById('closeVfxModal').onclick = () => { vfxModal.style.display = 'none'; };
-    function refreshEmitterList() {
-        const container = document.getElementById('emitterList');
-        container.innerHTML = '';
-        particleSystems.forEach(ps => {
-            const div = document.createElement('div');
-            div.textContent = ps.name;
-            div.style.padding = '4px 8px';
-            div.style.cursor = 'pointer';
-            div.onclick = () => showVfxProps(ps);
-            container.appendChild(div);
-        });
-    }
-    function showVfxProps(ps) {
-        const propsDiv = document.getElementById('vfxProps');
-        const cfg = ps.userData.config;
-        propsDiv.innerHTML = `
-            <div class="prop-group"><label>Name</label><input id="vfxName" value="${ps.name}"></div>
-            <div class="prop-group"><label>Count</label><input id="vfxCount" type="number" value="${cfg.count}"></div>
-            <div class="prop-group"><label>Color</label><input id="vfxColor" type="color" value="${'#'+cfg.color.toString(16).padStart(6,'0')}"></div>
-            <div class="prop-group"><label>Size</label><input id="vfxSize" type="number" step="0.05" value="${cfg.size}"></div>
-            <div class="prop-group"><label>Speed Y</label><input id="vfxSpeedY" type="number" step="0.5" value="${cfg.speedY}"></div>
-            <div class="prop-group"><label>Spread</label><input id="vfxSpread" type="number" step="0.5" value="${cfg.spread}"></div>
-            <div class="prop-group"><label>Lifetime</label><input id="vfxLifetime" type="number" step="0.5" value="${cfg.lifetime}"></div>
-            <button id="vfxApply">Apply</button>
-        `;
-        document.getElementById('vfxApply').onclick = () => {
-            cfg.count = parseInt(document.getElementById('vfxCount').value);
-            cfg.color = parseInt(document.getElementById('vfxColor').value.slice(1),16);
-            cfg.size = parseFloat(document.getElementById('vfxSize').value);
-            cfg.speedY = parseFloat(document.getElementById('vfxSpeedY').value);
-            cfg.spread = parseFloat(document.getElementById('vfxSpread').value);
-            cfg.lifetime = parseFloat(document.getElementById('vfxLifetime').value);
-            ps.name = document.getElementById('vfxName').value;
-            const newPs = createParticleSystem(cfg);
-            newPs.userData.id = ps.id;
-            newPs.userData.name = ps.name;
-            editorScene.remove(ps.threeObject);
-            ps.threeObject = newPs;
-            ps.userData.config = cfg;
-            editorScene.add(newPs);
-            refreshEmitterList();
-        };
-    }
-    document.getElementById('vfxPlayBtn').onclick = () => { alert('Preview not fully implemented'); };
-    document.getElementById('vfxStopBtn').onclick = () => {};
-
-    // Animation Editor Modal
-    const animModal = document.getElementById('animEditorModal');
-    document.getElementById('openAnimEditor').onclick = () => { animModal.style.display = 'flex'; refreshAnimTracks(); };
-    document.getElementById('closeAnimModal').onclick = () => { animModal.style.display = 'none'; };
-    function refreshAnimTracks() {
-        const container = document.getElementById('animTracksList');
-        container.innerHTML = '';
-        if (!currentAnimation) return;
-        currentAnimation.tracks.forEach(track => {
-            const targetObj = editorObjects.find(o => o.id === track.targetId);
-            const div = document.createElement('div');
-            div.textContent = `${targetObj ? targetObj.name : '?'} : ${track.property}`;
-            div.style.padding = '2px 4px';
-            container.appendChild(div);
-        });
-    }
-    document.getElementById('animSetKeyframe').onclick = () => {
-        if (!selectedObjects.length || !currentAnimation) return;
-        const obj = selectedObjects[0];
-        const pos = obj.threeObject.position.clone();
-        const rot = obj.threeObject.rotation.clone();
-        const scale = obj.threeObject.scale.clone();
-        addKeyframe(currentAnimation.id, obj.id, 'position', currentAnimationTime, pos);
-        addKeyframe(currentAnimation.id, obj.id, 'rotation', currentAnimationTime, rot);
-        addKeyframe(currentAnimation.id, obj.id, 'scale', currentAnimationTime, scale);
-        refreshAnimTracks();
-    };
-    document.getElementById('animAutoKey').onclick = () => { alert('Auto-Key mode'); };
-    // Curve editor placeholder
-    const curveCanvas = document.getElementById('curveEditorAnim');
-    if (curveCanvas) {
-        curveCanvas.style.background = '#1a1f2e';
-        curveCanvas.innerHTML = '<div style="padding:8px; color:#aaa;">Редактор кривых (в разработке)</div>';
-    }
 
     function animateEditor() { if (!editorActive) return; editorAnimationId = requestAnimationFrame(animateEditor); editorControls.update(); editorRenderer.render(editorScene, editorCamera); }
     editorActive = true; animateEditor();
@@ -869,4 +731,4 @@ export function openEditor(gameToEdit = null) {
     if (gameToEdit && gameToEdit.data) {
         loadGameIntoEditor(gameToEdit.data);
     }
-                      }
+}

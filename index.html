@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>BlockVerse Studio</title>
+    <title>BlockVerse Studio — Roblox Studio Clone</title>
     <style>
         * {
             margin: 0;
@@ -29,7 +29,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0,0,0,0.95);
+            background: #1e1f24;
             z-index: 10000;
             display: flex;
             align-items: center;
@@ -57,40 +57,7 @@
         }
         .hidden { display: none; }
 
-        .start-page {
-            background: #1e1f24;
-            padding: 40px;
-            overflow-y: auto;
-            height: 100%;
-        }
-        .templates-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-            gap: 20px;
-            margin-top: 20px;
-        }
-        .template-card {
-            background: #2c2f36;
-            border-radius: 12px;
-            padding: 16px;
-            text-align: center;
-            cursor: pointer;
-            transition: 0.2s;
-        }
-        .template-card:hover {
-            background: #3a3e47;
-            border-color: #ffaa44;
-        }
-        .btn {
-            background: #ff5722;
-            border: none;
-            padding: 8px 20px;
-            border-radius: 6px;
-            color: white;
-            cursor: pointer;
-            margin-top: 10px;
-        }
-
+        /* ========== ROBOXL STUDIO ИНТЕРФЕЙС ========== */
         .studio-layout {
             display: flex;
             flex-direction: column;
@@ -98,6 +65,7 @@
             background: #1e1f24;
         }
 
+        /* TOP DOCK - Главное меню */
         .top-dock {
             display: flex;
             flex-direction: column;
@@ -110,59 +78,70 @@
             padding: 4px 12px;
             background: #25282e;
             border-bottom: 1px solid #3a3e47;
+            height: 28px;
         }
         .menu-item {
             padding: 4px 12px;
             cursor: pointer;
-            font-size: 13px;
+            font-size: 12px;
             border-radius: 4px;
+            color: #e0e0e0;
         }
         .menu-item:hover { background: #3a3e47; }
+
+        /* RIBBON - Лента инструментов */
         .ribbon {
             background: #2c2f36;
         }
         .ribbon-tabs {
             display: flex;
             padding: 0 12px;
-            gap: 8px;
+            gap: 2px;
         }
         .ribbon-tab {
             padding: 6px 16px;
             cursor: pointer;
             font-size: 12px;
-            font-weight: bold;
+            font-weight: 600;
             border-radius: 6px 6px 0 0;
             background: #2c2f36;
-            color: #ccc;
+            color: #e0e0e0;
         }
         .ribbon-tab.active {
             background: #1e1f24;
             color: white;
         }
         .ribbon-content {
-            padding: 8px 12px;
+            padding: 6px 12px;
             display: flex;
             flex-wrap: wrap;
-            gap: 12px;
+            gap: 8px;
             align-items: center;
             border-top: 1px solid #3a3e47;
+            background: #1e1f24;
+            min-height: 56px;
         }
         .ribbon-group {
             display: flex;
-            gap: 4px;
-            background: #3a3e47;
-            border-radius: 6px;
-            padding: 4px 8px;
+            gap: 2px;
+            background: #2c2f36;
+            border-radius: 4px;
+            padding: 4px 6px;
         }
         .ribbon-btn {
             background: none;
             border: none;
             color: white;
-            padding: 4px 12px;
+            padding: 4px 10px;
             border-radius: 4px;
             cursor: pointer;
             font-size: 12px;
+            font-weight: 500;
         }
+        .ribbon-btn:hover { background: #4a4e55; }
+        .ribbon-btn.active { background: #ff5722; }
+
+        /* MEZZANINE - Антресоль */
         .mezzanine {
             padding: 4px 12px;
             display: flex;
@@ -170,74 +149,47 @@
             gap: 12px;
             background: #25282e;
             border-top: 1px solid #3a3e47;
+            height: 36px;
+            align-items: center;
         }
+        .play-btn, .stop-btn {
+            border: none;
+            padding: 4px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 12px;
+        }
+        .play-btn { background: #4caf50; color: white; }
+        .stop-btn { background: #f44336; color: white; }
 
+        /* MAIN DOCKS */
         .main-docks {
             display: flex;
             flex: 1;
             overflow: hidden;
             position: relative;
         }
+
+        /* LEFT DOCK - Toolbox */
         .left-dock {
             width: 280px;
             background: #25282e;
             border-right: 1px solid #3a3e47;
             display: flex;
             flex-direction: column;
-            position: relative;
         }
-        .left-resizer {
-            position: absolute;
-            right: -4px;
-            top: 0;
-            width: 8px;
-            height: 100%;
-            cursor: ew-resize;
-            z-index: 10;
+        .toolbox-header {
+            padding: 8px 12px;
+            font-weight: bold;
+            font-size: 11px;
+            text-transform: uppercase;
+            color: #aaa;
+            border-bottom: 1px solid #3a3e47;
         }
-        .right-dock {
-            width: 360px;
-            background: #25282e;
-            border-left: 1px solid #3a3e47;
-            display: flex;
-            flex-direction: column;
-            position: relative;
-        }
-        .right-resizer {
-            position: absolute;
-            left: -4px;
-            top: 0;
-            width: 8px;
-            height: 100%;
-            cursor: ew-resize;
-            z-index: 10;
-        }
-        .center-viewport {
-            flex: 1;
-            position: relative;
-            background: #1a1d24;
-        }
-        .bottom-dock {
-            height: 150px;
-            background: #25282e;
-            border-top: 1px solid #3a3e47;
-            display: flex;
-            flex-direction: column;
-            position: relative;
-        }
-        .bottom-resizer {
-            position: absolute;
-            top: -4px;
-            left: 0;
-            width: 100%;
-            height: 8px;
-            cursor: ns-resize;
-            z-index: 10;
-        }
-
         .toolbox-categories {
             display: flex;
-            gap: 8px;
+            gap: 4px;
             padding: 8px;
             border-bottom: 1px solid #3a3e47;
         }
@@ -246,15 +198,16 @@
             padding: 4px 12px;
             border-radius: 16px;
             cursor: pointer;
-            font-size: 12px;
+            font-size: 11px;
         }
         .toolbox-cat.active { background: #ff5722; }
         .asset-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
             gap: 8px;
-            padding: 8px;
+            padding: 12px;
             overflow-y: auto;
+            flex: 1;
         }
         .asset-item {
             background: #1a1f2e;
@@ -262,31 +215,57 @@
             padding: 8px;
             text-align: center;
             cursor: pointer;
+            font-size: 11px;
+            transition: 0.1s;
         }
+        .asset-item:hover { background: #3a3e47; }
 
-        .explorer-header, .properties-header {
-            padding: 6px 12px;
-            background: #1e1f24;
-            font-weight: bold;
-            font-size: 12px;
+        /* RIGHT DOCK - Explorer + Properties */
+        .right-dock {
+            width: 360px;
+            background: #25282e;
+            border-left: 1px solid #3a3e47;
             display: flex;
-            justify-content: space-between;
+            flex-direction: column;
+        }
+        .right-dock-header {
+            display: flex;
             border-bottom: 1px solid #3a3e47;
         }
+        .dock-tab {
+            flex: 1;
+            text-align: center;
+            padding: 6px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: bold;
+            background: #25282e;
+        }
+        .dock-tab.active {
+            background: #0e639c;
+            color: white;
+        }
+        .explorer-panel, .properties-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
         .explorer-search {
-            width: 100%;
+            width: calc(100% - 16px);
+            margin: 8px;
             background: #1a1f2e;
             border: 1px solid #3a3e47;
             border-radius: 4px;
             padding: 4px 8px;
             color: white;
-            margin: 8px;
-            width: calc(100% - 16px);
+            font-size: 11px;
         }
         .explorer-tree {
             flex: 1;
             overflow-y: auto;
             padding: 4px;
+            font-size: 12px;
         }
         .explorer-item {
             padding: 4px 8px;
@@ -319,14 +298,54 @@
             border-radius: 4px;
             padding: 6px 8px;
             color: white;
+            font-size: 12px;
         }
 
+        /* CENTER - 3D Viewport */
+        .center-viewport {
+            flex: 1;
+            position: relative;
+            background: #1a1d24;
+        }
+        .canvas-container {
+            width: 100%;
+            height: 100%;
+        }
+        .viewport-controls {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.6);
+            padding: 4px 8px;
+            border-radius: 4px;
+            display: flex;
+            gap: 8px;
+            font-size: 11px;
+        }
+        .viewport-controls button {
+            background: #3a3e47;
+            border: none;
+            padding: 2px 6px;
+            border-radius: 3px;
+            color: white;
+            cursor: pointer;
+        }
+
+        /* BOTTOM DOCK - Output */
+        .bottom-dock {
+            height: 150px;
+            background: #25282e;
+            border-top: 1px solid #3a3e47;
+            display: flex;
+            flex-direction: column;
+        }
         .output-header {
             padding: 4px 12px;
             background: #1e1f24;
             display: flex;
             justify-content: space-between;
             border-bottom: 1px solid #3a3e47;
+            font-size: 11px;
         }
         .output-content {
             flex: 1;
@@ -346,25 +365,21 @@
             padding: 6px 12px;
             color: white;
             font-family: monospace;
+            font-size: 11px;
         }
 
-        .canvas-container {
-            width: 100%;
-            height: 100%;
-        }
-        .viewport-controls {
+        /* RESIZERS */
+        .left-resizer, .right-resizer, .bottom-resizer {
             position: absolute;
-            bottom: 10px;
-            right: 10px;
-            background: rgba(0,0,0,0.6);
-            padding: 4px 8px;
-            border-radius: 4px;
-            display: flex;
-            gap: 8px;
+            background: transparent;
+            z-index: 10;
         }
+        .left-resizer { right: -3px; top: 0; width: 6px; height: 100%; cursor: ew-resize; }
+        .right-resizer { left: -3px; top: 0; width: 6px; height: 100%; cursor: ew-resize; }
+        .bottom-resizer { top: -3px; left: 0; width: 100%; height: 6px; cursor: ns-resize; }
 
         @media (max-width: 768px) {
-            .left-dock, .right-dock { width: 200px; }
+            .left-dock, .right-dock { width: 220px; }
             .ribbon-content { display: none; }
         }
     </style>
@@ -372,42 +387,28 @@
 <body>
 <div id="loadingScreen"><div class="spinner"></div><div>Загрузка BlockVerse Studio...</div></div>
 
-<div id="startPage" class="screen start-page">
-    <h1>Добро пожаловать в BlockVerse Studio</h1>
-    <div style="display: flex; gap: 20px; margin: 30px 0;">
-        <button id="newEmptyProjectBtn" class="btn">➕ Новый пустой проект</button>
-        <button id="openProjectBtn" class="btn">📂 Открыть проект</button>
-    </div>
-    <h2>Шаблоны</h2>
-    <div class="templates-grid">
-        <div class="template-card" data-template="empty">🌍 Пустой мир</div>
-        <div class="template-card" data-template="platformer">🏃 Платформер</div>
-        <div class="template-card" data-template="racing">🏎️ Гонки</div>
-        <div class="template-card" data-template="rpg">⚔️ RPG</div>
-    </div>
-</div>
-
-<div id="studioScreen" class="screen hidden">
+<div id="studioScreen" class="screen">
     <div class="studio-layout">
+        <!-- TOP DOCK -->
         <div class="top-dock">
             <div class="main-menu">
-                <div class="menu-item" data-action="new">File</div>
-                <div class="menu-item" data-action="open">Edit</div>
-                <div class="menu-item" data-action="save">View</div>
-                <div class="menu-item" data-action="exit">Insert</div>
-                <div class="menu-item" data-action="undo">Model</div>
-                <div class="menu-item" data-action="redo">Avatar</div>
-                <div class="menu-item" data-action="resetLayout">Test</div>
-                <div class="menu-item" data-action="resetLayout">Plugins</div>
-                <div class="menu-item" data-action="resetLayout">Help</div>
+                <div class="menu-item" data-action="file">File</div>
+                <div class="menu-item" data-action="edit">Edit</div>
+                <div class="menu-item" data-action="view">View</div>
+                <div class="menu-item" data-action="insert">Insert</div>
+                <div class="menu-item" data-action="model">Model</div>
+                <div class="menu-item" data-action="avatar">Avatar</div>
+                <div class="menu-item" data-action="test">Test</div>
+                <div class="menu-item" data-action="plugins">Plugins</div>
+                <div class="menu-item" data-action="help">Help</div>
             </div>
             <div class="ribbon">
                 <div class="ribbon-tabs">
                     <div class="ribbon-tab active" data-tab="home">Home</div>
                     <div class="ribbon-tab" data-tab="model">Model</div>
                     <div class="ribbon-tab" data-tab="avatar">Avatar</div>
-                    <div class="ribbon-tab" data-tab="ui">UI</div>
-                    <div class="ribbon-tab" data-tab="script">Script</div>
+                    <div class="ribbon-tab" data-tab="test">Test</div>
+                    <div class="ribbon-tab" data-tab="view">View</div>
                     <div class="ribbon-tab" data-tab="plugins">Plugins</div>
                 </div>
                 <div id="ribbonHome" class="ribbon-content">
@@ -422,68 +423,83 @@
                         <button class="ribbon-btn" id="addCylinderBtn">Cylinder</button>
                     </div>
                     <div class="ribbon-group">
-                        <input type="color" id="colorPicker" value="#ffaa44">
+                        <input type="color" id="colorPicker" value="#ffaa44" style="width:32px; height:24px; border:none;">
                         <select id="materialSelect"><option>Plastic</option><option>Metal</option></select>
                     </div>
                 </div>
-                <div id="ribbonModel" class="ribbon-content hidden"><div class="ribbon-group"><button class="ribbon-btn">Align</button><button class="ribbon-btn">Union</button></div></div>
-                <div id="ribbonAvatar" class="ribbon-content hidden"><div class="ribbon-group"><button class="ribbon-btn">Create Rig</button></div></div>
-                <div id="ribbonUI" class="ribbon-content hidden"><div class="ribbon-group"><button class="ribbon-btn">Button</button><button class="ribbon-btn">Frame</button></div></div>
-                <div id="ribbonScript" class="ribbon-content hidden"><div class="ribbon-group"><button class="ribbon-btn">New Script</button><button class="ribbon-btn">Run</button></div></div>
-                <div id="ribbonPlugins" class="ribbon-content hidden"><div class="ribbon-group"><button class="ribbon-btn">Plugin 1</button></div></div>
+                <div id="ribbonModel" class="ribbon-content hidden">
+                    <div class="ribbon-group"><button class="ribbon-btn">Align</button><button class="ribbon-btn">Union</button></div>
+                </div>
+                <div id="ribbonAvatar" class="ribbon-content hidden">
+                    <div class="ribbon-group"><button class="ribbon-btn">Create Rig</button></div>
+                </div>
+                <div id="ribbonTest" class="ribbon-content hidden">
+                    <div class="ribbon-group"><button class="ribbon-btn" id="playTestBtn">Play</button><button class="ribbon-btn" id="stopTestBtn">Stop</button></div>
+                </div>
+                <div id="ribbonView" class="ribbon-content hidden">
+                    <div class="ribbon-group"><button class="ribbon-btn" id="toggleGridBtn">Grid</button><button class="ribbon-btn" id="toggleWireframeBtn">Wireframe</button></div>
+                </div>
+                <div id="ribbonPlugins" class="ribbon-content hidden">
+                    <div class="ribbon-group"><button class="ribbon-btn">Plugin 1</button></div>
+                </div>
             </div>
             <div class="mezzanine">
-                <button id="playBtn" style="background:#4caf50;">▶ Play</button>
-                <button id="stopBtn" style="background:#f44336;">⏹ Stop</button>
-                <button id="assistantBtn">🤖 Assistant</button>
-                <span id="userName">User</span>
+                <button class="play-btn" id="playBtn">▶ Play</button>
+                <button class="stop-btn" id="stopBtn">⏹ Stop</button>
+                <span>🤖 Assistant</span>
+                <span>👤 User</span>
             </div>
         </div>
 
+        <!-- MAIN DOCKS -->
         <div class="main-docks">
+            <!-- LEFT DOCK - Toolbox -->
             <div class="left-dock" id="leftDock">
+                <div class="toolbox-header">📦 TOOLBOX</div>
                 <div class="toolbox-categories">
                     <div class="toolbox-cat active" data-cat="marketplace">Marketplace</div>
                     <div class="toolbox-cat" data-cat="inventory">Inventory</div>
                     <div class="toolbox-cat" data-cat="recent">Recent</div>
-                    <div class="toolbox-cat" data-cat="creations">Creations</div>
                 </div>
                 <div id="toolboxMarketplace" class="asset-grid">
                     <div class="asset-item" data-asset="cube">🧊 Cube</div>
                     <div class="asset-item" data-asset="sphere">⚪ Sphere</div>
+                    <div class="asset-item" data-asset="cylinder">📦 Cylinder</div>
                     <div class="asset-item" data-asset="lamp">💡 Lamp</div>
                 </div>
                 <div id="toolboxInventory" class="asset-grid hidden"></div>
                 <div id="toolboxRecent" class="asset-grid hidden"></div>
-                <div id="toolboxCreations" class="asset-grid hidden"></div>
                 <div class="left-resizer" id="leftResizer"></div>
             </div>
 
+            <!-- CENTER - 3D Viewport -->
             <div class="center-viewport">
                 <div id="editorCanvasContainer" class="canvas-container"></div>
                 <div class="viewport-controls">
-                    <button id="toggleGridBtn">🔲 Grid</button>
-                    <button id="toggleWireframeBtn">📐 Wireframe</button>
+                    <button id="toggleGridBtn2">🔲 Grid</button>
+                    <button id="toggleWireframeBtn2">📐 Wireframe</button>
                     <select id="coordSystem"><option value="global">Global</option><option value="local">Local</option></select>
                 </div>
             </div>
 
+            <!-- RIGHT DOCK - Explorer + Properties -->
             <div class="right-dock" id="rightDock">
-                <div style="display: flex; border-bottom: 1px solid #3a3e47;">
-                    <div id="explorerTabBtn" style="flex:1; text-align:center; padding:6px; cursor:pointer; background:#0e639c;">Explorer</div>
-                    <div id="propertiesTabBtn" style="flex:1; text-align:center; padding:6px; cursor:pointer;">Properties</div>
+                <div class="right-dock-header">
+                    <div class="dock-tab active" id="explorerTabBtn">Explorer</div>
+                    <div class="dock-tab" id="propertiesTabBtn">Properties</div>
                 </div>
-                <div id="explorerPanel" style="flex:1; display:flex; flex-direction:column;">
+                <div id="explorerContainer" class="explorer-panel">
                     <input type="text" id="explorerSearch" class="explorer-search" placeholder="🔍 Search...">
                     <div id="explorerTree" class="explorer-tree"></div>
                 </div>
-                <div id="propertiesPanel" style="flex:1; display:none; flex-direction:column;">
+                <div id="propertiesContainer" class="properties-panel" style="display: none;">
                     <div id="propertiesContent" class="properties-content"></div>
                 </div>
                 <div class="right-resizer" id="rightResizer"></div>
             </div>
         </div>
 
+        <!-- BOTTOM DOCK - Output -->
         <div class="bottom-dock" id="bottomDock">
             <div class="output-header">
                 <span>Output</span>
@@ -509,35 +525,18 @@
 </script>
 
 <script>
-    // Проверка сессии и скрытие загрузки
-    (function() {
-        const loadingScreen = document.getElementById('loadingScreen');
-        
-        // Проверяем сессию
-        if (!sessionStorage.getItem('blockverse_session')) {
-            window.location.href = 'login.html';
-            return;
-        }
-        
-        // Ждём полной загрузки страницы и всех скриптов
-        window.addEventListener('load', function() {
-            // Скрываем загрузку через 500 мс, чтобы дать время скриптам инициализироваться
-            setTimeout(function() {
-                if (loadingScreen) {
-                    loadingScreen.style.display = 'none';
-                }
-            }, 500);
-        });
-        
-        // Обработка ошибок скриптов
-        window.onerror = function(msg, url, line, col, error) {
-            console.error('Global error:', msg, error);
-            if (loadingScreen) {
-                loadingScreen.innerHTML = '<div style="color:red; text-align:center;">Ошибка загрузки<br><button onclick="location.reload()">Перезагрузить</button></div>';
-            }
-            return false;
-        };
-    })();
+    // Скрываем загрузку после полной загрузки страницы
+    window.addEventListener('load', function() {
+        setTimeout(function() {
+            var loading = document.getElementById('loadingScreen');
+            if (loading) loading.style.display = 'none';
+        }, 500);
+    });
+    
+    // Проверка сессии
+    if (!sessionStorage.getItem('blockverse_session')) {
+        window.location.href = 'login.html';
+    }
 </script>
 
 <script type="module" src="platform.js"></script>

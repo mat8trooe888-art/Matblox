@@ -14,6 +14,7 @@ let editorActive = false;
 let editorAnimationId = null;
 let currentGameId = null;
 
+// Системные папки (как в Roblox)
 let folders = ['Workspace', 'Lighting', 'ServerStorage', 'StarterGui'];
 
 let animations = [];
@@ -34,6 +35,219 @@ let guiElements = [];
 let npcs = [];
 let selectedNpc = null;
 
+// ========== EXPLORER (полноценный) ==========
+let searchFilter = '';
+let expandedNodes = new Set(); // id узлов, которые раскрыты
+
+function renderExplorer() {
+    const container = document.getElementById('explorerTree');
+    if (!container) return;
+    const roots = editorObjects.filter(obj => !obj.parentId);
+    container.innerHTML = '';
+    roots.forEach(obj => {
+        renderExplorerItem(obj, container, 0);
+    });
+}
+
+function renderExplorerItem(obj, parentElement, depth) {
+    // Фильтрация по поиску
+    if (searchFilter && !obj.name.toLowerCase().includes(searchFilter.toLowerCase())) {
+        // Если объект не подходит, но может быть у него есть подходящие дети? Пока пропускаем
+        return;
+    }
+    const div = document.createElement('div');
+    div.className = 'explorer-item';
+    div.dataset.id = obj.id;
+    div.setAttribute('draggable', 'true');
+    if (selectedObjects.some(s => s.id === obj.id)) div.classList.add('selected');
+    
+    // Стрелка-твист
+    const hasChildren = obj.childrenIds && obj.childrenIds.length > 0;
+    const toggleSpan = document.createElement('span');
+    toggleSpan.className = 'toggle-icon';
+    toggleSpan.textContent = hasChildren ? (expandedNodes.has(obj.id) ? '▼' : '▶') : '';
+    toggleSpan.style.cursor = hasChildren ? 'pointer' : 'default';
+    toggleSpan.onclick = (e) => {
+        e.stopPropagation();
+        if (hasChildren) {
+            if (expandedNodes.has(obj.id)) {
+                expandedNodes.delete(obj.id);
+            } else {
+                expandedNodes.add(obj.id);
+            }
+            renderExplorer(); // перерисовка
+        }
+    };
+    div.appendChild(toggleSpan);
+    
+    // Иконка типа
+    const iconSpan = document.createElement('span');
+    iconSpan.className = 'type-icon';
+    let icon = obj.type === 'folder' ? '📁' : obj.type === 'npc' ? '👤' : obj.type === 'group' ? '📦' : '🧱';
+    iconSpan.textContent = icon;
+    div.appendChild(iconSpan);
+    
+    // Имя (редактируемое по двойному клику)
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'item-name';
+    nameSpan.textContent = obj.name;
+    nameSpan.ondblclick = (e) => {
+        e.stopPropagation();
+        const input = document.createElement('input');
+        input.value = obj.name;
+        input.style.width = '100px';
+        input.onblur = () => {
+            const newName = input.value.trim();
+            if (newName) {
+                obj.name = newName;
+                if (obj.type === 'npc') obj.userData.name = newName;
+                renderExplorer();
+                updatePropertiesPanel();
+            }
+        };
+        input.onkeydown = (e) => {
+            if (e.key === 'Enter') input.blur();
+        };
+        nameSpan.innerHTML = '';
+        nameSpan.appendChild(input);
+        input.focus();
+    };
+    div.appendChild(nameSpan);
+    
+    // Контролы (видимость, блокировка)
+    const controlsSpan = document.createElement('span');
+    controlsSpan.className = 'item-controls';
+    const visibleBtn = document.createElement('button');
+    visibleBtn.textContent = obj.visible !== false ? '👁️' : '🚫';
+    visibleBtn.onclick = (e) => {
+        e.stopPropagation();
+        obj.visible = !obj.visible;
+        if (obj.threeObject) obj.threeObject.visible = obj.visible;
+        visibleBtn.textContent = obj.visible ? '👁️' : '🚫';
+        if (!obj.visible) nameSpan.style.color = '#8A8A8A';
+        else nameSpan.style.color = '';
+    };
+    const lockBtn = document.createElement('button');
+    lockBtn.textContent = obj.locked ? '🔒' : '🔓';
+    lockBtn.onclick = (e) => {
+        e.stopPropagation();
+        obj.locked = !obj.locked;
+        lockBtn.textContent = obj.locked ? '🔒' : '🔓';
+    };
+    controlsSpan.appendChild(visibleBtn);
+    controlsSpan.appendChild(lockBtn);
+    div.appendChild(controlsSpan);
+    
+    // Drag & Drop
+    div.addEventListener('dragstart', (e) => {
+        e.dataTransfer.setData('text/plain', obj.id);
+        e.dataTransfer.effectAllowed = 'move';
+    });
+    div.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        div.classList.add('drag-over');
+    });
+    div.addEventListener('dragleave', () => {
+        div.classList.remove('drag-over');
+    });
+    div.addEventListener('drop', (e) => {
+        e.preventDefault();
+        div.classList.remove('drag-over');
+        const srcId = e.dataTransfer.getData('text/plain');
+        const srcObj = editorObjects.find(o => o.id === srcId);
+        if (srcObj && srcObj.id !== obj.id) {
+            // Перемещаем srcObj в качестве дочернего к obj (если obj может быть родителем)
+            const oldParent = editorObjects.find(o => o.id === srcObj.parentId);
+            if (oldParent) {
+                oldParent.childrenIds = oldParent.childrenIds.filter(id => id !== srcObj.id);
+            }
+            srcObj.parentId = obj.id;
+            if (!obj.childrenIds.includes(srcObj.id)) obj.childrenIds.push(srcObj.id);
+            renderExplorer();
+        }
+    });
+    
+    div.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (e.ctrlKey) {
+            // множественный выбор
+            if (selectedObjects.includes(obj)) {
+                selectedObjects = selectedObjects.filter(s => s !== obj);
+                if (obj.threeObject && obj.userData.originalMaterial) {
+                    obj.threeObject.material = obj.userData.originalMaterial;
+                    delete obj.userData.originalMaterial;
+                }
+            } else {
+                selectedObjects.push(obj);
+                if (obj.threeObject && !obj.userData.originalMaterial && obj.threeObject.material) {
+                    obj.userData.originalMaterial = obj.threeObject.material;
+                    let newMat = obj.threeObject.material.clone();
+                    newMat.emissive = new THREE.Color(0x444444);
+                    obj.threeObject.material = newMat;
+                }
+            }
+        } else {
+            clearSelection();
+            selectedObjects.push(obj);
+            if (obj.threeObject && !obj.userData.originalMaterial && obj.threeObject.material) {
+                obj.userData.originalMaterial = obj.threeObject.material;
+                let newMat = obj.threeObject.material.clone();
+                newMat.emissive = new THREE.Color(0x444444);
+                obj.threeObject.material = newMat;
+            }
+        }
+        if (selectedObjects.length === 1) transformControls.attach(selectedObjects[0].threeObject);
+        else transformControls.detach();
+        updatePropertiesPanel();
+        updateSelectedInExplorer();
+    });
+    
+    parentElement.appendChild(div);
+    
+    // Дети
+    if (hasChildren && expandedNodes.has(obj.id)) {
+        const childrenContainer = document.createElement('div');
+        childrenContainer.className = 'explorer-children';
+        obj.childrenIds.forEach(childId => {
+            const child = editorObjects.find(o => o.id === childId);
+            if (child) renderExplorerItem(child, childrenContainer, depth + 1);
+        });
+        parentElement.appendChild(childrenContainer);
+    }
+}
+
+function updateSelectedInExplorer() {
+    document.querySelectorAll('.explorer-item').forEach(el => {
+        el.classList.remove('selected');
+        const id = el.dataset.id;
+        if (selectedObjects.some(obj => obj.id === id)) el.classList.add('selected');
+    });
+}
+
+// Поиск с задержкой
+let searchTimeout;
+document.getElementById('explorerSearch')?.addEventListener('input', (e) => {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+        searchFilter = e.target.value;
+        renderExplorer();
+    }, 150);
+});
+
+// Создание папки
+document.getElementById('addFolderBtn')?.addEventListener('click', () => {
+    const name = prompt('Название папки:', 'Новая папка');
+    if (name) createFolder(name);
+});
+
+function createFolder(name) {
+    const folder = { id: generateId(), name: name, type: 'folder', parentId: 'Workspace', childrenIds: [], threeObject: null, visible: true, locked: false };
+    addObject(folder);
+    return folder;
+}
+
+// ========== ОСТАЛЬНЫЕ ФУНКЦИИ (создание блоков, анимации, GUI, NPC, сохранение) ==========
 function generateId() { return Date.now() + '-' + Math.random().toString(36).substr(2, 8); }
 
 function createBlockMesh(shape, size = { x: 0.9, y: 0.9, z: 0.9 }, color = 0x8B5A2B, opacity = 1) {
@@ -82,21 +296,16 @@ function duplicateObject(obj) {
     if (!obj.threeObject) return;
     const cloneMesh = obj.threeObject.clone();
     cloneMesh.position.x += 1;
-    const newObj = { id: generateId(), name: `${obj.name} (копия)`, type: obj.type, parentId: obj.parentId, childrenIds: [], threeObject: cloneMesh, userData: { ...obj.userData } };
+    const newObj = { id: generateId(), name: `${obj.name} (копия)`, type: obj.type, parentId: obj.parentId, childrenIds: [], threeObject: cloneMesh, userData: { ...obj.userData }, visible: true, locked: false };
     addObject(newObj);
     selectObject(newObj);
-}
-
-function renameObject(obj) {
-    const newName = prompt('Новое имя', obj.name);
-    if (newName) { obj.name = newName; if (obj.type === 'npc') obj.userData.name = newName; renderExplorer(); updatePropertiesPanel(); }
 }
 
 function addDefaultBlock() {
     const color = parseInt(currentColor.slice(1), 16);
     const mesh = createBlockMesh(currentShape, { x: 0.9, y: 0.9, z: 0.9 }, color, currentOpacity);
     mesh.position.set(0, 1, 0);
-    const obj = { id: generateId(), name: `Block_${currentShape}`, type: 'block', parentId: 'Workspace', childrenIds: [], threeObject: mesh, userData: { shape: currentShape, color: currentColor, opacity: currentOpacity, collision: true } };
+    const obj = { id: generateId(), name: `Block_${currentShape}`, type: 'block', parentId: 'Workspace', childrenIds: [], threeObject: mesh, userData: { shape: currentShape, color: currentColor, opacity: currentOpacity, collision: true }, visible: true, locked: false };
     addObject(obj);
     selectObject(obj);
 }
@@ -104,7 +313,7 @@ function addDefaultBlock() {
 function groupSelected() {
     if (selectedObjects.length < 2) return;
     const groupId = generateId();
-    const groupObj = { id: groupId, name: 'Group', type: 'group', parentId: 'Workspace', childrenIds: [], threeObject: new THREE.Group() };
+    const groupObj = { id: groupId, name: 'Group', type: 'group', parentId: 'Workspace', childrenIds: [], threeObject: new THREE.Group(), visible: true, locked: false };
     selectedObjects.forEach(obj => {
         const idx = editorObjects.findIndex(o => o.id === obj.id);
         if (idx !== -1) { editorObjects[idx].parentId = groupId; groupObj.childrenIds.push(obj.id); groupObj.threeObject.add(obj.threeObject); }
@@ -144,46 +353,6 @@ function clearSelection() {
     updateSelectedInExplorer();
 }
 
-function updateSelectedInExplorer() {
-    document.querySelectorAll('.explorer-item').forEach(el => {
-        el.classList.remove('selected');
-        if (selectedObjects.some(obj => obj.id === el.dataset.id)) el.classList.add('selected');
-    });
-}
-
-function renderExplorer() {
-    const container = document.getElementById('explorerTree');
-    if (!container) return;
-    const roots = editorObjects.filter(obj => !obj.parentId);
-    container.innerHTML = '';
-    roots.forEach(obj => renderExplorerItem(obj, container));
-}
-
-function renderExplorerItem(obj, parentElement) {
-    const div = document.createElement('div');
-    div.className = 'explorer-item';
-    div.dataset.id = obj.id;
-    if (selectedObjects.includes(obj)) div.classList.add('selected');
-    let icon = obj.type === 'folder' ? '📁' : obj.type === 'npc' ? '👤' : obj.type === 'group' ? '📦' : '🧱';
-    div.innerHTML = `<span class="icon">${icon}</span><span class="name">${escapeHtml(obj.name)}</span><span class="controls"><button class="renameBtn">✎</button><button class="deleteBtn">🗑</button><button class="duplicateBtn">📋</button></span>`;
-    if (obj.childrenIds && obj.childrenIds.length) {
-        let childrenContainer = document.createElement('div');
-        childrenContainer.className = 'explorer-children';
-        obj.childrenIds.forEach(childId => {
-            let child = editorObjects.find(o => o.id === childId);
-            if (child) renderExplorerItem(child, childrenContainer);
-        });
-        div.appendChild(childrenContainer);
-    }
-    parentElement.appendChild(div);
-    div.addEventListener('click', (e) => { e.stopPropagation(); selectObject(obj, e.ctrlKey); });
-    div.querySelector('.renameBtn')?.addEventListener('click', (e) => { e.stopPropagation(); renameObject(obj); });
-    div.querySelector('.deleteBtn')?.addEventListener('click', (e) => { e.stopPropagation(); deleteObject(obj); });
-    div.querySelector('.duplicateBtn')?.addEventListener('click', (e) => { e.stopPropagation(); duplicateObject(obj); });
-}
-
-function escapeHtml(str) { return str.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'})[m]); }
-
 function updatePropertiesPanel() {
     const container = document.getElementById('propertiesContent');
     if (!container) return;
@@ -202,10 +371,11 @@ function updatePropertiesPanel() {
             obj.userData.behavior = document.getElementById('propBehavior').value;
             obj.userData.speed = parseFloat(document.getElementById('propSpeed').value);
             obj.userData.dialog = document.getElementById('propDialog').value;
-            if (obj.type === 'npc') { obj.userData.name = document.getElementById('propName').value; obj.name = obj.userData.name; renderNpcList(); }
+            obj.name = document.getElementById('propName').value;
+            obj.userData.name = obj.name;
             renderExplorer();
         });
-        document.getElementById('propName')?.addEventListener('change', e => { obj.name = e.target.value; if (obj.type === 'npc') obj.userData.name = e.target.value; renderExplorer(); });
+        document.getElementById('propName')?.addEventListener('change', e => { obj.name = e.target.value; obj.userData.name = e.target.value; renderExplorer(); });
         return;
     }
     if (!obj.threeObject) return;
@@ -243,19 +413,13 @@ function applyProps() {
     renderExplorer();
 }
 
-function createFolder(name) {
-    const folder = { id: generateId(), name: name, type: 'folder', parentId: null, childrenIds: [], threeObject: null };
-    addObject(folder);
-    return folder;
-}
-
 function createNPC(name = "NPC") {
     const geometry = new THREE.BoxGeometry(0.8, 1.2, 0.8);
     const material = new THREE.MeshStandardMaterial({ color: 0x88aa88 });
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.y = 0.6;
     mesh.userData = { name, behavior: 'idle', speed: 2, dialog: '' };
-    const obj = { id: generateId(), name, type: 'npc', parentId: 'Workspace', childrenIds: [], threeObject: mesh, userData: mesh.userData };
+    const obj = { id: generateId(), name, type: 'npc', parentId: 'Workspace', childrenIds: [], threeObject: mesh, userData: mesh.userData, visible: true, locked: false };
     addObject(obj);
     npcs.push(obj);
     renderNpcList();
@@ -372,7 +536,7 @@ function createParticleSystem(config) {
 
 function addParticleSystem(config) {
     const ps = createParticleSystem(config);
-    const obj = { id: generateId(), name: config.name, type: 'particle', parentId: 'Workspace', childrenIds: [], threeObject: ps, userData: { config } };
+    const obj = { id: generateId(), name: config.name, type: 'particle', parentId: 'Workspace', childrenIds: [], threeObject: ps, userData: { config }, visible: true, locked: false };
     addObject(obj);
     return obj;
 }
@@ -541,7 +705,9 @@ function serializeObject(obj) {
         position: { x: obj.threeObject.position.x, y: obj.threeObject.position.y, z: obj.threeObject.position.z },
         rotation: { x: obj.threeObject.rotation.x, y: obj.threeObject.rotation.y, z: obj.threeObject.rotation.z },
         scale: { x: obj.threeObject.scale.x, y: obj.threeObject.scale.y, z: obj.threeObject.scale.z },
-        userData: obj.userData
+        userData: obj.userData,
+        visible: obj.visible,
+        locked: obj.locked
     };
 }
 
@@ -554,14 +720,14 @@ function deserializeObject(data) {
         mesh.rotation.copy(data.rotation);
         mesh.scale.copy(data.scale);
         mesh.userData = data.userData;
-        return { id: data.id, name: data.name, type: 'npc', parentId: data.parentId, childrenIds: [], threeObject: mesh, userData: data.userData };
+        return { id: data.id, name: data.name, type: 'npc', parentId: data.parentId, childrenIds: [], threeObject: mesh, userData: data.userData, visible: data.visible !== false, locked: data.locked || false };
     }
     const mesh = createBlockMesh(data.userData.shape || 'cube', data.scale, data.userData.color, data.userData.opacity);
     mesh.position.copy(data.position);
     mesh.rotation.copy(data.rotation);
     mesh.scale.copy(data.scale);
     mesh.userData = data.userData;
-    return { id: data.id, name: data.name, type: data.type || 'block', parentId: data.parentId, childrenIds: [], threeObject: mesh, userData: data.userData };
+    return { id: data.id, name: data.name, type: data.type || 'block', parentId: data.parentId, childrenIds: [], threeObject: mesh, userData: data.userData, visible: data.visible !== false, locked: data.locked || false };
 }
 
 function loadGameIntoEditor(gameData) {
@@ -598,9 +764,10 @@ function clearEditor() {
     animations = [];
     guiElements = [];
     npcs = [];
+    expandedNodes.clear();
     if (transformControls.object) transformControls.detach();
     folders.forEach(f => {
-        editorObjects.push({ id: f, name: f, type: 'folder', parentId: null, childrenIds: [], threeObject: null });
+        editorObjects.push({ id: f, name: f, type: 'folder', parentId: null, childrenIds: [], threeObject: null, visible: true, locked: false });
     });
     renderExplorer();
     updatePropertiesPanel();
@@ -642,9 +809,15 @@ function initEditor() {
 
     clearEditor();
 
-    document.getElementById('modeMoveBtn').onclick = () => { transformControls.setMode('translate'); document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active')); document.getElementById('modeMoveBtn').classList.add('active'); };
-    document.getElementById('modeRotateBtn').onclick = () => { transformControls.setMode('rotate'); document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active')); document.getElementById('modeRotateBtn').classList.add('active'); };
-    document.getElementById('modeScaleBtn').onclick = () => { transformControls.setMode('scale'); document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active')); document.getElementById('modeScaleBtn').classList.add('active'); };
+    document.getElementById('modeMoveBtn').onclick = () => { transformControls.setMode('translate'); currentTransformMode='translate'; document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active')); document.getElementById('modeMoveBtn').classList.add('active'); };
+    document.getElementById('modeRotateBtn').onclick = () => { transformControls.setMode('rotate'); currentTransformMode='rotate'; document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active')); document.getElementById('modeRotateBtn').classList.add('active'); };
+    document.getElementById('modeScaleBtn').onclick = () => { transformControls.setMode('scale'); currentTransformMode='scale'; document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active')); document.getElementById('modeScaleBtn').classList.add('active'); };
+    document.getElementById('modelBtn').onclick = () => { alert('Model tools'); };
+    document.getElementById('animationBtn').onclick = () => { document.querySelector('.bottom-tab[data-tab="animations"]').click(); };
+    document.getElementById('vfxBtn').onclick = () => { document.querySelector('.bottom-tab[data-tab="vfx"]').click(); };
+    document.getElementById('guiBtn').onclick = () => { document.querySelector('.bottom-tab[data-tab="gui"]').click(); };
+    document.getElementById('lightBtn').onclick = () => { alert('Light settings'); };
+    
     document.getElementById('addCubeBtn').onclick = addDefaultBlock;
     document.getElementById('deleteBtn').onclick = () => { if (selectedObjects.length) deleteObject(selectedObjects[0]); else alert('Выберите объект'); };
     document.getElementById('duplicateBtn').onclick = () => { if (selectedObjects.length) duplicateObject(selectedObjects[0]); else alert('Выберите объект'); };
@@ -656,26 +829,6 @@ function initEditor() {
         document.getElementById('mainMenuScreen').classList.remove('hidden');
         if (editorActive) { editorActive = false; cancelAnimationFrame(editorAnimationId); }
     };
-
-    document.getElementById('addFolderBtn').onclick = () => {
-        const name = prompt('Название папки:', 'Новая папка');
-        if (name) createFolder(name);
-    };
-
-    document.querySelectorAll('.block-option').forEach(opt => {
-        opt.addEventListener('click', () => {
-            document.querySelectorAll('.block-option').forEach(o => o.classList.remove('selected'));
-            opt.classList.add('selected');
-            const type = opt.dataset.type;
-            if (type === 'wood') currentColor = '#8B5A2B';
-            else if (type === 'stone') currentColor = '#808080';
-            else if (type === 'concrete') currentColor = '#B0B0B0';
-            else if (type === 'dirt') currentColor = '#6B4C3B';
-            document.getElementById('blockColorPicker').value = currentColor;
-        });
-    });
-    document.querySelector('.block-option').classList.add('selected');
-    document.getElementById('blockColorPicker').value = currentColor;
 
     document.getElementById('addParticleBtn').onclick = () => addParticleSystem({ name:'Particles', count:100, color:0xffaa44, size:0.2 });
     document.getElementById('vfxFireBtn').onclick = () => addParticlePreset('fire');
@@ -701,11 +854,10 @@ function initEditor() {
 
     const bottomTabs = document.querySelectorAll('.bottom-tab');
     const tabContents = {
-        blocks: document.getElementById('blocksTab'),
+        gui: document.getElementById('guiTab'),
         vfx: document.getElementById('vfxTab'),
         animations: document.getElementById('animationsTab'),
         scripts: document.getElementById('scriptsTab'),
-        gui: document.getElementById('guiTab'),
         npc: document.getElementById('npcTab')
     };
     bottomTabs.forEach(tab => {
@@ -731,4 +883,4 @@ export function openEditor(gameToEdit = null) {
     if (gameToEdit && gameToEdit.data) {
         loadGameIntoEditor(gameToEdit.data);
     }
-}
+                    }

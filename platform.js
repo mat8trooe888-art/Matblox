@@ -572,7 +572,7 @@ async function renderMyProjects() {
         });
         attachMobileEvents();
         
-        // ПРИВЯЗКА ОБРАБОТЧИКОВ ДЛЯ КНОПОК
+        // ПРИВЯЗКА ОБРАБОТЧИКОВ
         document.querySelectorAll('.play-btn-small').forEach(btn => {
             btn.removeEventListener('click', handlePlayClick);
             btn.addEventListener('click', handlePlayClick);
@@ -626,7 +626,7 @@ async function handleHostClick(e) {
         }
     } catch(err) {
         console.error('Host error:', err);
-        alert('Ошибка при создании сервера');
+        alert('Ошибка при создании сервера: ' + err.message);
     }
 }
 
@@ -916,4 +916,4 @@ if (session && session !== 'undefined' && session !== 'null') {
     }
 } else { 
     window.location.href = 'login.html'; 
-    }
+            }

@@ -173,22 +173,42 @@
             background: #2c2f36;
             padding: 8px 12px;
             display: flex;
-            gap: 8px;
+            gap: 6px;
             flex-wrap: wrap;
             border-bottom: 1px solid #3a3e47;
+            align-items: center;
         }
         .tool-btn {
             background: #3a3e47;
             border: none;
             color: white;
-            padding: 6px 14px;
+            padding: 6px 12px;
             border-radius: 4px;
             cursor: pointer;
             font-size: 12px;
             font-weight: 500;
+            transition: 0.1s;
         }
         .tool-btn.active { background: #ff5722; }
         .tool-btn:hover { background: #4a4e55; }
+        
+        .toolbar select {
+            background: #3a3e47;
+            color: white;
+            border: none;
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        .toolbar input[type="color"] {
+            width: 36px;
+            height: 32px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            background: #3a3e47;
+        }
 
         .editor-main {
             display: flex;
@@ -230,10 +250,10 @@
             align-items: center;
             gap: 8px;
             border-radius: 4px;
+            font-size: 12px;
         }
         .explorer-item:hover { background: #3a3e47; }
         .explorer-item.selected { background: #0e639c; }
-        .explorer-children { margin-left: 20px; }
 
         .properties-content {
             flex: 1;
@@ -254,6 +274,16 @@
             border-radius: 4px;
             padding: 6px 8px;
             color: white;
+            font-size: 12px;
+        }
+        .prop-group button {
+            background: #ff5722;
+            border: none;
+            padding: 6px;
+            border-radius: 4px;
+            color: white;
+            width: 100%;
+            cursor: pointer;
         }
 
         /* Мобильное управление */
@@ -331,7 +361,7 @@
 
         @media (max-width: 768px) {
             .right-panel { width: 250px; }
-            .tool-btn { padding: 4px 10px; font-size: 11px; }
+            .tool-btn { padding: 4px 8px; font-size: 10px; }
             .joystick-container { width: 100px; height: 100px; }
             .joystick-thumb { width: 40px; height: 40px; top: 30px; left: 30px; }
             .mobile-jump-btn { width: 60px; height: 60px; font-size: 14px; }
@@ -397,13 +427,35 @@
             <button class="tool-btn" id="modeMoveBtn">Переместить</button>
             <button class="tool-btn" id="modeRotateBtn">Повернуть</button>
             <button class="tool-btn" id="modeScaleBtn">Масштаб</button>
+            <div style="width:1px; height:24px; background:#3a3e47;"></div>
             <button class="tool-btn" id="addPartBtn">➕ Куб</button>
             <button class="tool-btn" id="addSphereBtn">⚪ Сфера</button>
             <button class="tool-btn" id="addCylinderBtn">📦 Цилиндр</button>
-            <input type="color" id="colorPicker" value="#ffaa44" style="width:40px; height:32px; border:none; border-radius:4px;">
+            <button class="tool-btn" id="addConeBtn">🔺 Конус</button>
+            <button class="tool-btn" id="addPlaneBtn">⬜ Плоскость</button>
+            <div style="width:1px; height:24px; background:#3a3e47;"></div>
+            <button class="tool-btn" id="duplicateBtn">📋 Дублировать</button>
+            <button class="tool-btn" id="deleteBtn">🗑 Удалить</button>
+            <button class="tool-btn" id="groupBtn">📁 Группа</button>
+            <button class="tool-btn" id="ungroupBtn">📂 Разгруппировать</button>
+            <div style="width:1px; height:24px; background:#3a3e47;"></div>
+            <button class="tool-btn" id="undoBtn">↩️ Отмена</button>
+            <button class="tool-btn" id="redoBtn">↪️ Повтор</button>
+            <div style="width:1px; height:24px; background:#3a3e47;"></div>
+            <input type="color" id="colorPicker" value="#ffaa44">
+            <select id="materialSelect">
+                <option value="plastic">Пластик</option>
+                <option value="metal">Металл</option>
+                <option value="wood">Дерево</option>
+                <option value="glass">Стекло</option>
+            </select>
+            <div style="width:1px; height:24px; background:#3a3e47;"></div>
+            <button class="tool-btn" id="exportBtn">📤 Экспорт</button>
+            <button class="tool-btn" id="importBtn">📥 Импорт</button>
+            <div style="width:1px; height:24px; background:#3a3e47;"></div>
             <button class="tool-btn" id="playTestBtn">🎮 Play</button>
-            <button class="tool-btn" id="publishGameBtn">🚀 Опубликовать</button>
             <button class="tool-btn" id="saveGameBtn">💾 Сохранить</button>
+            <button class="tool-btn" id="publishGameBtn">🚀 Опубликовать</button>
             <button class="tool-btn" id="exitEditorBtn">✖ Выйти</button>
         </div>
         <div class="editor-main">

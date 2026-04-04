@@ -9,12 +9,15 @@ let objects = [];
 let selectedObject = null;
 let currentColor = '#ffaa44';
 let currentGameId = null;
+let editorActive = false;
 
 // ========== ЭЛЕМЕНТЫ UI ==========
 let explorerTree, propertiesContent;
 
 // ========== ИНИЦИАЛИЗАЦИЯ ==========
 function init() {
+    if (editorActive) return;
+    editorActive = true;
     init3D();
     initUI();
     addDefaultPart('box');
@@ -22,6 +25,7 @@ function init() {
 
 function init3D() {
     const container = document.getElementById('editorCanvasContainer');
+    if (!container) return;
     container.innerHTML = '';
     
     scene = new THREE.Scene();
@@ -66,6 +70,7 @@ function init3D() {
     
     // Анимация
     function animate() {
+        if (!editorActive) return;
         requestAnimationFrame(animate);
         controls.update();
         renderer.render(scene, camera);
@@ -73,6 +78,7 @@ function init3D() {
     animate();
     
     window.addEventListener('resize', () => {
+        if (!container) return;
         camera.aspect = container.clientWidth / container.clientHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(container.clientWidth, container.clientHeight);
@@ -84,27 +90,39 @@ function initUI() {
     propertiesContent = document.getElementById('propertiesContent');
     
     // Инструменты
-    document.getElementById('modeMoveBtn').onclick = () => {
+    const moveBtn = document.getElementById('modeMoveBtn');
+    const rotateBtn = document.getElementById('modeRotateBtn');
+    const scaleBtn = document.getElementById('modeScaleBtn');
+    const addPartBtn = document.getElementById('addPartBtn');
+    const addSphereBtn = document.getElementById('addSphereBtn');
+    const addCylinderBtn = document.getElementById('addCylinderBtn');
+    const colorPicker = document.getElementById('colorPicker');
+    const playTestBtn = document.getElementById('playTestBtn');
+    const saveGameBtn = document.getElementById('saveGameBtn');
+    const publishGameBtn = document.getElementById('publishGameBtn');
+    const exitEditorBtn = document.getElementById('exitEditorBtn');
+    
+    if (moveBtn) moveBtn.onclick = () => {
         transformControls.setMode('translate');
         document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
-        document.getElementById('modeMoveBtn').classList.add('active');
+        moveBtn.classList.add('active');
     };
-    document.getElementById('modeRotateBtn').onclick = () => {
+    if (rotateBtn) rotateBtn.onclick = () => {
         transformControls.setMode('rotate');
         document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
-        document.getElementById('modeRotateBtn').classList.add('active');
+        rotateBtn.classList.add('active');
     };
-    document.getElementById('modeScaleBtn').onclick = () => {
+    if (scaleBtn) scaleBtn.onclick = () => {
         transformControls.setMode('scale');
         document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
-        document.getElementById('modeScaleBtn').classList.add('active');
+        scaleBtn.classList.add('active');
     };
     
-    document.getElementById('addPartBtn').onclick = () => addDefaultPart('box');
-    document.getElementById('addSphereBtn').onclick = () => addDefaultPart('sphere');
-    document.getElementById('addCylinderBtn').onclick = () => addDefaultPart('cylinder');
+    if (addPartBtn) addPartBtn.onclick = () => addDefaultPart('box');
+    if (addSphereBtn) addSphereBtn.onclick = () => addDefaultPart('sphere');
+    if (addCylinderBtn) addCylinderBtn.onclick = () => addDefaultPart('cylinder');
     
-    document.getElementById('colorPicker').onchange = (e) => {
+    if (colorPicker) colorPicker.onchange = (e) => {
         currentColor = e.target.value;
         if (selectedObject && selectedObject.material) {
             selectedObject.material.color.set(currentColor);
@@ -112,13 +130,14 @@ function initUI() {
         }
     };
     
-    document.getElementById('playTestBtn').onclick = () => {
+    if (playTestBtn) playTestBtn.onclick = () => {
         alert('Тестовый режим запущен!');
     };
     
-    document.getElementById('saveGameBtn').onclick = () => saveGame(false);
-    document.getElementById('publishGameBtn').onclick = () => saveGame(true);
-    document.getElementById('exitEditorBtn').onclick = () => {
+    if (saveGameBtn) saveGameBtn.onclick = () => saveGame(false);
+    if (publishGameBtn) publishGameBtn.onclick = () => saveGame(true);
+    if (exitEditorBtn) exitEditorBtn.onclick = () => {
+        editorActive = false;
         document.getElementById('editorScreen').classList.add('hidden');
         document.getElementById('mainMenuScreen').classList.remove('hidden');
         if (window.renderMyProjects) window.renderMyProjects();
@@ -158,6 +177,7 @@ function selectObject(obj) {
 }
 
 function updateProperties() {
+    if (!propertiesContent) return;
     if (!selectedObject) {
         propertiesContent.innerHTML = '<div style="color:#aaa;">Ничего не выбрано</div>';
         return;
@@ -175,30 +195,40 @@ function updateProperties() {
         <button id="applyPropsBtn" style="background:#ff5722; border:none; padding:6px; border-radius:4px; color:white; width:100%; margin-top:8px;">Применить</button>
     `;
     
-    document.getElementById('propName').onchange = () => {
-        selectedObject.userData.name = document.getElementById('propName').value;
+    const propName = document.getElementById('propName');
+    const propPosX = document.getElementById('propPosX');
+    const propPosY = document.getElementById('propPosY');
+    const propPosZ = document.getElementById('propPosZ');
+    const propScaleX = document.getElementById('propScaleX');
+    const propScaleY = document.getElementById('propScaleY');
+    const propScaleZ = document.getElementById('propScaleZ');
+    const propColor = document.getElementById('propColor');
+    const applyBtn = document.getElementById('applyPropsBtn');
+    
+    if (propName) propName.onchange = () => {
+        selectedObject.userData.name = propName.value;
         renderExplorer();
     };
-    document.getElementById('propPosX').onchange = () => selectedObject.position.x = parseFloat(document.getElementById('propPosX').value);
-    document.getElementById('propPosY').onchange = () => selectedObject.position.y = parseFloat(document.getElementById('propPosY').value);
-    document.getElementById('propPosZ').onchange = () => selectedObject.position.z = parseFloat(document.getElementById('propPosZ').value);
-    document.getElementById('propScaleX').onchange = () => selectedObject.scale.x = parseFloat(document.getElementById('propScaleX').value);
-    document.getElementById('propScaleY').onchange = () => selectedObject.scale.y = parseFloat(document.getElementById('propScaleY').value);
-    document.getElementById('propScaleZ').onchange = () => selectedObject.scale.z = parseFloat(document.getElementById('propScaleZ').value);
-    document.getElementById('propColor').onchange = () => {
-        selectedObject.userData.color = document.getElementById('propColor').value;
+    if (propPosX) propPosX.onchange = () => selectedObject.position.x = parseFloat(propPosX.value);
+    if (propPosY) propPosY.onchange = () => selectedObject.position.y = parseFloat(propPosY.value);
+    if (propPosZ) propPosZ.onchange = () => selectedObject.position.z = parseFloat(propPosZ.value);
+    if (propScaleX) propScaleX.onchange = () => selectedObject.scale.x = parseFloat(propScaleX.value);
+    if (propScaleY) propScaleY.onchange = () => selectedObject.scale.y = parseFloat(propScaleY.value);
+    if (propScaleZ) propScaleZ.onchange = () => selectedObject.scale.z = parseFloat(propScaleZ.value);
+    if (propColor) propColor.onchange = () => {
+        selectedObject.userData.color = propColor.value;
         selectedObject.material.color.set(selectedObject.userData.color);
     };
-    document.getElementById('applyPropsBtn').onclick = () => {
+    if (applyBtn) applyBtn.onclick = () => {
         selectedObject.position.set(
-            parseFloat(document.getElementById('propPosX').value),
-            parseFloat(document.getElementById('propPosY').value),
-            parseFloat(document.getElementById('propPosZ').value)
+            parseFloat(propPosX?.value || 0),
+            parseFloat(propPosY?.value || 0),
+            parseFloat(propPosZ?.value || 0)
         );
         selectedObject.scale.set(
-            parseFloat(document.getElementById('propScaleX').value),
-            parseFloat(document.getElementById('propScaleY').value),
-            parseFloat(document.getElementById('propScaleZ').value)
+            parseFloat(propScaleX?.value || 1),
+            parseFloat(propScaleY?.value || 1),
+            parseFloat(propScaleZ?.value || 1)
         );
     };
 }
@@ -256,5 +286,27 @@ async function saveGame(isPublished = false) {
     }
 }
 
-// Запуск
-init();
+// Экспорт функции openEditor
+export function openEditor(gameToEdit = null) {
+    currentGameId = gameToEdit?.id || null;
+    document.getElementById('mainMenuScreen').classList.add('hidden');
+    document.getElementById('editorScreen').classList.remove('hidden');
+    init();
+    if (gameToEdit && gameToEdit.data && gameToEdit.data.blocks) {
+        // Загрузка сохранённой игры
+        gameToEdit.data.blocks.forEach(block => {
+            let geometry;
+            if (block.type === 'sphere') geometry = new THREE.SphereGeometry(0.5, 32, 32);
+            else if (block.type === 'cylinder') geometry = new THREE.CylinderGeometry(0.5, 0.5, 1, 32);
+            else geometry = new THREE.BoxGeometry(1, 1, 1);
+            const material = new THREE.MeshStandardMaterial({ color: block.color });
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.copy(block.position);
+            mesh.scale.copy(block.scale);
+            mesh.userData = block;
+            scene.add(mesh);
+            objects.push(mesh);
+        });
+        renderExplorer();
+    }
+            }

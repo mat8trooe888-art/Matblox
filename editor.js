@@ -17,9 +17,6 @@ let history = [];
 let historyIndex = -1;
 const MAX_HISTORY = 50;
 
-// ========== ЭЛЕМЕНТЫ UI ==========
-let explorerTree, propertiesContent;
-
 // ========== ИНИЦИАЛИЗАЦИЯ ==========
 function init() {
     if (editorActive) return;
@@ -32,7 +29,10 @@ function init() {
 
 function init3D() {
     const container = document.getElementById('editorCanvasContainer');
-    if (!container) return;
+    if (!container) {
+        console.error('Container not found');
+        return;
+    }
     container.innerHTML = '';
     
     scene = new THREE.Scene();
@@ -97,36 +97,144 @@ function init3D() {
 }
 
 function initUI() {
-    explorerTree = document.getElementById('explorerTree');
-    propertiesContent = document.getElementById('propertiesContent');
+    const explorerTree = document.getElementById('explorerTree');
+    const propertiesContent = document.getElementById('propertiesContent');
     
-    // Инструменты трансформации
-    document.getElementById('modeMoveBtn').onclick = () => {
-        transformControls.setMode('translate');
-        document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
-        document.getElementById('modeMoveBtn').classList.add('active');
-    };
-    document.getElementById('modeRotateBtn').onclick = () => {
-        transformControls.setMode('rotate');
-        document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
-        document.getElementById('modeRotateBtn').classList.add('active');
-    };
-    document.getElementById('modeScaleBtn').onclick = () => {
-        transformControls.setMode('scale');
-        document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
-        document.getElementById('modeScaleBtn').classList.add('active');
+    if (!explorerTree || !propertiesContent) {
+        console.error('UI elements not found');
+        return;
+    }
+    
+    // Функции для UI
+    window.renderExplorer = function() {
+        if (!explorerTree) return;
+        explorerTree.innerHTML = '';
+        objects.forEach(obj => {
+            const div = document.createElement('div');
+            div.className = 'explorer-item';
+            if (selectedObject === obj) div.classList.add('selected');
+            let icon = '🧱';
+            if (obj.userData.type === 'sphere') icon = '⚪';
+            else if (obj.userData.type === 'cylinder') icon = '📦';
+            else if (obj.userData.type === 'cone') icon = '🔺';
+            div.innerHTML = `<span class="icon">${icon}</span><span class="name">${obj.userData.name || 'Объект'}</span>`;
+            div.onclick = (e) => {
+                e.stopPropagation();
+                selectObject(obj);
+            };
+            explorerTree.appendChild(div);
+        });
     };
     
-    // Добавление объектов
-    document.getElementById('addPartBtn').onclick = () => addDefaultPart('box');
-    document.getElementById('addSphereBtn').onclick = () => addDefaultPart('sphere');
-    document.getElementById('addCylinderBtn').onclick = () => addDefaultPart('cylinder');
-    document.getElementById('addConeBtn')?.addEventListener('click', () => addDefaultPart('cone'));
-    document.getElementById('addCapsuleBtn')?.addEventListener('click', () => addDefaultPart('capsule'));
-    document.getElementById('addPlaneBtn')?.addEventListener('click', () => addDefaultPart('plane'));
+    window.updateProperties = function() {
+        if (!propertiesContent) return;
+        if (!selectedObject) {
+            propertiesContent.innerHTML = '<div style="color:#aaa;">Ничего не выбрано</div>';
+            return;
+        }
+        
+        propertiesContent.innerHTML = `
+            <div class="prop-group"><label>Имя</label><input id="propName" value="${escapeHtml(selectedObject.userData.name || 'Объект')}"></div>
+            <div class="prop-group"><label>Позиция X</label><input id="propPosX" type="number" step="0.1" value="${selectedObject.position.x.toFixed(2)}"></div>
+            <div class="prop-group"><label>Позиция Y</label><input id="propPosY" type="number" step="0.1" value="${selectedObject.position.y.toFixed(2)}"></div>
+            <div class="prop-group"><label>Позиция Z</label><input id="propPosZ" type="number" step="0.1" value="${selectedObject.position.z.toFixed(2)}"></div>
+            <div class="prop-group"><label>Масштаб X</label><input id="propScaleX" type="number" step="0.1" value="${selectedObject.scale.x.toFixed(2)}"></div>
+            <div class="prop-group"><label>Масштаб Y</label><input id="propScaleY" type="number" step="0.1" value="${selectedObject.scale.y.toFixed(2)}"></div>
+            <div class="prop-group"><label>Масштаб Z</label><input id="propScaleZ" type="number" step="0.1" value="${selectedObject.scale.z.toFixed(2)}"></div>
+            <div class="prop-group"><label>Цвет</label><input id="propColor" type="color" value="${selectedObject.userData.color || '#ffaa44'}"></div>
+            <div class="prop-group"><label>Материал</label><select id="propMaterial">
+                <option value="plastic" ${selectedObject.userData.material === 'plastic' ? 'selected' : ''}>Пластик</option>
+                <option value="metal" ${selectedObject.userData.material === 'metal' ? 'selected' : ''}>Металл</option>
+                <option value="wood" ${selectedObject.userData.material === 'wood' ? 'selected' : ''}>Дерево</option>
+                <option value="glass" ${selectedObject.userData.material === 'glass' ? 'selected' : ''}>Стекло</option>
+            </select></div>
+            <button id="applyPropsBtn" style="background:#ff5722; border:none; padding:6px; border-radius:4px; color:white; width:100%; margin-top:8px;">Применить</button>
+        `;
+        
+        const propName = document.getElementById('propName');
+        const propPosX = document.getElementById('propPosX');
+        const propPosY = document.getElementById('propPosY');
+        const propPosZ = document.getElementById('propPosZ');
+        const propScaleX = document.getElementById('propScaleX');
+        const propScaleY = document.getElementById('propScaleY');
+        const propScaleZ = document.getElementById('propScaleZ');
+        const propColor = document.getElementById('propColor');
+        const propMaterial = document.getElementById('propMaterial');
+        const applyBtn = document.getElementById('applyPropsBtn');
+        
+        if (propName) propName.onchange = () => { selectedObject.userData.name = propName.value; window.renderExplorer(); saveToHistory(); };
+        if (propPosX) propPosX.onchange = () => { selectedObject.position.x = parseFloat(propPosX.value); saveToHistory(); };
+        if (propPosY) propPosY.onchange = () => { selectedObject.position.y = parseFloat(propPosY.value); saveToHistory(); };
+        if (propPosZ) propPosZ.onchange = () => { selectedObject.position.z = parseFloat(propPosZ.value); saveToHistory(); };
+        if (propScaleX) propScaleX.onchange = () => { selectedObject.scale.x = parseFloat(propScaleX.value); saveToHistory(); };
+        if (propScaleY) propScaleY.onchange = () => { selectedObject.scale.y = parseFloat(propScaleY.value); saveToHistory(); };
+        if (propScaleZ) propScaleZ.onchange = () => { selectedObject.scale.z = parseFloat(propScaleZ.value); saveToHistory(); };
+        if (propColor) propColor.onchange = () => {
+            selectedObject.userData.color = propColor.value;
+            selectedObject.material.color.set(selectedObject.userData.color);
+            saveToHistory();
+        };
+        if (propMaterial) propMaterial.onchange = () => {
+            selectedObject.userData.material = propMaterial.value;
+            applyMaterialToSelected();
+            saveToHistory();
+        };
+        if (applyBtn) applyBtn.onclick = () => {
+            selectedObject.position.set(
+                parseFloat(propPosX?.value || 0),
+                parseFloat(propPosY?.value || 0),
+                parseFloat(propPosZ?.value || 0)
+            );
+            selectedObject.scale.set(
+                parseFloat(propScaleX?.value || 1),
+                parseFloat(propScaleY?.value || 1),
+                parseFloat(propScaleZ?.value || 1)
+            );
+            saveToHistory();
+        };
+    };
     
-    // Материалы
-    document.getElementById('colorPicker').onchange = (e) => {
+    // Привязка кнопок
+    const modeMoveBtn = document.getElementById('modeMoveBtn');
+    const modeRotateBtn = document.getElementById('modeRotateBtn');
+    const modeScaleBtn = document.getElementById('modeScaleBtn');
+    const addPartBtn = document.getElementById('addPartBtn');
+    const addSphereBtn = document.getElementById('addSphereBtn');
+    const addCylinderBtn = document.getElementById('addCylinderBtn');
+    const addConeBtn = document.getElementById('addConeBtn');
+    const addPlaneBtn = document.getElementById('addPlaneBtn');
+    const duplicateBtn = document.getElementById('duplicateBtn');
+    const deleteBtn = document.getElementById('deleteBtn');
+    const groupBtn = document.getElementById('groupBtn');
+    const ungroupBtn = document.getElementById('ungroupBtn');
+    const undoBtn = document.getElementById('undoBtn');
+    const redoBtn = document.getElementById('redoBtn');
+    const exportBtn = document.getElementById('exportBtn');
+    const importBtn = document.getElementById('importBtn');
+    const colorPicker = document.getElementById('colorPicker');
+    const materialSelect = document.getElementById('materialSelect');
+    const playTestBtn = document.getElementById('playTestBtn');
+    const saveGameBtn = document.getElementById('saveGameBtn');
+    const publishGameBtn = document.getElementById('publishGameBtn');
+    const exitEditorBtn = document.getElementById('exitEditorBtn');
+    
+    if (modeMoveBtn) modeMoveBtn.onclick = () => { transformControls.setMode('translate'); };
+    if (modeRotateBtn) modeRotateBtn.onclick = () => { transformControls.setMode('rotate'); };
+    if (modeScaleBtn) modeScaleBtn.onclick = () => { transformControls.setMode('scale'); };
+    if (addPartBtn) addPartBtn.onclick = () => addDefaultPart('box');
+    if (addSphereBtn) addSphereBtn.onclick = () => addDefaultPart('sphere');
+    if (addCylinderBtn) addCylinderBtn.onclick = () => addDefaultPart('cylinder');
+    if (addConeBtn) addConeBtn.onclick = () => addDefaultPart('cone');
+    if (addPlaneBtn) addPlaneBtn.onclick = () => addDefaultPart('plane');
+    if (duplicateBtn) duplicateBtn.onclick = () => duplicateSelected();
+    if (deleteBtn) deleteBtn.onclick = () => deleteSelected();
+    if (groupBtn) groupBtn.onclick = () => groupSelected();
+    if (ungroupBtn) ungroupBtn.onclick = () => ungroupSelected();
+    if (undoBtn) undoBtn.onclick = () => undo();
+    if (redoBtn) redoBtn.onclick = () => redo();
+    if (exportBtn) exportBtn.onclick = () => exportProject();
+    if (importBtn) importBtn.onclick = () => importProject();
+    if (colorPicker) colorPicker.onchange = (e) => {
         currentColor = e.target.value;
         if (selectedObject && selectedObject.material) {
             selectedObject.material.color.set(currentColor);
@@ -134,28 +242,14 @@ function initUI() {
             saveToHistory();
         }
     };
-    document.getElementById('materialSelect').onchange = (e) => {
+    if (materialSelect) materialSelect.onchange = (e) => {
         currentMaterial = e.target.value;
         applyMaterialToSelected();
     };
-    
-    // Действия
-    document.getElementById('duplicateBtn')?.addEventListener('click', duplicateSelected);
-    document.getElementById('deleteBtn')?.addEventListener('click', deleteSelected);
-    document.getElementById('groupBtn')?.addEventListener('click', groupSelected);
-    document.getElementById('ungroupBtn')?.addEventListener('click', ungroupSelected);
-    document.getElementById('undoBtn')?.addEventListener('click', undo);
-    document.getElementById('redoBtn')?.addEventListener('click', redo);
-    document.getElementById('exportBtn')?.addEventListener('click', exportProject);
-    document.getElementById('importBtn')?.addEventListener('click', importProject);
-    
-    // Тестирование и сохранение
-    document.getElementById('playTestBtn').onclick = () => {
-        alert('Тестовый режим запущен!');
-    };
-    document.getElementById('saveGameBtn').onclick = () => saveGame(false);
-    document.getElementById('publishGameBtn').onclick = () => saveGame(true);
-    document.getElementById('exitEditorBtn').onclick = () => {
+    if (playTestBtn) playTestBtn.onclick = () => alert('Тестовый режим запущен!');
+    if (saveGameBtn) saveGameBtn.onclick = () => saveGame(false);
+    if (publishGameBtn) publishGameBtn.onclick = () => saveGame(true);
+    if (exitEditorBtn) exitEditorBtn.onclick = () => {
         editorActive = false;
         document.getElementById('editorScreen').classList.add('hidden');
         document.getElementById('mainMenuScreen').classList.remove('hidden');
@@ -163,7 +257,18 @@ function initUI() {
         if (window.renderGamesList) window.renderGamesList();
     };
     
-    renderExplorer();
+    window.renderExplorer();
+    window.updateProperties();
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/[&<>]/g, function(m) {
+        if (m === '&') return '&amp;';
+        if (m === '<') return '&lt;';
+        if (m === '>') return '&gt;';
+        return m;
+    });
 }
 
 function applyMaterialToSelected() {
@@ -193,7 +298,6 @@ function addDefaultPart(type = 'box') {
         case 'sphere': geometry = new THREE.SphereGeometry(0.5, 32, 32); break;
         case 'cylinder': geometry = new THREE.CylinderGeometry(0.5, 0.5, 1, 32); break;
         case 'cone': geometry = new THREE.ConeGeometry(0.5, 1, 32); break;
-        case 'capsule': geometry = new THREE.CylinderGeometry(0.5, 0.5, 1, 32); break;
         case 'plane': geometry = new THREE.PlaneGeometry(1, 1); break;
         default: geometry = new THREE.BoxGeometry(1, 1, 1);
     }
@@ -208,8 +312,17 @@ function addDefaultPart(type = 'box') {
     scene.add(mesh);
     objects.push(mesh);
     selectObject(mesh);
-    renderExplorer();
+    window.renderExplorer();
     saveToHistory();
+}
+
+function selectObject(obj) {
+    if (selectedObject === obj) return;
+    if (transformControls.object) transformControls.detach();
+    selectedObject = obj;
+    if (obj) transformControls.attach(obj);
+    window.updateProperties();
+    window.renderExplorer();
 }
 
 function duplicateSelected() {
@@ -220,7 +333,7 @@ function duplicateSelected() {
     scene.add(clone);
     objects.push(clone);
     selectObject(clone);
-    renderExplorer();
+    window.renderExplorer();
     saveToHistory();
 }
 
@@ -230,18 +343,19 @@ function deleteSelected() {
     objects = objects.filter(obj => obj !== selectedObject);
     if (transformControls.object) transformControls.detach();
     selectedObject = null;
-    renderExplorer();
-    updateProperties();
+    window.renderExplorer();
+    window.updateProperties();
     saveToHistory();
 }
 
 function groupSelected() {
-    const selected = objects.filter(obj => obj === selectedObject);
-    if (selected.length < 2) {
-        alert('Выберите несколько объектов для группировки');
+    if (!selectedObject) {
+        alert('Выберите объект для группировки');
         return;
     }
     const group = new THREE.Group();
+    const selected = [...objects.filter(obj => obj === selectedObject)];
+    if (selected.length === 0) return;
     selected.forEach(obj => {
         group.add(obj);
         objects = objects.filter(o => o !== obj);
@@ -249,12 +363,15 @@ function groupSelected() {
     scene.add(group);
     objects.push(group);
     selectObject(group);
-    renderExplorer();
+    window.renderExplorer();
     saveToHistory();
 }
 
 function ungroupSelected() {
-    if (!selectedObject || !selectedObject.isGroup) return;
+    if (!selectedObject || !selectedObject.isGroup) {
+        alert('Выберите группу для разгруппировки');
+        return;
+    }
     const children = [...selectedObject.children];
     selectedObject.clear();
     scene.remove(selectedObject);
@@ -264,19 +381,20 @@ function ungroupSelected() {
     });
     objects = objects.filter(obj => obj !== selectedObject);
     selectObject(children[0] || null);
-    renderExplorer();
+    window.renderExplorer();
     saveToHistory();
 }
 
 function saveToHistory() {
-    const state = JSON.parse(JSON.stringify(objects.map(obj => ({
+    const state = objects.map(obj => ({
         type: obj.userData.type,
         position: { x: obj.position.x, y: obj.position.y, z: obj.position.z },
         rotation: { x: obj.rotation.x, y: obj.rotation.y, z: obj.rotation.z },
         scale: { x: obj.scale.x, y: obj.scale.y, z: obj.scale.z },
         color: obj.userData.color,
-        name: obj.userData.name
-    }))));
+        name: obj.userData.name,
+        material: obj.userData.material
+    }));
     history = history.slice(0, historyIndex + 1);
     history.push(state);
     historyIndex++;
@@ -299,26 +417,42 @@ function redo() {
 }
 
 function restoreState(state) {
+    if (!state || !Array.isArray(state)) return;
     objects.forEach(obj => scene.remove(obj));
     objects = [];
     state.forEach(data => {
+        if (!data) return;
         let geometry;
         switch(data.type) {
             case 'sphere': geometry = new THREE.SphereGeometry(0.5, 32, 32); break;
             case 'cylinder': geometry = new THREE.CylinderGeometry(0.5, 0.5, 1, 32); break;
             case 'cone': geometry = new THREE.ConeGeometry(0.5, 1, 32); break;
+            case 'plane': geometry = new THREE.PlaneGeometry(1, 1); break;
             default: geometry = new THREE.BoxGeometry(1, 1, 1);
         }
-        const material = new THREE.MeshStandardMaterial({ color: data.color });
+        let material;
+        switch(data.material) {
+            case 'metal':
+                material = new THREE.MeshStandardMaterial({ color: data.color, metalness: 0.9, roughness: 0.3 });
+                break;
+            case 'wood':
+                material = new THREE.MeshStandardMaterial({ color: data.color, roughness: 0.7, metalness: 0.1 });
+                break;
+            case 'glass':
+                material = new THREE.MeshPhysicalMaterial({ color: data.color, metalness: 0, roughness: 0.1, transparent: true, opacity: 0.6 });
+                break;
+            default:
+                material = new THREE.MeshStandardMaterial({ color: data.color });
+        }
         const mesh = new THREE.Mesh(geometry, material);
         mesh.position.copy(data.position);
-        mesh.rotation.copy(data.rotation);
+        mesh.rotation.set(data.rotation.x, data.rotation.y, data.rotation.z);
         mesh.scale.copy(data.scale);
         mesh.userData = data;
         scene.add(mesh);
         objects.push(mesh);
     });
-    renderExplorer();
+    window.renderExplorer();
     if (selectedObject && !objects.includes(selectedObject)) {
         selectObject(objects[0] || null);
     }
@@ -332,7 +466,8 @@ function exportProject() {
             rotation: { x: obj.rotation.x, y: obj.rotation.y, z: obj.rotation.z },
             scale: { x: obj.scale.x, y: obj.scale.y, z: obj.scale.z },
             color: obj.userData.color,
-            name: obj.userData.name
+            name: obj.userData.name,
+            material: obj.userData.material
         }))
     };
     const dataStr = JSON.stringify(projectData);
@@ -355,6 +490,9 @@ function importProject() {
         reader.onload = (event) => {
             try {
                 const data = JSON.parse(event.target.result);
+                if (!data.objects || !Array.isArray(data.objects)) {
+                    throw new Error('Invalid project file');
+                }
                 objects.forEach(obj => scene.remove(obj));
                 objects = [];
                 data.objects.forEach(objData => {
@@ -362,136 +500,41 @@ function importProject() {
                     switch(objData.type) {
                         case 'sphere': geometry = new THREE.SphereGeometry(0.5, 32, 32); break;
                         case 'cylinder': geometry = new THREE.CylinderGeometry(0.5, 0.5, 1, 32); break;
+                        case 'cone': geometry = new THREE.ConeGeometry(0.5, 1, 32); break;
                         default: geometry = new THREE.BoxGeometry(1, 1, 1);
                     }
-                    const material = new THREE.MeshStandardMaterial({ color: objData.color });
+                    let material;
+                    switch(objData.material) {
+                        case 'metal':
+                            material = new THREE.MeshStandardMaterial({ color: objData.color, metalness: 0.9, roughness: 0.3 });
+                            break;
+                        case 'wood':
+                            material = new THREE.MeshStandardMaterial({ color: objData.color, roughness: 0.7, metalness: 0.1 });
+                            break;
+                        case 'glass':
+                            material = new THREE.MeshPhysicalMaterial({ color: objData.color, metalness: 0, roughness: 0.1, transparent: true, opacity: 0.6 });
+                            break;
+                        default:
+                            material = new THREE.MeshStandardMaterial({ color: objData.color });
+                    }
                     const mesh = new THREE.Mesh(geometry, material);
                     mesh.position.copy(objData.position);
-                    mesh.rotation.copy(objData.rotation);
+                    mesh.rotation.set(objData.rotation.x, objData.rotation.y, objData.rotation.z);
                     mesh.scale.copy(objData.scale);
                     mesh.userData = objData;
                     scene.add(mesh);
                     objects.push(mesh);
                 });
-                renderExplorer();
+                window.renderExplorer();
                 saveToHistory();
                 alert('Проект импортирован');
             } catch(err) {
-                alert('Ошибка импорта');
+                alert('Ошибка импорта: ' + err.message);
             }
         };
         reader.readAsText(file);
     };
     input.click();
-}
-
-function selectObject(obj) {
-    if (selectedObject === obj) return;
-    if (transformControls.object) transformControls.detach();
-    selectedObject = obj;
-    if (obj) transformControls.attach(obj);
-    updateProperties();
-    renderExplorer();
-}
-
-function updateProperties() {
-    if (!propertiesContent) return;
-    if (!selectedObject) {
-        propertiesContent.innerHTML = '<div style="color:#aaa;">Ничего не выбрано</div>';
-        return;
-    }
-    
-    propertiesContent.innerHTML = `
-        <div class="prop-group"><label>Имя</label><input id="propName" value="${selectedObject.userData.name || 'Объект'}"></div>
-        <div class="prop-group"><label>Позиция X</label><input id="propPosX" type="number" step="0.1" value="${selectedObject.position.x.toFixed(2)}"></div>
-        <div class="prop-group"><label>Позиция Y</label><input id="propPosY" type="number" step="0.1" value="${selectedObject.position.y.toFixed(2)}"></div>
-        <div class="prop-group"><label>Позиция Z</label><input id="propPosZ" type="number" step="0.1" value="${selectedObject.position.z.toFixed(2)}"></div>
-        <div class="prop-group"><label>Масштаб X</label><input id="propScaleX" type="number" step="0.1" value="${selectedObject.scale.x.toFixed(2)}"></div>
-        <div class="prop-group"><label>Масштаб Y</label><input id="propScaleY" type="number" step="0.1" value="${selectedObject.scale.y.toFixed(2)}"></div>
-        <div class="prop-group"><label>Масштаб Z</label><input id="propScaleZ" type="number" step="0.1" value="${selectedObject.scale.z.toFixed(2)}"></div>
-        <div class="prop-group"><label>Цвет</label><input id="propColor" type="color" value="${selectedObject.userData.color || '#ffaa44'}"></div>
-        <div class="prop-group"><label>Материал</label><select id="propMaterial">
-            <option value="plastic" ${selectedObject.userData.material === 'plastic' ? 'selected' : ''}>Пластик</option>
-            <option value="metal" ${selectedObject.userData.material === 'metal' ? 'selected' : ''}>Металл</option>
-            <option value="wood" ${selectedObject.userData.material === 'wood' ? 'selected' : ''}>Дерево</option>
-            <option value="glass" ${selectedObject.userData.material === 'glass' ? 'selected' : ''}>Стекло</option>
-        </select></div>
-        <button id="applyPropsBtn" style="background:#ff5722; border:none; padding:6px; border-radius:4px; color:white; width:100%; margin-top:8px;">Применить</button>
-    `;
-    
-    document.getElementById('propName').onchange = () => {
-        selectedObject.userData.name = document.getElementById('propName').value;
-        renderExplorer();
-        saveToHistory();
-    };
-    document.getElementById('propPosX').onchange = () => {
-        selectedObject.position.x = parseFloat(document.getElementById('propPosX').value);
-        saveToHistory();
-    };
-    document.getElementById('propPosY').onchange = () => {
-        selectedObject.position.y = parseFloat(document.getElementById('propPosY').value);
-        saveToHistory();
-    };
-    document.getElementById('propPosZ').onchange = () => {
-        selectedObject.position.z = parseFloat(document.getElementById('propPosZ').value);
-        saveToHistory();
-    };
-    document.getElementById('propScaleX').onchange = () => {
-        selectedObject.scale.x = parseFloat(document.getElementById('propScaleX').value);
-        saveToHistory();
-    };
-    document.getElementById('propScaleY').onchange = () => {
-        selectedObject.scale.y = parseFloat(document.getElementById('propScaleY').value);
-        saveToHistory();
-    };
-    document.getElementById('propScaleZ').onchange = () => {
-        selectedObject.scale.z = parseFloat(document.getElementById('propScaleZ').value);
-        saveToHistory();
-    };
-    document.getElementById('propColor').onchange = () => {
-        selectedObject.userData.color = document.getElementById('propColor').value;
-        selectedObject.material.color.set(selectedObject.userData.color);
-        saveToHistory();
-    };
-    document.getElementById('propMaterial').onchange = () => {
-        selectedObject.userData.material = document.getElementById('propMaterial').value;
-        applyMaterialToSelected();
-        saveToHistory();
-    };
-    document.getElementById('applyPropsBtn').onclick = () => {
-        selectedObject.position.set(
-            parseFloat(document.getElementById('propPosX').value),
-            parseFloat(document.getElementById('propPosY').value),
-            parseFloat(document.getElementById('propPosZ').value)
-        );
-        selectedObject.scale.set(
-            parseFloat(document.getElementById('propScaleX').value),
-            parseFloat(document.getElementById('propScaleY').value),
-            parseFloat(document.getElementById('propScaleZ').value)
-        );
-        saveToHistory();
-    };
-}
-
-function renderExplorer() {
-    if (!explorerTree) return;
-    explorerTree.innerHTML = '';
-    
-    objects.forEach(obj => {
-        const div = document.createElement('div');
-        div.className = 'explorer-item';
-        if (selectedObject === obj) div.classList.add('selected');
-        let icon = '🧱';
-        if (obj.userData.type === 'sphere') icon = '⚪';
-        else if (obj.userData.type === 'cylinder') icon = '📦';
-        else if (obj.userData.type === 'cone') icon = '🔺';
-        div.innerHTML = `<span class="icon">${icon}</span><span class="name">${obj.userData.name || 'Объект'}</span>`;
-        div.onclick = (e) => {
-            e.stopPropagation();
-            selectObject(obj);
-        };
-        explorerTree.appendChild(div);
-    });
 }
 
 async function saveGame(isPublished = false) {
@@ -531,14 +574,18 @@ async function saveGame(isPublished = false) {
     }
 }
 
-// Экспорт функции openEditor
+// ========== ЭКСПОРТ ФУНКЦИИ ==========
 export function openEditor(gameToEdit = null) {
+    console.log('openEditor called');
     currentGameId = gameToEdit?.id || null;
-    document.getElementById('mainMenuScreen').classList.add('hidden');
-    document.getElementById('editorScreen').classList.remove('hidden');
+    const mainMenu = document.getElementById('mainMenuScreen');
+    const editorScreen = document.getElementById('editorScreen');
+    if (mainMenu) mainMenu.classList.add('hidden');
+    if (editorScreen) editorScreen.classList.remove('hidden');
     init();
-    if (gameToEdit && gameToEdit.data && gameToEdit.data.blocks) {
+    if (gameToEdit && gameToEdit.data && gameToEdit.data.blocks && Array.isArray(gameToEdit.data.blocks)) {
         gameToEdit.data.blocks.forEach(block => {
+            if (!block) return;
             let geometry;
             switch(block.type) {
                 case 'sphere': geometry = new THREE.SphereGeometry(0.5, 32, 32); break;
@@ -562,13 +609,13 @@ export function openEditor(gameToEdit = null) {
             }
             const mesh = new THREE.Mesh(geometry, material);
             mesh.position.copy(block.position);
-            mesh.rotation.copy(block.rotation);
+            mesh.rotation.set(block.rotation.x, block.rotation.y, block.rotation.z);
             mesh.scale.copy(block.scale);
             mesh.userData = block;
             scene.add(mesh);
             objects.push(mesh);
         });
-        renderExplorer();
+        window.renderExplorer();
         saveToHistory();
     }
-            }
+    }

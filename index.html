@@ -3,89 +3,503 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>BlockVerse Studio</title>
+    <title>BlockVerse Studio — по чертежу</title>
     <style>
-        * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-tap-highlight-color:transparent; }
-        body { font-family:'Segoe UI',sans-serif; background:#1e1f24; color:#ccc; overflow:hidden; height:100vh; width:100%; position:fixed; }
-        .screen { position:absolute; top:0; left:0; width:100%; height:100%; overflow-y:auto; padding:20px; }
-        .hidden { display:none; }
-        #loadingScreen { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:10000; display:flex; align-items:center; justify-content:center; flex-direction:column; }
-        .spinner { width:48px; height:48px; border:4px solid #ff5722; border-top-color:transparent; border-radius:50%; animation:spin 1s linear infinite; }
-        @keyframes spin { to { transform:rotate(360deg); } }
-        .header { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; margin-bottom:30px; background:rgba(0,0,0,0.6); backdrop-filter:blur(12px); padding:12px 24px; border-radius:60px; }
-        .logo { font-size:28px; font-weight:bold; background:linear-gradient(135deg,#ffaa44,#ff5722); -webkit-background-clip:text; background-clip:text; color:transparent; }
-        .user-info { display:flex; gap:20px; align-items:center; flex-wrap:wrap; }
-        .coin-badge { background:#f0b90b; color:#1e1e2a; padding:6px 14px; border-radius:40px; font-weight:bold; display:flex; align-items:center; gap:6px; }
-        .nav-buttons { display:flex; gap:12px; flex-wrap:wrap; }
-        .nav-btn { background:rgba(255,255,255,0.1); backdrop-filter:blur(4px); padding:8px 20px; border-radius:40px; cursor:pointer; font-weight:500; border:1px solid rgba(255,255,255,0.2); }
-        .nav-btn:hover { background:#ff5722; border-color:#ffaa44; }
-        .games-grid, .my-projects-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:24px; margin-top:20px; max-height:calc(100vh - 200px); overflow-y:auto; }
-        .game-card, .project-card { background:rgba(30,35,55,0.8); border-radius:24px; overflow:hidden; cursor:pointer; border:1px solid rgba(255,255,255,0.15); transition:0.2s; }
-        .game-card:hover, .project-card:hover { transform:translateY(-5px); border-color:#ffaa44; }
-        .game-image { height:140px; background:linear-gradient(135deg,#2a3a5a,#1a2a4a); display:flex; align-items:center; justify-content:center; font-size:48px; }
-        .game-info, .project-card { padding:16px; }
-        .game-title { font-size:20px; font-weight:bold; }
-        .game-author { font-size:12px; color:#aaa; }
-        .play-btn { background:#ff5722; border:none; padding:8px 16px; border-radius:30px; font-weight:bold; cursor:pointer; margin-top:8px; width:100%; }
-        .server-join { margin:20px 0; display:flex; gap:12px; align-items:center; background:rgba(0,0,0,0.5); padding:8px 16px; border-radius:40px; flex-wrap:wrap; }
-        .server-join input { flex:1; background:#1a1f2e; border:1px solid #ffaa44; border-radius:40px; padding:8px 16px; color:white; }
-        .shop-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:20px; margin-top:24px; max-height:calc(100vh - 200px); overflow-y:auto; }
-        .shop-item { background:rgba(30,35,55,0.9); border-radius:20px; padding:16px; text-align:center; backdrop-filter:blur(8px); }
-        .price { color:#ffaa44; font-weight:bold; font-size:20px; }
-        .buy-btn { background:#2a6f3f; margin-top:12px; }
-        .social-panels { display:flex; gap:20px; margin-top:20px; flex-wrap:wrap; }
-        .panel { background:rgba(0,0,0,0.6); backdrop-filter:blur(8px); border-radius:20px; padding:16px; flex:1; min-width:250px; }
-        .friend-list, .chat-messages { max-height:200px; overflow-y:auto; margin-bottom:12px; }
-        .friend-item { display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.2); }
-        .chat-input { display:flex; gap:8px; }
-        .chat-input input { flex:1; padding:8px 12px; border-radius:40px; border:none; background:rgba(255,255,255,0.2); color:white; }
-        .chat-input button { background:#ff5722; border:none; padding:8px 16px; border-radius:40px; cursor:pointer; }
-        .studio-layout { display:flex; flex-direction:column; height:100%; background:#1e1f24; }
-        .menu-bar { background:#2c2f36; padding:4px 12px; display:flex; gap:8px; border-bottom:1px solid #3a3e47; }
-        .menu-item { padding:4px 12px; cursor:pointer; font-size:13px; border-radius:4px; color:#ccc; }
-        .menu-item:hover { background:#3a3e47; }
-        .toolbar { background:#2c2f36; padding:6px 12px; display:flex; gap:4px; border-bottom:1px solid #3a3e47; flex-wrap:wrap; }
-        .tool-btn { background:#3a3e47; border:none; color:white; padding:4px 12px; border-radius:4px; cursor:pointer; font-size:12px; }
-        .tool-btn.active { background:#ff5722; }
-        .main-area { display:flex; flex:1; overflow:hidden; }
-        .explorer-panel { width:260px; background:#2c2f36; border-right:1px solid #3a3e47; display:flex; flex-direction:column; }
-        .explorer-header { padding:8px 12px; font-weight:bold; font-size:12px; text-transform:uppercase; background:#25282e; border-bottom:1px solid #3a3e47; display:flex; justify-content:space-between; }
-        .explorer-tree { flex:1; overflow-y:auto; padding:4px; }
-        .explorer-item { padding:4px 8px; margin:1px 0; border-radius:4px; cursor:pointer; display:flex; align-items:center; gap:6px; font-size:12px; }
-        .explorer-item:hover { background:#3a3e47; }
-        .explorer-item.selected { background:#0e639c; }
-        .explorer-item .controls { display:none; gap:4px; }
-        .explorer-item:hover .controls { display:flex; }
-        .explorer-children { margin-left:20px; }
-        .viewport-area { flex:1; position:relative; background:#1a1d24; }
-        .editor-canvas { width:100%; height:100%; }
-        .properties-panel { width:280px; background:#2c2f36; border-left:1px solid #3a3e47; display:flex; flex-direction:column; }
-        .properties-header { padding:8px 12px; font-weight:bold; font-size:12px; text-transform:uppercase; background:#25282e; border-bottom:1px solid #3a3e47; }
-        .properties-content { flex:1; overflow-y:auto; padding:12px; }
-        .prop-group { margin-bottom:12px; }
-        .prop-group label { display:block; margin-bottom:4px; font-size:11px; color:#aaa; }
-        .prop-group input, .prop-group select, .prop-group textarea { width:100%; background:#1a1f2e; border:1px solid #3a3e47; border-radius:4px; padding:6px 8px; color:white; font-size:12px; }
-        .bottom-panel { background:#2c2f36; border-top:1px solid #3a3e47; height:250px; display:flex; flex-direction:column; }
-        .bottom-tabs { display:flex; gap:2px; background:#1e1f24; padding:4px 8px; }
-        .bottom-tab { padding:6px 16px; cursor:pointer; font-size:12px; border-radius:4px 4px 0 0; background:#2c2f36; color:#ccc; }
-        .bottom-tab.active { background:#0e639c; color:white; }
-        .bottom-content { flex:1; overflow-y:auto; padding:12px; }
-        .timeline-canvas { width:100%; height:100px; background:#1a1f2e; border-radius:4px; cursor:pointer; }
-        .block-palette { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
-        .block-option { width:44px; height:44px; border-radius:8px; cursor:pointer; border:2px solid transparent; }
-        .block-option.selected { border-color:#ffaa44; }
-        .code-editor { font-family:monospace; background:#1a1f2e; border:1px solid #3a3e47; border-radius:4px; padding:8px; color:#d4d4d4; font-size:12px; width:100%; height:150px; resize:vertical; }
-        .gui-preview { background:#1a1f2e; min-height:80px; padding:8px; position:relative; }
-        #mobileControls { position:fixed; bottom:20px; left:0; right:0; pointer-events:none; z-index:1000; display:none; }
-        .joystick-container { position:absolute; bottom:0; left:20px; width:120px; height:120px; background:rgba(0,0,0,0.4); border-radius:60px; pointer-events:auto; backdrop-filter:blur(4px); border:2px solid rgba(255,255,255,0.2); }
-        .joystick-thumb { position:absolute; width:50px; height:50px; background:rgba(255,255,255,0.9); border-radius:25px; top:35px; left:35px; transition:0.02s linear; }
-        .mobile-jump-btn { position:absolute; bottom:20px; right:20px; width:70px; height:70px; background:rgba(255,87,34,0.9); border:none; border-radius:35px; color:white; font-size:18px; font-weight:bold; pointer-events:auto; }
-        .exit-editor-btn, .exit-game { position:absolute; top:10px; right:10px; background:#ff3333; border:none; padding:4px 12px; border-radius:4px; color:white; cursor:pointer; z-index:61; font-size:12px; }
-        .custom-game-ui { position:absolute; bottom:10px; left:10px; background:rgba(0,0,0,0.6); padding:4px 12px; border-radius:20px; z-index:20; display:flex; gap:10px; font-size:12px; }
-        @media (max-width:768px) {
-            .explorer-panel { width:200px; }
-            .properties-panel { width:220px; }
-            .bottom-panel { height:180px; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: 'Segoe UI', 'Poppins', system-ui, sans-serif;
+            background: #1e1f24;
+            color: #cccccc;
+            overflow: hidden;
+            height: 100vh;
+            width: 100%;
+            position: fixed;
+        }
+
+        /* Загрузка */
+        #loadingScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.95);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid #ff5722;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow-y: auto;
+            padding: 20px;
+        }
+        .hidden { display: none; }
+
+        /* Главное меню (оставляем как есть) */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 30px;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(12px);
+            padding: 12px 24px;
+            border-radius: 60px;
+        }
+        .logo {
+            font-size: 28px;
+            font-weight: bold;
+            background: linear-gradient(135deg, #ffaa44, #ff5722);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+        .user-info {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .coin-badge {
+            background: #f0b90b;
+            color: #1e1e2a;
+            padding: 6px 14px;
+            border-radius: 40px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .nav-buttons {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .nav-btn {
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(4px);
+            padding: 8px 20px;
+            border-radius: 40px;
+            cursor: pointer;
+            font-weight: 500;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        .nav-btn:hover { background: #ff5722; border-color: #ffaa44; }
+
+        .games-grid, .my-projects-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 24px;
+            margin-top: 20px;
+            max-height: calc(100vh - 200px);
+            overflow-y: auto;
+        }
+        .game-card, .project-card {
+            background: rgba(30,35,55,0.8);
+            border-radius: 24px;
+            overflow: hidden;
+            cursor: pointer;
+            border: 1px solid rgba(255,255,255,0.15);
+            transition: 0.2s;
+        }
+        .game-card:hover, .project-card:hover {
+            transform: translateY(-5px);
+            border-color: #ffaa44;
+        }
+        .game-image {
+            height: 140px;
+            background: linear-gradient(135deg, #2a3a5a, #1a2a4a);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+        }
+        .game-info, .project-card { padding: 16px; }
+        .game-title { font-size: 20px; font-weight: bold; }
+        .game-author { font-size: 12px; color: #aaa; }
+        .play-btn { background: #ff5722; border: none; padding: 8px 16px; border-radius: 30px; font-weight: bold; cursor: pointer; margin-top: 8px; width: 100%; }
+        .server-join { margin: 20px 0; display: flex; gap: 12px; align-items: center; background: rgba(0,0,0,0.5); padding: 8px 16px; border-radius: 40px; flex-wrap: wrap; }
+        .server-join input { flex: 1; background: #1a1f2e; border: 1px solid #ffaa44; border-radius: 40px; padding: 8px 16px; color: white; }
+        .shop-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px; margin-top: 24px; max-height: calc(100vh - 200px); overflow-y: auto; }
+        .shop-item { background: rgba(30,35,55,0.9); border-radius: 20px; padding: 16px; text-align: center; backdrop-filter: blur(8px); }
+        .price { color: #ffaa44; font-weight: bold; font-size: 20px; }
+        .buy-btn { background: #2a6f3f; margin-top: 12px; }
+        .social-panels { display: flex; gap: 20px; margin-top: 20px; flex-wrap: wrap; }
+        .panel { background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); border-radius: 20px; padding: 16px; flex: 1; min-width: 250px; }
+        .friend-list, .chat-messages { max-height: 200px; overflow-y: auto; margin-bottom: 12px; }
+        .friend-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.2); }
+        .chat-input { display: flex; gap: 8px; }
+        .chat-input input { flex: 1; padding: 8px 12px; border-radius: 40px; border: none; background: rgba(255,255,255,0.2); color: white; }
+        .chat-input button { background: #ff5722; border: none; padding: 8px 16px; border-radius: 40px; cursor: pointer; }
+
+        /* ========== НОВЫЙ ИНТЕРФЕЙС ПО ЧЕРТЕЖУ ========== */
+        .studio-layout {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            background: #1e1f24;
+        }
+        /* Верхняя панель инструментов (Move, Rotate, Scale, Model, Animation, VFX, GUI, Light) */
+        .toolbar-main {
+            background: #2c2f36;
+            padding: 6px 12px;
+            display: flex;
+            gap: 8px;
+            border-bottom: 1px solid #3a3e47;
+            flex-wrap: wrap;
+        }
+        .tool-btn {
+            background: #3a3e47;
+            border: none;
+            color: white;
+            padding: 6px 14px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .tool-btn.active { background: #ff5722; }
+        .tool-btn:hover { background: #4a4e55; }
+
+        /* Основная область (Explorer | Viewport | Properties) */
+        .main-area {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+        /* Левая панель Explorer (с поиском, плюсом, деревом) */
+        .explorer-panel {
+            width: 280px;
+            background: #25282e;
+            border-right: 1px solid #3a3e47;
+            display: flex;
+            flex-direction: column;
+        }
+        .explorer-header {
+            padding: 8px 12px;
+            font-weight: bold;
+            font-size: 12px;
+            text-transform: uppercase;
+            background: #1e1f24;
+            border-bottom: 1px solid #3a3e47;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .explorer-toolbar {
+            padding: 6px 8px;
+            display: flex;
+            gap: 6px;
+            border-bottom: 1px solid #3a3e47;
+            background: #25282e;
+        }
+        .explorer-search {
+            flex: 1;
+            background: #1a1f2e;
+            border: 1px solid #3a3e47;
+            border-radius: 4px;
+            padding: 4px 8px;
+            color: white;
+            font-size: 12px;
+        }
+        .explorer-add-btn {
+            background: #3a3e47;
+            border: none;
+            color: white;
+            width: 28px;
+            height: 28px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .explorer-tree {
+            flex: 1;
+            overflow-y: auto;
+            padding: 4px 0;
+        }
+        /* Строка объекта в Explorer */
+        .explorer-item {
+            padding: 4px 8px;
+            margin: 1px 0;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            position: relative;
+            background: transparent;
+            transition: background 0.05s ease;
+        }
+        .explorer-item:hover { background: #2a2a2a; }
+        .explorer-item.selected { background: #3e3e40; border-left: 2px solid #0078d4; }
+        .explorer-item .toggle-icon {
+            width: 16px;
+            text-align: center;
+            cursor: pointer;
+            font-size: 10px;
+        }
+        .explorer-item .type-icon {
+            width: 16px;
+            text-align: center;
+        }
+        .explorer-item .item-name {
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .explorer-item .item-controls {
+            display: none;
+            gap: 4px;
+        }
+        .explorer-item:hover .item-controls { display: flex; }
+        .explorer-item .item-controls button {
+            background: none;
+            border: none;
+            color: #ccc;
+            cursor: pointer;
+            font-size: 12px;
+            width: 20px;
+            border-radius: 2px;
+        }
+        .explorer-item .item-controls button:hover { background: #3a3e47; }
+        .explorer-children {
+            margin-left: 20px;
+        }
+        /* Индикатор перетаскивания */
+        .explorer-item.drag-over {
+            background: #094771;
+        }
+        .drag-placeholder {
+            height: 2px;
+            background: #0078d4;
+            margin: 2px 0;
+        }
+
+        /* 3D Viewport */
+        .viewport-area {
+            flex: 1;
+            position: relative;
+            background: #1a1d24;
+        }
+        .editor-canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Правая панель Properties */
+        .properties-panel {
+            width: 320px;
+            background: #25282e;
+            border-left: 1px solid #3a3e47;
+            display: flex;
+            flex-direction: column;
+        }
+        .properties-header {
+            padding: 8px 12px;
+            font-weight: bold;
+            font-size: 12px;
+            text-transform: uppercase;
+            background: #1e1f24;
+            border-bottom: 1px solid #3a3e47;
+        }
+        .properties-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+        }
+        .prop-group { margin-bottom: 12px; }
+        .prop-group label {
+            display: block;
+            margin-bottom: 4px;
+            font-size: 11px;
+            color: #aaa;
+        }
+        .prop-group input, .prop-group select, .prop-group textarea {
+            width: 100%;
+            background: #1a1f2e;
+            border: 1px solid #3a3e47;
+            border-radius: 4px;
+            padding: 6px 8px;
+            color: white;
+            font-size: 12px;
+        }
+
+        /* Нижняя панель (дополнительные окна: GUI, VFX, Animation) */
+        .bottom-panel {
+            background: #2c2f36;
+            border-top: 1px solid #3a3e47;
+            height: 220px;
+            display: flex;
+            flex-direction: column;
+        }
+        .bottom-tabs {
+            display: flex;
+            gap: 2px;
+            background: #1e1f24;
+            padding: 4px 8px;
+            overflow-x: auto;
+        }
+        .bottom-tab {
+            padding: 6px 16px;
+            cursor: pointer;
+            font-size: 12px;
+            border-radius: 4px 4px 0 0;
+            background: #2c2f36;
+            color: #ccc;
+            white-space: nowrap;
+        }
+        .bottom-tab.active {
+            background: #0e639c;
+            color: white;
+        }
+        .bottom-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+        }
+        .timeline-canvas {
+            width: 100%;
+            height: 100px;
+            background: #1a1f2e;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .block-palette {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+        .block-option {
+            width: 44px;
+            height: 44px;
+            border-radius: 8px;
+            cursor: pointer;
+            border: 2px solid transparent;
+        }
+        .block-option.selected { border-color: #ffaa44; }
+        .code-editor {
+            font-family: monospace;
+            background: #1a1f2e;
+            border: 1px solid #3a3e47;
+            border-radius: 4px;
+            padding: 8px;
+            color: #d4d4d4;
+            font-size: 12px;
+            width: 100%;
+            height: 120px;
+            resize: vertical;
+        }
+        .gui-preview {
+            background: #1a1f2e;
+            min-height: 100px;
+            padding: 8px;
+            position: relative;
+        }
+
+        /* Мобильное управление (как было) */
+        #mobileControls {
+            position: fixed;
+            bottom: 20px;
+            left: 0;
+            right: 0;
+            pointer-events: none;
+            z-index: 1000;
+            display: none;
+        }
+        .joystick-container {
+            position: absolute;
+            bottom: 0;
+            left: 20px;
+            width: 100px;
+            height: 100px;
+            background: rgba(0,0,0,0.4);
+            border-radius: 50px;
+            pointer-events: auto;
+            backdrop-filter: blur(4px);
+            border: 2px solid rgba(255,255,255,0.2);
+        }
+        .joystick-thumb {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            background: rgba(255,255,255,0.9);
+            border-radius: 20px;
+            top: 30px;
+            left: 30px;
+            transition: 0.02s linear;
+        }
+        .mobile-jump-btn {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 60px;
+            height: 60px;
+            background: rgba(255,87,34,0.9);
+            border: none;
+            border-radius: 30px;
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            pointer-events: auto;
+        }
+        .exit-editor-btn, .exit-game {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #ff3333;
+            border: none;
+            padding: 4px 12px;
+            border-radius: 4px;
+            color: white;
+            cursor: pointer;
+            z-index: 61;
+            font-size: 12px;
+        }
+        .custom-game-ui {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.6);
+            padding: 4px 12px;
+            border-radius: 20px;
+            z-index: 20;
+            display: flex;
+            gap: 10px;
+            font-size: 12px;
+        }
+
+        @media (max-width: 768px) {
+            .explorer-panel, .properties-panel { width: 240px; }
+            .bottom-panel { height: 180px; }
+            .tool-btn { padding: 4px 10px; font-size: 11px; }
         }
     </style>
 </head>
@@ -94,7 +508,9 @@
 
 <script>
     if (!sessionStorage.getItem('blockverse_session')) window.location.href = 'login.html';
-    window.addEventListener('load', () => { setTimeout(() => { document.getElementById('loadingScreen').style.display = 'none'; }, 500); });
+    window.addEventListener('load', () => {
+        setTimeout(() => { document.getElementById('loadingScreen').style.display = 'none'; }, 500);
+    });
 </script>
 
 <div id="mainMenuScreen" class="screen">
@@ -121,58 +537,91 @@
     <div id="settingsPanel" style="display:none;"><h2>⚙️ Настройки</h2><label>Скорость: <input type="range" id="moveSpeed" min="2" max="6" step="0.5" value="4"></label><button id="reportBugBtn">Сообщить о проблеме</button><div id="reportsList"></div></div>
 </div>
 
+<!-- НОВЫЙ КОНСТРУКТОР ПО ЧЕРТЕЖУ -->
 <div id="editorScreen" class="screen hidden">
     <div class="studio-layout">
-        <div class="menu-bar">
-            <div class="menu-item">Файл</div>
-            <div class="menu-item">Правка</div>
-            <div class="menu-item">Вид</div>
-            <div class="menu-item" id="saveGameBtn">Сохранить</div>
-            <div class="menu-item" id="publishGameBtn">Опубликовать</div>
+        <!-- Верхняя панель инструментов (Move, Rotate, Scale, Model, Animation, VFX, GUI, Light) -->
+        <div class="toolbar-main">
+            <button class="tool-btn" id="modeMoveBtn">📦 Move</button>
+            <button class="tool-btn" id="modeRotateBtn">🔄 Rotate</button>
+            <button class="tool-btn" id="modeScaleBtn">📏 Scale</button>
+            <button class="tool-btn" id="modelBtn">🎨 Model</button>
+            <button class="tool-btn" id="animationBtn">🎬 Animation</button>
+            <button class="tool-btn" id="vfxBtn">✨ VFX</button>
+            <button class="tool-btn" id="guiBtn">🖥️ GUI</button>
+            <button class="tool-btn" id="lightBtn">💡 Light</button>
         </div>
-        <div class="toolbar">
-            <button class="tool-btn" id="modeMoveBtn">📦 Переместить</button>
-            <button class="tool-btn" id="modeRotateBtn">🔄 Повернуть</button>
-            <button class="tool-btn" id="modeScaleBtn">📏 Масштаб</button>
-            <button class="tool-btn" id="addCubeBtn">➕ Куб</button>
-            <button class="tool-btn" id="deleteBtn">🗑 Удалить</button>
-            <button class="tool-btn" id="duplicateBtn">📋 Дублировать</button>
-            <button class="tool-btn" id="groupBtn">📁 Группа</button>
-        </div>
+
         <div class="main-area">
-            <div class="explorer-panel">
-                <div class="explorer-header"><span>📁 EXPLORER</span><button class="add-btn" id="addFolderBtn">+</button></div>
+            <!-- EXPLORER (полноценный как в Roblox Studio) -->
+            <div class="explorer-panel" id="explorerPanel">
+                <div class="explorer-header">
+                    <span>📁 EXPLORER</span>
+                </div>
+                <div class="explorer-toolbar">
+                    <input type="text" id="explorerSearch" class="explorer-search" placeholder="🔍 Поиск...">
+                    <button id="addFolderBtn" class="explorer-add-btn">+</button>
+                </div>
                 <div id="explorerTree" class="explorer-tree"></div>
             </div>
+
+            <!-- 3D Viewport -->
             <div class="viewport-area">
                 <div id="editorCanvasContainer" class="editor-canvas"></div>
                 <button class="exit-editor-btn" id="exitEditorBtn">✖ Выйти</button>
             </div>
+
+            <!-- PROPERTIES -->
             <div class="properties-panel">
                 <div class="properties-header">⚙️ PROPERTIES</div>
                 <div id="propertiesContent" class="properties-content"></div>
             </div>
         </div>
+
+        <!-- Нижняя панель (дополнительные окна: GUI, VFX, Animation) -->
         <div class="bottom-panel">
             <div class="bottom-tabs">
-                <div class="bottom-tab active" data-tab="blocks">Блоки</div>
+                <div class="bottom-tab active" data-tab="gui">GUI</div>
                 <div class="bottom-tab" data-tab="vfx">VFX</div>
-                <div class="bottom-tab" data-tab="animations">Анимации</div>
-                <div class="bottom-tab" data-tab="scripts">Скрипты</div>
-                <div class="bottom-tab" data-tab="gui">GUI</div>
+                <div class="bottom-tab" data-tab="animations">Animation</div>
+                <div class="bottom-tab" data-tab="scripts">Scripts</div>
                 <div class="bottom-tab" data-tab="npc">NPC</div>
             </div>
             <div class="bottom-content">
-                <div id="blocksTab" class="tab-content active">
-                    <div class="block-palette"><div class="block-option" data-type="wood" style="background:#8B5A2B;"></div><div class="block-option" data-type="stone" style="background:#808080;"></div><div class="block-option" data-type="concrete" style="background:#B0B0B0;"></div><div class="block-option" data-type="dirt" style="background:#6B4C3B;"></div></div>
-                    <label>Цвет: <input type="color" id="blockColorPicker"></label>
-                    <label>Collision: <input type="checkbox" id="blockCollision" checked></label>
+                <!-- GUI Editor -->
+                <div id="guiTab" class="tab-content active">
+                    <div><button id="addButtonBtn">➕ Кнопка</button><button id="addPanelBtn">📦 Панель</button><button id="addTextBtn">📝 Текст</button></div>
+                    <div id="guiElementsList" style="max-height:100px; overflow-y:auto; background:#1a1f2e; margin:8px 0; padding:8px;"></div>
+                    <div id="guiPreview" class="gui-preview"></div>
                 </div>
-                <div id="vfxTab" class="tab-content hidden"><button id="addParticleBtn">➕ Добавить частицы</button><div><button id="vfxFireBtn">🔥 Огонь</button><button id="vfxWaterBtn">💧 Вода</button><button id="vfxAirBtn">💨 Воздух</button><button id="vfxSmokeBtn">🌫️ Дым</button></div></div>
-                <div id="animationsTab" class="tab-content hidden"><div><button id="newAnimationBtn">➕ Создать</button><select id="animationSelect"></select><button id="playAnimationBtn">▶</button><button id="stopAnimationBtn">⏹</button><button id="recordAnimationBtn">🎥 Записать</button></div><canvas id="timelineCanvas" class="timeline-canvas" width="800" height="100"></canvas><div><span id="currentTime">0.00</span><span id="animationDuration">1.00</span></div></div>
-                <div id="scriptsTab" class="tab-content hidden"><textarea id="blockScriptEditor" class="code-editor" placeholder="-- Lua скрипт"></textarea><button id="applyScriptBtn">Применить</button></div>
-                <div id="guiTab" class="tab-content hidden"><div><button id="addButtonBtn">➕ Кнопка</button><button id="addPanelBtn">📦 Панель</button><button id="addTextBtn">📝 Текст</button></div><div id="guiElementsList" style="max-height:100px; overflow-y:auto; background:#1a1f2e; margin:8px 0; padding:8px;"></div><div id="guiPreview" class="gui-preview"></div></div>
-                <div id="npcTab" class="tab-content hidden"><button id="createNpcBtn">➕ Создать NPC</button><div id="npcList" style="max-height:120px; overflow-y:auto; margin-top:8px;"></div><div id="npcProperties" style="background:#1a1f2e; padding:8px; margin-top:8px;"><label>Имя: <input id="npcName" style="width:100%"></label><label>Поведение: <select id="npcBehavior"><option value="idle">Стоять</option><option value="patrol">Патруль</option><option value="follow">Следовать</option></select></label><label>Скорость: <input id="npcSpeed" type="number" value="2"></label><label>Диалог: <textarea id="npcDialog" rows="2"></textarea></label><button id="saveNpcBtn">Сохранить</button></div></div>
+                <!-- VFX Editor -->
+                <div id="vfxTab" class="tab-content hidden">
+                    <button id="addParticleBtn">➕ Добавить частицы</button>
+                    <div><button id="vfxFireBtn">🔥 Огонь</button><button id="vfxWaterBtn">💧 Вода</button><button id="vfxAirBtn">💨 Воздух</button><button id="vfxSmokeBtn">🌫️ Дым</button></div>
+                </div>
+                <!-- Animation Editor -->
+                <div id="animationsTab" class="tab-content hidden">
+                    <div><button id="newAnimationBtn">➕ Создать</button><select id="animationSelect"></select><button id="playAnimationBtn">▶</button><button id="stopAnimationBtn">⏹</button><button id="recordAnimationBtn">🎥 Записать</button></div>
+                    <canvas id="timelineCanvas" class="timeline-canvas" width="800" height="100"></canvas>
+                    <div><span id="currentTime">0.00</span><span id="animationDuration">1.00</span></div>
+                </div>
+                <!-- Scripts Editor -->
+                <div id="scriptsTab" class="tab-content hidden">
+                    <textarea id="blockScriptEditor" class="code-editor" placeholder="-- Lua скрипт"></textarea>
+                    <button id="applyScriptBtn">Применить</button>
+                </div>
+                <!-- NPC Editor -->
+                <div id="npcTab" class="tab-content hidden">
+                    <button id="createNpcBtn">➕ Создать NPC</button>
+                    <div id="npcList" style="max-height:100px; overflow-y:auto; margin-top:8px;"></div>
+                    <div id="npcProperties" style="background:#1a1f2e; padding:8px; margin-top:8px;">
+                        <label>Имя: <input id="npcName" style="width:100%"></label>
+                        <label>Поведение: <select id="npcBehavior"><option value="idle">Стоять</option><option value="patrol">Патруль</option><option value="follow">Следовать</option></select></label>
+                        <label>Скорость: <input id="npcSpeed" type="number" value="2"></label>
+                        <label>Диалог: <textarea id="npcDialog" rows="2"></textarea></label>
+                        <button id="saveNpcBtn">Сохранить</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -195,4 +644,4 @@
 <script type="module" src="platform.js"></script>
 <script type="module" src="editor.js"></script>
 </body>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                </html>
+                    </html>

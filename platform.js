@@ -570,40 +570,95 @@ async function renderMyProjects() {
             `;
             container.appendChild(card);
         });
+        attachMobileEvents();
         
-        document.querySelectorAll('.play-btn-small').forEach(btn => btn.addEventListener('click', async () => { 
-            const id = parseInt(btn.dataset.id); 
-            const game = (await API.getGames()).find(g => g.id === id); 
-            if (game && game.data) startLocalGameSession(JSON.parse(game.data), game.name); 
-        }));
-        document.querySelectorAll('.host-btn-small').forEach(btn => btn.addEventListener('click', async () => { 
-            const id = parseInt(btn.dataset.id); 
-            const game = (await API.getGames()).find(g => g.id === id); 
-            if (game && game.data) createLocalGame(game.name, JSON.parse(game.data)); 
-        }));
-        document.querySelectorAll('.edit-btn-small').forEach(btn => btn.addEventListener('click', async () => { 
-            const id = parseInt(btn.dataset.id); 
-            const game = (await API.getGames()).find(g => g.id === id); 
-            if (game) { 
-                try {
-                    const mod = await import('./editor.js'); 
-                    if (mod.openEditor) mod.openEditor(game);
-                } catch(e) {
-                    console.error('Editor load error:', e);
-                }
-            } 
-        }));
-        document.querySelectorAll('.delete-btn-small').forEach(btn => btn.addEventListener('click', async () => { 
-            const id = parseInt(btn.dataset.id); 
-            if (confirm('Удалить игру?')) { 
-                await API.deleteGame(id, currentUser.username); 
-                renderMyProjects(); 
-            } 
-        }));
+        // ПРИВЯЗКА ОБРАБОТЧИКОВ ДЛЯ КНОПОК
+        document.querySelectorAll('.play-btn-small').forEach(btn => {
+            btn.removeEventListener('click', handlePlayClick);
+            btn.addEventListener('click', handlePlayClick);
+        });
+        document.querySelectorAll('.host-btn-small').forEach(btn => {
+            btn.removeEventListener('click', handleHostClick);
+            btn.addEventListener('click', handleHostClick);
+        });
+        document.querySelectorAll('.edit-btn-small').forEach(btn => {
+            btn.removeEventListener('click', handleEditClick);
+            btn.addEventListener('click', handleEditClick);
+        });
+        document.querySelectorAll('.delete-btn-small').forEach(btn => {
+            btn.removeEventListener('click', handleDeleteClick);
+            btn.addEventListener('click', handleDeleteClick);
+        });
+        
     } catch (e) {
         console.error('renderMyProjects error:', e);
     }
-    attachMobileEvents();
+}
+
+// Обработчики кнопок
+async function handlePlayClick(e) {
+    const btn = e.currentTarget;
+    const id = parseInt(btn.dataset.id);
+    try {
+        const allGames = await API.getGames();
+        const game = allGames.find(g => g.id === id);
+        if (game && game.data) {
+            startLocalGameSession(JSON.parse(game.data), game.name);
+        } else {
+            alert('Ошибка загрузки игры');
+        }
+    } catch(err) {
+        console.error('Play error:', err);
+        alert('Ошибка при запуске игры');
+    }
+}
+
+async function handleHostClick(e) {
+    const btn = e.currentTarget;
+    const id = parseInt(btn.dataset.id);
+    try {
+        const allGames = await API.getGames();
+        const game = allGames.find(g => g.id === id);
+        if (game && game.data) {
+            createLocalGame(game.name, JSON.parse(game.data));
+        } else {
+            alert('Ошибка загрузки игры');
+        }
+    } catch(err) {
+        console.error('Host error:', err);
+        alert('Ошибка при создании сервера');
+    }
+}
+
+async function handleEditClick(e) {
+    const btn = e.currentTarget;
+    const id = parseInt(btn.dataset.id);
+    try {
+        const allGames = await API.getGames();
+        const game = allGames.find(g => g.id === id);
+        if (game) {
+            const mod = await import('./editor.js');
+            if (mod.openEditor) mod.openEditor(game);
+            else console.error('openEditor not found');
+        }
+    } catch(err) {
+        console.error('Edit error:', err);
+        alert('Ошибка при открытии редактора');
+    }
+}
+
+async function handleDeleteClick(e) {
+    const btn = e.currentTarget;
+    const id = parseInt(btn.dataset.id);
+    if (confirm('Удалить игру?')) {
+        try {
+            await API.deleteGame(id, currentUser.username);
+            renderMyProjects();
+        } catch(err) {
+            console.error('Delete error:', err);
+            alert('Ошибка при удалении');
+        }
+    }
 }
 
 function renderShop() {
@@ -832,7 +887,7 @@ document.getElementById('connectToServerBtn')?.addEventListener('click', () => {
     else alert('Введите ID сервера'); 
 });
 
-// ========== ИНИЦИАЛИЗАЦИЯ СЕССИИ С ЗАЩИТОЙ ОТ ОШИБОК ==========
+// ========== ИНИЦИАЛИЗАЦИЯ СЕССИИ ==========
 initMobileControls();
 
 const session = sessionStorage.getItem('blockverse_session');
@@ -851,7 +906,6 @@ if (session && session !== 'undefined' && session !== 'null') {
             document.getElementById('mainMenuScreen').classList.remove('hidden');
             updateUIafterAuth();
         } else {
-            // Данные сессии повреждены
             sessionStorage.removeItem('blockverse_session');
             window.location.href = 'login.html';
         }
@@ -862,4 +916,4 @@ if (session && session !== 'undefined' && session !== 'null') {
     }
 } else { 
     window.location.href = 'login.html'; 
-                                              }
+    }

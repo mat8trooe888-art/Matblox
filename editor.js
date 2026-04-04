@@ -309,4 +309,4 @@ export function openEditor(gameToEdit = null) {
         });
         renderExplorer();
     }
-            }
+}

@@ -1,461 +1,545 @@
-import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { TransformControls } from 'three/addons/controls/TransformControls.js';
-import * as API from './api.js';
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>BlockVerse Studio — Roblox Studio Clone</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
 
-// ========== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ==========
-let editorScene, editorCamera, editorRenderer, editorControls, transformControls;
-let editorObjects = [];
-let selectedObjects = [];
-let currentTransformMode = 'translate';
-let currentColor = '#ffaa44';
-let editorActive = false;
-let editorAnimationId = null;
-let currentGameId = null;
+        body {
+            font-family: 'Segoe UI', 'Poppins', system-ui, sans-serif;
+            background: #1e1f24;
+            color: #cccccc;
+            overflow: hidden;
+            height: 100vh;
+            width: 100%;
+            position: fixed;
+        }
 
-// ========== ЭЛЕМЕНТЫ ИНТЕРФЕЙСА ==========
-let explorerTree, propertiesContent, outputContent;
+        #loadingScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #1e1f24;
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid #ff5722;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
 
-// ========== ИНИЦИАЛИЗАЦИЯ ИНТЕРФЕЙСА ==========
-function initLayout() {
-    // Загрузка сохранённых размеров
-    const savedLayout = localStorage.getItem('blockverse_layout');
-    if (savedLayout) {
-        const layout = JSON.parse(savedLayout);
-        if (layout.leftWidth) document.getElementById('leftDock').style.width = layout.leftWidth;
-        if (layout.rightWidth) document.getElementById('rightDock').style.width = layout.rightWidth;
-        if (layout.bottomHeight) document.getElementById('bottomDock').style.height = layout.bottomHeight;
-    }
-    initResizers();
-    initMenu();
-    initRibbon();
-    initToolbox();
-    initExplorerProperties();
-    initOutputCommand();
-    init3DViewport();
-}
+        .screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+        .hidden { display: none; }
 
-function initResizers() {
-    const leftResizer = document.getElementById('leftResizer');
-    const rightResizer = document.getElementById('rightResizer');
-    const bottomResizer = document.getElementById('bottomResizer');
-    const leftDock = document.getElementById('leftDock');
-    const rightDock = document.getElementById('rightDock');
-    const bottomDock = document.getElementById('bottomDock');
+        /* ========== ROBOXL STUDIO ИНТЕРФЕЙС ========== */
+        .studio-layout {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            background: #1e1f24;
+        }
 
-    let startX, startWidth;
-    leftResizer.addEventListener('mousedown', (e) => {
-        startX = e.clientX;
-        startWidth = leftDock.offsetWidth;
-        document.addEventListener('mousemove', onMouseMoveLeft);
-        document.addEventListener('mouseup', onMouseUpLeft);
-    });
-    function onMouseMoveLeft(e) {
-        const newWidth = startWidth + (e.clientX - startX);
-        if (newWidth >= 150 && newWidth <= 500) {
-            leftDock.style.width = newWidth + 'px';
-            saveLayout();
+        /* TOP DOCK - Главное меню */
+        .top-dock {
+            display: flex;
+            flex-direction: column;
+            background: #2c2f36;
+            border-bottom: 1px solid #3a3e47;
+        }
+        .main-menu {
+            display: flex;
+            gap: 4px;
+            padding: 4px 12px;
+            background: #25282e;
+            border-bottom: 1px solid #3a3e47;
+            height: 28px;
+        }
+        .menu-item {
+            padding: 4px 12px;
+            cursor: pointer;
+            font-size: 12px;
+            border-radius: 4px;
+            color: #e0e0e0;
+        }
+        .menu-item:hover { background: #3a3e47; }
+
+        /* RIBBON - Лента инструментов */
+        .ribbon {
+            background: #2c2f36;
+        }
+        .ribbon-tabs {
+            display: flex;
+            padding: 0 12px;
+            gap: 2px;
+        }
+        .ribbon-tab {
+            padding: 6px 16px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            border-radius: 6px 6px 0 0;
+            background: #2c2f36;
+            color: #e0e0e0;
+        }
+        .ribbon-tab.active {
+            background: #1e1f24;
+            color: white;
+        }
+        .ribbon-content {
+            padding: 6px 12px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+            border-top: 1px solid #3a3e47;
+            background: #1e1f24;
+            min-height: 56px;
+        }
+        .ribbon-group {
+            display: flex;
+            gap: 2px;
+            background: #2c2f36;
+            border-radius: 4px;
+            padding: 4px 6px;
+        }
+        .ribbon-btn {
+            background: none;
+            border: none;
+            color: white;
+            padding: 4px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .ribbon-btn:hover { background: #4a4e55; }
+        .ribbon-btn.active { background: #ff5722; }
+
+        /* MEZZANINE - Антресоль */
+        .mezzanine {
+            padding: 4px 12px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+            background: #25282e;
+            border-top: 1px solid #3a3e47;
+            height: 36px;
+            align-items: center;
+        }
+        .play-btn, .stop-btn {
+            border: none;
+            padding: 4px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 12px;
+        }
+        .play-btn { background: #4caf50; color: white; }
+        .stop-btn { background: #f44336; color: white; }
+
+        /* MAIN DOCKS */
+        .main-docks {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* LEFT DOCK - Toolbox */
+        .left-dock {
+            width: 280px;
+            background: #25282e;
+            border-right: 1px solid #3a3e47;
+            display: flex;
+            flex-direction: column;
+        }
+        .toolbox-header {
+            padding: 8px 12px;
+            font-weight: bold;
+            font-size: 11px;
+            text-transform: uppercase;
+            color: #aaa;
+            border-bottom: 1px solid #3a3e47;
+        }
+        .toolbox-categories {
+            display: flex;
+            gap: 4px;
+            padding: 8px;
+            border-bottom: 1px solid #3a3e47;
+        }
+        .toolbox-cat {
+            background: #3a3e47;
+            padding: 4px 12px;
+            border-radius: 16px;
+            cursor: pointer;
+            font-size: 11px;
+        }
+        .toolbox-cat.active { background: #ff5722; }
+        .asset-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            gap: 8px;
+            padding: 12px;
+            overflow-y: auto;
+            flex: 1;
+        }
+        .asset-item {
+            background: #1a1f2e;
+            border-radius: 8px;
+            padding: 8px;
+            text-align: center;
+            cursor: pointer;
+            font-size: 11px;
+            transition: 0.1s;
+        }
+        .asset-item:hover { background: #3a3e47; }
+
+        /* RIGHT DOCK - Explorer + Properties */
+        .right-dock {
+            width: 360px;
+            background: #25282e;
+            border-left: 1px solid #3a3e47;
+            display: flex;
+            flex-direction: column;
+        }
+        .right-dock-header {
+            display: flex;
+            border-bottom: 1px solid #3a3e47;
+        }
+        .dock-tab {
+            flex: 1;
+            text-align: center;
+            padding: 6px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: bold;
+            background: #25282e;
+        }
+        .dock-tab.active {
+            background: #0e639c;
+            color: white;
+        }
+        .explorer-panel, .properties-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .explorer-search {
+            width: calc(100% - 16px);
+            margin: 8px;
+            background: #1a1f2e;
+            border: 1px solid #3a3e47;
+            border-radius: 4px;
+            padding: 4px 8px;
+            color: white;
+            font-size: 11px;
+        }
+        .explorer-tree {
+            flex: 1;
+            overflow-y: auto;
+            padding: 4px;
+            font-size: 12px;
+        }
+        .explorer-item {
+            padding: 4px 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            border-radius: 4px;
+        }
+        .explorer-item:hover { background: #2a2a2a; }
+        .explorer-item.selected { background: #0e639c; }
+        .explorer-children { margin-left: 20px; }
+
+        .properties-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+        }
+        .prop-group { margin-bottom: 12px; }
+        .prop-group label {
+            display: block;
+            font-size: 11px;
+            color: #aaa;
+            margin-bottom: 4px;
+        }
+        .prop-group input, .prop-group select {
+            width: 100%;
+            background: #1a1f2e;
+            border: 1px solid #3a3e47;
+            border-radius: 4px;
+            padding: 6px 8px;
+            color: white;
+            font-size: 12px;
+        }
+
+        /* CENTER - 3D Viewport */
+        .center-viewport {
+            flex: 1;
+            position: relative;
+            background: #1a1d24;
+        }
+        .canvas-container {
+            width: 100%;
+            height: 100%;
+        }
+        .viewport-controls {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.6);
+            padding: 4px 8px;
+            border-radius: 4px;
+            display: flex;
+            gap: 8px;
+            font-size: 11px;
+        }
+        .viewport-controls button {
+            background: #3a3e47;
+            border: none;
+            padding: 2px 6px;
+            border-radius: 3px;
+            color: white;
+            cursor: pointer;
+        }
+
+        /* BOTTOM DOCK - Output */
+        .bottom-dock {
+            height: 150px;
+            background: #25282e;
+            border-top: 1px solid #3a3e47;
+            display: flex;
+            flex-direction: column;
+        }
+        .output-header {
+            padding: 4px 12px;
+            background: #1e1f24;
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 1px solid #3a3e47;
+            font-size: 11px;
+        }
+        .output-content {
+            flex: 1;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 11px;
+            padding: 8px;
+        }
+        .command-bar {
+            display: flex;
+            border-top: 1px solid #3a3e47;
+        }
+        .command-input {
+            flex: 1;
+            background: #1a1f2e;
+            border: none;
+            padding: 6px 12px;
+            color: white;
+            font-family: monospace;
+            font-size: 11px;
+        }
+
+        /* RESIZERS */
+        .left-resizer, .right-resizer, .bottom-resizer {
+            position: absolute;
+            background: transparent;
+            z-index: 10;
+        }
+        .left-resizer { right: -3px; top: 0; width: 6px; height: 100%; cursor: ew-resize; }
+        .right-resizer { left: -3px; top: 0; width: 6px; height: 100%; cursor: ew-resize; }
+        .bottom-resizer { top: -3px; left: 0; width: 100%; height: 6px; cursor: ns-resize; }
+
+        @media (max-width: 768px) {
+            .left-dock, .right-dock { width: 220px; }
+            .ribbon-content { display: none; }
+        }
+    </style>
+</head>
+<body>
+<div id="loadingScreen"><div class="spinner"></div><div>Загрузка BlockVerse Studio...</div></div>
+
+<div id="studioScreen" class="screen">
+    <div class="studio-layout">
+        <!-- TOP DOCK -->
+        <div class="top-dock">
+            <div class="main-menu">
+                <div class="menu-item" data-action="file">File</div>
+                <div class="menu-item" data-action="edit">Edit</div>
+                <div class="menu-item" data-action="view">View</div>
+                <div class="menu-item" data-action="insert">Insert</div>
+                <div class="menu-item" data-action="model">Model</div>
+                <div class="menu-item" data-action="avatar">Avatar</div>
+                <div class="menu-item" data-action="test">Test</div>
+                <div class="menu-item" data-action="plugins">Plugins</div>
+                <div class="menu-item" data-action="help">Help</div>
+            </div>
+            <div class="ribbon">
+                <div class="ribbon-tabs">
+                    <div class="ribbon-tab active" data-tab="home">Home</div>
+                    <div class="ribbon-tab" data-tab="model">Model</div>
+                    <div class="ribbon-tab" data-tab="avatar">Avatar</div>
+                    <div class="ribbon-tab" data-tab="test">Test</div>
+                    <div class="ribbon-tab" data-tab="view">View</div>
+                    <div class="ribbon-tab" data-tab="plugins">Plugins</div>
+                </div>
+                <div id="ribbonHome" class="ribbon-content">
+                    <div class="ribbon-group">
+                        <button class="ribbon-btn" id="modeMoveBtn">Move</button>
+                        <button class="ribbon-btn" id="modeRotateBtn">Rotate</button>
+                        <button class="ribbon-btn" id="modeScaleBtn">Scale</button>
+                    </div>
+                    <div class="ribbon-group">
+                        <button class="ribbon-btn" id="addPartBtn">Part</button>
+                        <button class="ribbon-btn" id="addSphereBtn">Sphere</button>
+                        <button class="ribbon-btn" id="addCylinderBtn">Cylinder</button>
+                    </div>
+                    <div class="ribbon-group">
+                        <input type="color" id="colorPicker" value="#ffaa44" style="width:32px; height:24px; border:none;">
+                        <select id="materialSelect"><option>Plastic</option><option>Metal</option></select>
+                    </div>
+                </div>
+                <div id="ribbonModel" class="ribbon-content hidden">
+                    <div class="ribbon-group"><button class="ribbon-btn">Align</button><button class="ribbon-btn">Union</button></div>
+                </div>
+                <div id="ribbonAvatar" class="ribbon-content hidden">
+                    <div class="ribbon-group"><button class="ribbon-btn">Create Rig</button></div>
+                </div>
+                <div id="ribbonTest" class="ribbon-content hidden">
+                    <div class="ribbon-group"><button class="ribbon-btn" id="playTestBtn">Play</button><button class="ribbon-btn" id="stopTestBtn">Stop</button></div>
+                </div>
+                <div id="ribbonView" class="ribbon-content hidden">
+                    <div class="ribbon-group"><button class="ribbon-btn" id="toggleGridBtn">Grid</button><button class="ribbon-btn" id="toggleWireframeBtn">Wireframe</button></div>
+                </div>
+                <div id="ribbonPlugins" class="ribbon-content hidden">
+                    <div class="ribbon-group"><button class="ribbon-btn">Plugin 1</button></div>
+                </div>
+            </div>
+            <div class="mezzanine">
+                <button class="play-btn" id="playBtn">▶ Play</button>
+                <button class="stop-btn" id="stopBtn">⏹ Stop</button>
+                <span>🤖 Assistant</span>
+                <span>👤 User</span>
+            </div>
+        </div>
+
+        <!-- MAIN DOCKS -->
+        <div class="main-docks">
+            <!-- LEFT DOCK - Toolbox -->
+            <div class="left-dock" id="leftDock">
+                <div class="toolbox-header">📦 TOOLBOX</div>
+                <div class="toolbox-categories">
+                    <div class="toolbox-cat active" data-cat="marketplace">Marketplace</div>
+                    <div class="toolbox-cat" data-cat="inventory">Inventory</div>
+                    <div class="toolbox-cat" data-cat="recent">Recent</div>
+                </div>
+                <div id="toolboxMarketplace" class="asset-grid">
+                    <div class="asset-item" data-asset="cube">🧊 Cube</div>
+                    <div class="asset-item" data-asset="sphere">⚪ Sphere</div>
+                    <div class="asset-item" data-asset="cylinder">📦 Cylinder</div>
+                    <div class="asset-item" data-asset="lamp">💡 Lamp</div>
+                </div>
+                <div id="toolboxInventory" class="asset-grid hidden"></div>
+                <div id="toolboxRecent" class="asset-grid hidden"></div>
+                <div class="left-resizer" id="leftResizer"></div>
+            </div>
+
+            <!-- CENTER - 3D Viewport -->
+            <div class="center-viewport">
+                <div id="editorCanvasContainer" class="canvas-container"></div>
+                <div class="viewport-controls">
+                    <button id="toggleGridBtn2">🔲 Grid</button>
+                    <button id="toggleWireframeBtn2">📐 Wireframe</button>
+                    <select id="coordSystem"><option value="global">Global</option><option value="local">Local</option></select>
+                </div>
+            </div>
+
+            <!-- RIGHT DOCK - Explorer + Properties -->
+            <div class="right-dock" id="rightDock">
+                <div class="right-dock-header">
+                    <div class="dock-tab active" id="explorerTabBtn">Explorer</div>
+                    <div class="dock-tab" id="propertiesTabBtn">Properties</div>
+                </div>
+                <div id="explorerContainer" class="explorer-panel">
+                    <input type="text" id="explorerSearch" class="explorer-search" placeholder="🔍 Search...">
+                    <div id="explorerTree" class="explorer-tree"></div>
+                </div>
+                <div id="propertiesContainer" class="properties-panel" style="display: none;">
+                    <div id="propertiesContent" class="properties-content"></div>
+                </div>
+                <div class="right-resizer" id="rightResizer"></div>
+            </div>
+        </div>
+
+        <!-- BOTTOM DOCK - Output -->
+        <div class="bottom-dock" id="bottomDock">
+            <div class="output-header">
+                <span>Output</span>
+                <button id="clearOutputBtn">Clear</button>
+            </div>
+            <div id="outputContent" class="output-content"></div>
+            <div class="command-bar">
+                <span style="padding:6px 12px;">&gt;</span>
+                <input type="text" id="commandInput" class="command-input" placeholder="Lua command...">
+            </div>
+            <div class="bottom-resizer" id="bottomResizer"></div>
+        </div>
+    </div>
+</div>
+
+<script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.128.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.128.0/examples/jsm/"
         }
     }
-    function onMouseUpLeft() {
-        document.removeEventListener('mousemove', onMouseMoveLeft);
-        document.removeEventListener('mouseup', onMouseUpLeft);
+</script>
+
+<script>
+    // Скрываем загрузку после полной загрузки страницы
+    window.addEventListener('load', function() {
+        setTimeout(function() {
+            var loading = document.getElementById('loadingScreen');
+            if (loading) loading.style.display = 'none';
+        }, 500);
+    });
+    
+    // Проверка сессии
+    if (!sessionStorage.getItem('blockverse_session')) {
+        window.location.href = 'login.html';
     }
+</script>
 
-    rightResizer.addEventListener('mousedown', (e) => {
-        startX = e.clientX;
-        startWidth = rightDock.offsetWidth;
-        document.addEventListener('mousemove', onMouseMoveRight);
-        document.addEventListener('mouseup', onMouseUpRight);
-    });
-    function onMouseMoveRight(e) {
-        const newWidth = startWidth - (e.clientX - startX);
-        if (newWidth >= 200 && newWidth <= 600) {
-            rightDock.style.width = newWidth + 'px';
-            saveLayout();
-        }
-    }
-    function onMouseUpRight() {
-        document.removeEventListener('mousemove', onMouseMoveRight);
-        document.removeEventListener('mouseup', onMouseUpRight);
-    }
-
-    let startY, startHeight;
-    bottomResizer.addEventListener('mousedown', (e) => {
-        startY = e.clientY;
-        startHeight = bottomDock.offsetHeight;
-        document.addEventListener('mousemove', onMouseMoveBottom);
-        document.addEventListener('mouseup', onMouseUpBottom);
-    });
-    function onMouseMoveBottom(e) {
-        const newHeight = startHeight - (e.clientY - startY);
-        if (newHeight >= 80 && newHeight <= 400) {
-            bottomDock.style.height = newHeight + 'px';
-            saveLayout();
-        }
-    }
-    function onMouseUpBottom() {
-        document.removeEventListener('mousemove', onMouseMoveBottom);
-        document.removeEventListener('mouseup', onMouseUpBottom);
-    }
-}
-
-function saveLayout() {
-    const layout = {
-        leftWidth: document.getElementById('leftDock').style.width,
-        rightWidth: document.getElementById('rightDock').style.width,
-        bottomHeight: document.getElementById('bottomDock').style.height
-    };
-    localStorage.setItem('blockverse_layout', JSON.stringify(layout));
-}
-
-function initMenu() {
-    const menuItems = document.querySelectorAll('.menu-item');
-    menuItems.forEach(item => {
-        item.addEventListener('click', () => {
-            const action = item.textContent.toLowerCase();
-            if (action === 'file') alert('Новый проект');
-            else if (action === 'edit') alert('Открыть проект');
-            else if (action === 'view') alert('Сохранить');
-            else if (action === 'insert') addDefaultBlock();
-            else if (action === 'test') alert('Тестирование');
-            else if (action === 'resetlayout') resetLayout();
-        });
-    });
-}
-
-function resetLayout() {
-    localStorage.removeItem('blockverse_layout');
-    location.reload();
-}
-
-function initRibbon() {
-    const tabs = document.querySelectorAll('.ribbon-tab');
-    const contents = document.querySelectorAll('.ribbon-content');
-    tabs.forEach(tab => {
-        tab.addEventListener('click', () => {
-            const tabId = tab.dataset.tab;
-            tabs.forEach(t => t.classList.remove('active'));
-            tab.classList.add('active');
-            contents.forEach(c => c.classList.add('hidden'));
-            document.getElementById(`ribbon${tabId.charAt(0).toUpperCase() + tabId.slice(1)}`).classList.remove('hidden');
-        });
-    });
-    document.getElementById('modeMoveBtn').onclick = () => { if (transformControls) transformControls.setMode('translate'); };
-    document.getElementById('modeRotateBtn').onclick = () => { if (transformControls) transformControls.setMode('rotate'); };
-    document.getElementById('modeScaleBtn').onclick = () => { if (transformControls) transformControls.setMode('scale'); };
-    document.getElementById('addPartBtn').onclick = () => addDefaultBlock('box');
-    document.getElementById('addSphereBtn').onclick = () => addDefaultBlock('sphere');
-    document.getElementById('addCylinderBtn').onclick = () => addDefaultBlock('cylinder');
-    document.getElementById('colorPicker').onchange = (e) => { currentColor = e.target.value; if (selectedObjects[0] && selectedObjects[0].material) selectedObjects[0].material.color.set(currentColor); };
-}
-
-function initToolbox() {
-    const cats = document.querySelectorAll('.toolbox-cat');
-    const contents = {
-        marketplace: document.getElementById('toolboxMarketplace'),
-        inventory: document.getElementById('toolboxInventory'),
-        recent: document.getElementById('toolboxRecent'),
-        creations: document.getElementById('toolboxCreations')
-    };
-    cats.forEach(cat => {
-        cat.addEventListener('click', () => {
-            cats.forEach(c => c.classList.remove('active'));
-            cat.classList.add('active');
-            Object.values(contents).forEach(c => c.classList.add('hidden'));
-            contents[cat.dataset.cat].classList.remove('hidden');
-        });
-    });
-    document.querySelectorAll('.asset-item').forEach(asset => {
-        asset.addEventListener('click', () => {
-            const type = asset.dataset.asset;
-            if (type === 'cube') addDefaultBlock('box');
-            if (type === 'sphere') addDefaultBlock('sphere');
-            if (type === 'lamp') addDefaultBlock('cylinder');
-        });
-    });
-}
-
-function initExplorerProperties() {
-    explorerTree = document.getElementById('explorerTree');
-    propertiesContent = document.getElementById('propertiesContent');
-    document.getElementById('explorerSearch').addEventListener('input', (e) => {
-        const search = e.target.value.toLowerCase();
-        document.querySelectorAll('.explorer-item').forEach(el => {
-            const name = el.textContent.toLowerCase();
-            el.style.display = name.includes(search) ? 'flex' : 'none';
-        });
-    });
-    document.getElementById('explorerTabBtn').onclick = () => {
-        document.getElementById('explorerPanel').style.display = 'flex';
-        document.getElementById('propertiesPanel').style.display = 'none';
-        document.getElementById('explorerTabBtn').style.background = '#0e639c';
-        document.getElementById('propertiesTabBtn').style.background = '';
-    };
-    document.getElementById('propertiesTabBtn').onclick = () => {
-        document.getElementById('explorerPanel').style.display = 'none';
-        document.getElementById('propertiesPanel').style.display = 'flex';
-        document.getElementById('propertiesTabBtn').style.background = '#0e639c';
-        document.getElementById('explorerTabBtn').style.background = '';
-    };
-}
-
-function initOutputCommand() {
-    outputContent = document.getElementById('outputContent');
-    const commandInput = document.getElementById('commandInput');
-    commandInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            const cmd = commandInput.value;
-            addOutputMessage(`> ${cmd}`);
-            addOutputMessage(`Результат: команда "${cmd}" выполнена (заглушка)`);
-            commandInput.value = '';
-        }
-    });
-    document.getElementById('clearOutputBtn').onclick = () => { outputContent.innerHTML = ''; };
-}
-
-function addOutputMessage(msg, type = 'info') {
-    const div = document.createElement('div');
-    div.style.color = type === 'error' ? '#ff6666' : '#88ff88';
-    div.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
-    outputContent.appendChild(div);
-    outputContent.scrollTop = outputContent.scrollHeight;
-}
-
-// ========== 3D СЦЕНА И ОБЪЕКТЫ ==========
-function init3DViewport() {
-    const container = document.getElementById('editorCanvasContainer');
-    container.innerHTML = '';
-    editorScene = new THREE.Scene();
-    editorScene.background = new THREE.Color(0x1a1d24);
-    editorScene.fog = new THREE.FogExp2(0x1a1d24, 0.008);
-    editorCamera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
-    editorCamera.position.set(15, 12, 15);
-    editorRenderer = new THREE.WebGLRenderer({ antialias: true });
-    editorRenderer.setSize(container.clientWidth, container.clientHeight);
-    editorRenderer.shadowMap.enabled = true;
-    container.appendChild(editorRenderer.domElement);
-    editorControls = new OrbitControls(editorCamera, editorRenderer.domElement);
-    editorControls.enableDamping = true;
-    transformControls = new TransformControls(editorCamera, editorRenderer.domElement);
-    transformControls.addEventListener('dragging-changed', (event) => { editorControls.enabled = !event.value; });
-    transformControls.addEventListener('objectChange', () => { if (selectedObjects.length) updatePropertiesPanel(); });
-    editorScene.add(transformControls);
-
-    const ambient = new THREE.AmbientLight(0x404060);
-    editorScene.add(ambient);
-    const dirLight = new THREE.DirectionalLight(0xfff5d1, 1.2);
-    dirLight.position.set(5, 10, 7);
-    dirLight.castShadow = true;
-    editorScene.add(dirLight);
-    const fillLight = new THREE.PointLight(0x4466cc, 0.5);
-    fillLight.position.set(2, 3, 4);
-    editorScene.add(fillLight);
-    const gridHelper = new THREE.GridHelper(100, 20, 0x88aaff, 0x335588);
-    editorScene.add(gridHelper);
-    const axesHelper = new THREE.AxesHelper(5);
-    editorScene.add(axesHelper);
-    document.getElementById('toggleGridBtn').onclick = () => { gridHelper.visible = !gridHelper.visible; };
-    document.getElementById('toggleWireframeBtn').onclick = () => {
-        editorObjects.forEach(obj => {
-            if (obj.material) obj.material.wireframe = !obj.material.wireframe;
-        });
-    };
-
-    addDefaultBlock('box');
-    renderExplorer();
-
-    function animate() {
-        if (!editorActive) return;
-        editorAnimationId = requestAnimationFrame(animate);
-        editorControls.update();
-        editorRenderer.render(editorScene, editorCamera);
-    }
-    editorActive = true;
-    animate();
-    window.addEventListener('resize', () => {
-        editorCamera.aspect = container.clientWidth / container.clientHeight;
-        editorCamera.updateProjectionMatrix();
-        editorRenderer.setSize(container.clientWidth, container.clientHeight);
-    });
-}
-
-function addDefaultBlock(shape = 'box') {
-    let geometry;
-    if (shape === 'sphere') geometry = new THREE.SphereGeometry(0.5, 32, 32);
-    else if (shape === 'cylinder') geometry = new THREE.CylinderGeometry(0.5, 0.5, 1, 32);
-    else geometry = new THREE.BoxGeometry(1, 1, 1);
-    const material = new THREE.MeshStandardMaterial({ color: currentColor });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(0, 1, 0);
-    mesh.userData = { name: `Block_${Date.now()}`, color: currentColor };
-    editorScene.add(mesh);
-    editorObjects.push(mesh);
-    renderExplorer();
-    selectObject(mesh);
-}
-
-function selectObject(obj) {
-    clearSelection();
-    selectedObjects = [obj];
-    if (transformControls) transformControls.attach(obj);
-    updatePropertiesPanel();
-    renderExplorer();
-}
-
-function clearSelection() {
-    if (transformControls && transformControls.object) transformControls.detach();
-    selectedObjects = [];
-    updatePropertiesPanel();
-    renderExplorer();
-}
-
-function renderExplorer() {
-    if (!explorerTree) return;
-    explorerTree.innerHTML = '';
-    editorObjects.forEach(obj => {
-        const div = document.createElement('div');
-        div.className = 'explorer-item';
-        if (selectedObjects.includes(obj)) div.classList.add('selected');
-        div.innerHTML = `<span class="icon">🧱</span><span class="name">${obj.userData.name || 'Object'}</span>`;
-        div.onclick = (e) => {
-            e.stopPropagation();
-            selectObject(obj);
-        };
-        explorerTree.appendChild(div);
-    });
-}
-
-function updatePropertiesPanel() {
-    if (!propertiesContent) return;
-    if (selectedObjects.length === 0) {
-        propertiesContent.innerHTML = '<div style="color:#aaa;">Ничего не выбрано</div>';
-        return;
-    }
-    const obj = selectedObjects[0];
-    propertiesContent.innerHTML = `
-        <div class="prop-group"><label>Name</label><input id="propName" value="${obj.userData.name || ''}"></div>
-        <div class="prop-group"><label>Position X</label><input id="propPosX" type="number" step="0.1" value="${obj.position.x.toFixed(2)}"></div>
-        <div class="prop-group"><label>Position Y</label><input id="propPosY" type="number" step="0.1" value="${obj.position.y.toFixed(2)}"></div>
-        <div class="prop-group"><label>Position Z</label><input id="propPosZ" type="number" step="0.1" value="${obj.position.z.toFixed(2)}"></div>
-        <div class="prop-group"><label>Color</label><input id="propColor" type="color" value="${obj.userData.color || '#ffaa44'}"></div>
-        <button id="applyPropsBtn">Apply</button>
-    `;
-    document.getElementById('propName').onchange = () => { obj.userData.name = document.getElementById('propName').value; renderExplorer(); };
-    document.getElementById('propPosX').onchange = () => { obj.position.x = parseFloat(document.getElementById('propPosX').value); };
-    document.getElementById('propPosY').onchange = () => { obj.position.y = parseFloat(document.getElementById('propPosY').value); };
-    document.getElementById('propPosZ').onchange = () => { obj.position.z = parseFloat(document.getElementById('propPosZ').value); };
-    document.getElementById('propColor').onchange = () => { obj.userData.color = document.getElementById('propColor').value; obj.material.color.set(obj.userData.color); };
-    document.getElementById('applyPropsBtn').onclick = () => {
-        obj.position.set(
-            parseFloat(document.getElementById('propPosX').value),
-            parseFloat(document.getElementById('propPosY').value),
-            parseFloat(document.getElementById('propPosZ').value)
-        );
-    };
-}
-
-// ========== СОХРАНЕНИЕ И ПУБЛИКАЦИЯ ==========
-async function saveGame(isPublished = false) {
-    if (!window.currentUser) { alert('Не авторизован'); return; }
-    const gameName = prompt('Название игры:', currentGameId ? 'Моя игра' : 'Новая игра');
-    if (!gameName) return;
-    const description = prompt('Описание игры:', '');
-    const gameData = {
-        blocks: editorObjects.map(obj => ({
-            type: 'block',
-            name: obj.userData.name,
-            position: { x: obj.position.x, y: obj.position.y, z: obj.position.z },
-            rotation: { x: obj.rotation.x, y: obj.rotation.y, z: obj.rotation.z },
-            scale: { x: obj.scale.x, y: obj.scale.y, z: obj.scale.z },
-            userData: obj.userData
-        }))
-    };
-    let result;
-    if (currentGameId && !isPublished) result = await API.updateGame(currentGameId, gameName, description, gameData);
-    else result = await API.saveGame(gameName, window.currentUser.username, gameData, description);
-    if (result.success || result.id) {
-        alert(isPublished ? 'Игра опубликована!' : 'Игра сохранена!');
-    } else alert('Ошибка: ' + (result.error || 'Неизвестная ошибка'));
-}
-
-// ========== ЗАГРУЗКА ШАБЛОНОВ ==========
-function loadTemplate(template) {
-    // Очистка сцены
-    editorObjects.forEach(obj => editorScene.remove(obj));
-    editorObjects = [];
-    if (template === 'platformer') {
-        const ground = new THREE.Mesh(new THREE.BoxGeometry(30, 1, 30), new THREE.MeshStandardMaterial({ color: 0x6B8E23 }));
-        ground.position.y = -0.5;
-        ground.userData = { name: 'Ground' };
-        editorScene.add(ground);
-        editorObjects.push(ground);
-        for (let i = -3; i <= 3; i++) {
-            const plat = new THREE.Mesh(new THREE.BoxGeometry(2, 0.5, 2), new THREE.MeshStandardMaterial({ color: 0xaa8866 }));
-            plat.position.set(i * 2.5, 0.5 + Math.abs(i) * 0.5, 0);
-            plat.userData = { name: `Platform_${i}` };
-            editorScene.add(plat);
-            editorObjects.push(plat);
-        }
-    } else if (template === 'racing') {
-        for (let i = 0; i < 12; i++) {
-            const angle = (i / 12) * Math.PI * 2;
-            const road = new THREE.Mesh(new THREE.BoxGeometry(2, 0.2, 2), new THREE.MeshStandardMaterial({ color: 0x555555 }));
-            road.position.set(Math.cos(angle) * 8, -0.3, Math.sin(angle) * 8);
-            road.userData = { name: `Road_${i}` };
-            editorScene.add(road);
-            editorObjects.push(road);
-        }
-    } else if (template === 'rpg') {
-        const ground = new THREE.Mesh(new THREE.BoxGeometry(40, 1, 40), new THREE.MeshStandardMaterial({ color: 0x4a7a4a }));
-        ground.position.y = -0.5;
-        ground.userData = { name: 'Grass' };
-        editorScene.add(ground);
-        editorObjects.push(ground);
-        const house = new THREE.Mesh(new THREE.BoxGeometry(3, 2, 3), new THREE.MeshStandardMaterial({ color: 0xaa8866 }));
-        house.position.set(6, 0, 6);
-        house.userData = { name: 'House' };
-        editorScene.add(house);
-        editorObjects.push(house);
-    }
-    renderExplorer();
-}
-
-// ========== ЭКСПОРТ ФУНКЦИИ ОТКРЫТИЯ РЕДАКТОРА ==========
-export function openEditor(gameToEdit = null) {
-    currentGameId = gameToEdit?.id || null;
-    document.getElementById('startPage').classList.add('hidden');
-    document.getElementById('studioScreen').classList.remove('hidden');
-    initLayout();
-    if (gameToEdit && gameToEdit.data) {
-        gameToEdit.data.blocks.forEach(block => {
-            const geometry = new THREE.BoxGeometry(1, 1, 1);
-            const material = new THREE.MeshStandardMaterial({ color: block.userData.color });
-            const mesh = new THREE.Mesh(geometry, material);
-            mesh.position.copy(block.position);
-            mesh.userData = block.userData;
-            editorScene.add(mesh);
-            editorObjects.push(mesh);
-        });
-        renderExplorer();
-    }
-}
-
-// Стартовая страница – шаблоны
-document.getElementById('newEmptyProjectBtn').onclick = () => {
-    document.getElementById('startPage').classList.add('hidden');
-    document.getElementById('studioScreen').classList.remove('hidden');
-    initLayout();
-};
-document.querySelectorAll('.template-card').forEach(card => {
-    card.addEventListener('click', () => {
-        const template = card.dataset.template;
-        document.getElementById('startPage').classList.add('hidden');
-        document.getElementById('studioScreen').classList.remove('hidden');
-        initLayout();
-        loadTemplate(template);
-    });
-});
-document.getElementById('playBtn').onclick = () => addOutputMessage('Игровой режим запущен (симуляция)');
-document.getElementById('stopBtn').onclick = () => addOutputMessage('Игровой режим остановлен');
-document.getElementById('assistantBtn').onclick = () => alert('AI-помощник в разработке');
+<script type="module" src="platform.js"></script>
+<script type="module" src="editor.js"></script>
+</body>
+</html>

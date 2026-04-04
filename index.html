@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>BlockVerse Studio — Roblox Studio clone</title>
+    <title>BlockVerse Studio</title>
     <style>
         * {
             margin: 0;
@@ -23,7 +23,6 @@
             position: fixed;
         }
 
-        /* Загрузка */
         #loadingScreen {
             position: fixed;
             top: 0;
@@ -58,7 +57,6 @@
         }
         .hidden { display: none; }
 
-        /* ========== СТАРТОВАЯ СТРАНИЦА ========== */
         .start-page {
             background: #1e1f24;
             padding: 40px;
@@ -93,7 +91,6 @@
             margin-top: 10px;
         }
 
-        /* ========== ROBOXL STUDIO ИНТЕРФЕЙС ========== */
         .studio-layout {
             display: flex;
             flex-direction: column;
@@ -101,14 +98,12 @@
             background: #1e1f24;
         }
 
-        /* Верхняя область (Top Dock) */
         .top-dock {
             display: flex;
             flex-direction: column;
             background: #2c2f36;
             border-bottom: 1px solid #3a3e47;
         }
-        /* Главное меню */
         .main-menu {
             display: flex;
             gap: 4px;
@@ -123,7 +118,6 @@
             border-radius: 4px;
         }
         .menu-item:hover { background: #3a3e47; }
-        /* Ribbon (лента) */
         .ribbon {
             background: #2c2f36;
         }
@@ -169,8 +163,6 @@
             cursor: pointer;
             font-size: 12px;
         }
-        .ribbon-btn.active { background: #ff5722; }
-        /* Антресоль (Mezzanine) */
         .mezzanine {
             padding: 4px 12px;
             display: flex;
@@ -180,14 +172,12 @@
             border-top: 1px solid #3a3e47;
         }
 
-        /* Основная область с док-панелями */
         .main-docks {
             display: flex;
             flex: 1;
             overflow: hidden;
             position: relative;
         }
-        /* Левая панель (Toolbox) */
         .left-dock {
             width: 280px;
             background: #25282e;
@@ -205,7 +195,6 @@
             cursor: ew-resize;
             z-index: 10;
         }
-        /* Правая панель (Explorer + Properties) */
         .right-dock {
             width: 360px;
             background: #25282e;
@@ -223,13 +212,11 @@
             cursor: ew-resize;
             z-index: 10;
         }
-        /* Центральная область (Viewport) */
         .center-viewport {
             flex: 1;
             position: relative;
             background: #1a1d24;
         }
-        /* Нижняя панель (Output) */
         .bottom-dock {
             height: 150px;
             background: #25282e;
@@ -248,7 +235,6 @@
             z-index: 10;
         }
 
-        /* Панель Toolbox */
         .toolbox-categories {
             display: flex;
             gap: 8px;
@@ -278,7 +264,6 @@
             cursor: pointer;
         }
 
-        /* Explorer и Properties */
         .explorer-header, .properties-header {
             padding: 6px 12px;
             background: #1e1f24;
@@ -336,7 +321,6 @@
             color: white;
         }
 
-        /* Output */
         .output-header {
             padding: 4px 12px;
             background: #1e1f24;
@@ -364,7 +348,6 @@
             font-family: monospace;
         }
 
-        /* 3D Viewport */
         .canvas-container {
             width: 100%;
             height: 100%;
@@ -389,7 +372,6 @@
 <body>
 <div id="loadingScreen"><div class="spinner"></div><div>Загрузка BlockVerse Studio...</div></div>
 
-<!-- СТАРТОВАЯ СТРАНИЦА -->
 <div id="startPage" class="screen start-page">
     <h1>Добро пожаловать в BlockVerse Studio</h1>
     <div style="display: flex; gap: 20px; margin: 30px 0;">
@@ -405,10 +387,8 @@
     </div>
 </div>
 
-<!-- ОСНОВНОЙ ИНТЕРФЕЙС СТУДИИ -->
 <div id="studioScreen" class="screen hidden">
     <div class="studio-layout">
-        <!-- TOP DOCK -->
         <div class="top-dock">
             <div class="main-menu">
                 <div class="menu-item" data-action="new">File</div>
@@ -460,9 +440,7 @@
             </div>
         </div>
 
-        <!-- MAIN DOCKS -->
         <div class="main-docks">
-            <!-- LEFT DOCK (Toolbox) -->
             <div class="left-dock" id="leftDock">
                 <div class="toolbox-categories">
                     <div class="toolbox-cat active" data-cat="marketplace">Marketplace</div>
@@ -481,7 +459,6 @@
                 <div class="left-resizer" id="leftResizer"></div>
             </div>
 
-            <!-- CENTER VIEWPORT -->
             <div class="center-viewport">
                 <div id="editorCanvasContainer" class="canvas-container"></div>
                 <div class="viewport-controls">
@@ -491,7 +468,6 @@
                 </div>
             </div>
 
-            <!-- RIGHT DOCK (Explorer + Properties) -->
             <div class="right-dock" id="rightDock">
                 <div style="display: flex; border-bottom: 1px solid #3a3e47;">
                     <div id="explorerTabBtn" style="flex:1; text-align:center; padding:6px; cursor:pointer; background:#0e639c;">Explorer</div>
@@ -508,7 +484,6 @@
             </div>
         </div>
 
-        <!-- BOTTOM DOCK (Output) -->
         <div class="bottom-dock" id="bottomDock">
             <div class="output-header">
                 <span>Output</span>
@@ -532,6 +507,39 @@
         }
     }
 </script>
+
+<script>
+    // Проверка сессии и скрытие загрузки
+    (function() {
+        const loadingScreen = document.getElementById('loadingScreen');
+        
+        // Проверяем сессию
+        if (!sessionStorage.getItem('blockverse_session')) {
+            window.location.href = 'login.html';
+            return;
+        }
+        
+        // Ждём полной загрузки страницы и всех скриптов
+        window.addEventListener('load', function() {
+            // Скрываем загрузку через 500 мс, чтобы дать время скриптам инициализироваться
+            setTimeout(function() {
+                if (loadingScreen) {
+                    loadingScreen.style.display = 'none';
+                }
+            }, 500);
+        });
+        
+        // Обработка ошибок скриптов
+        window.onerror = function(msg, url, line, col, error) {
+            console.error('Global error:', msg, error);
+            if (loadingScreen) {
+                loadingScreen.innerHTML = '<div style="color:red; text-align:center;">Ошибка загрузки<br><button onclick="location.reload()">Перезагрузить</button></div>';
+            }
+            return false;
+        };
+    })();
+</script>
+
 <script type="module" src="platform.js"></script>
 <script type="module" src="editor.js"></script>
 </body>

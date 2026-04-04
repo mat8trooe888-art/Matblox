@@ -574,20 +574,23 @@ async function renderMyProjects() {
         document.querySelectorAll('.play-btn-small').forEach(btn => btn.addEventListener('click', async () => { 
             const id = parseInt(btn.dataset.id); 
             const game = (await API.getGames()).find(g => g.id === id); 
-            if (game) startLocalGameSession(JSON.parse(game.data), game.name); 
+            if (game && game.data) startLocalGameSession(JSON.parse(game.data), game.name); 
         }));
         document.querySelectorAll('.host-btn-small').forEach(btn => btn.addEventListener('click', async () => { 
             const id = parseInt(btn.dataset.id); 
             const game = (await API.getGames()).find(g => g.id === id); 
-            if (game) createLocalGame(game.name, JSON.parse(game.data)); 
+            if (game && game.data) createLocalGame(game.name, JSON.parse(game.data)); 
         }));
         document.querySelectorAll('.edit-btn-small').forEach(btn => btn.addEventListener('click', async () => { 
             const id = parseInt(btn.dataset.id); 
             const game = (await API.getGames()).find(g => g.id === id); 
             if (game) { 
-                const mod = await import('./editor.js'); 
-                if (mod.openEditor) mod.openEditor(game);
-                else console.error('openEditor not found');
+                try {
+                    const mod = await import('./editor.js'); 
+                    if (mod.openEditor) mod.openEditor(game);
+                } catch(e) {
+                    console.error('Editor load error:', e);
+                }
             } 
         }));
         document.querySelectorAll('.delete-btn-small').forEach(btn => btn.addEventListener('click', async () => { 
@@ -829,27 +832,34 @@ document.getElementById('connectToServerBtn')?.addEventListener('click', () => {
     else alert('Введите ID сервера'); 
 });
 
-// ========== ИНИЦИАЛИЗАЦИЯ ==========
+// ========== ИНИЦИАЛИЗАЦИЯ СЕССИИ С ЗАЩИТОЙ ОТ ОШИБОК ==========
 initMobileControls();
 
 const session = sessionStorage.getItem('blockverse_session');
-if (session) {
+if (session && session !== 'undefined' && session !== 'null') {
     try {
         const data = JSON.parse(session);
-        currentUser = { 
-            username: data.username, 
-            coins: data.coins || 0, 
-            inventory: data.inventory || [], 
-            friends: data.friends || [], 
-            isGuest: data.isGuest || false 
-        };
-        window.currentUser = currentUser;
-        document.getElementById('mainMenuScreen').classList.remove('hidden');
-        updateUIafterAuth();
+        if (data && data.username) {
+            currentUser = { 
+                username: data.username, 
+                coins: data.coins || 0, 
+                inventory: data.inventory || [], 
+                friends: data.friends || [], 
+                isGuest: data.isGuest || false 
+            };
+            window.currentUser = currentUser;
+            document.getElementById('mainMenuScreen').classList.remove('hidden');
+            updateUIafterAuth();
+        } else {
+            // Данные сессии повреждены
+            sessionStorage.removeItem('blockverse_session');
+            window.location.href = 'login.html';
+        }
     } catch (e) {
         console.error('Session parse error:', e);
+        sessionStorage.removeItem('blockverse_session');
         window.location.href = 'login.html';
     }
 } else { 
     window.location.href = 'login.html'; 
-                }
+                                              }

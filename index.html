@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>BlockVerse Studio — по чертежу</title>
+    <title>BlockVerse Studio — Roblox‑like IDE</title>
     <style>
         * {
             margin: 0;
@@ -23,7 +23,18 @@
             position: fixed;
         }
 
-        /* Загрузка */
+        /* ========== ОБЩИЕ СТИЛИ ========== */
+        .screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+        .hidden { display: none; }
+
+        /* Спиннер загрузки */
         #loadingScreen {
             position: fixed;
             top: 0;
@@ -48,600 +59,836 @@
         }
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        .screen {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
+        /* ========== ГЛАВНОЕ МЕНЮ (стартовая страница) ========== */
+        .start-page {
+            background: #1e1f24;
+            padding: 40px;
+            overflow-y: auto;
             height: 100%;
-            overflow-y: auto;
-            padding: 20px;
         }
-        .hidden { display: none; }
-
-        /* Главное меню (оставляем как есть) */
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            margin-bottom: 30px;
-            background: rgba(0,0,0,0.6);
-            backdrop-filter: blur(12px);
-            padding: 12px 24px;
-            border-radius: 60px;
-        }
-        .logo {
-            font-size: 28px;
-            font-weight: bold;
-            background: linear-gradient(135deg, #ffaa44, #ff5722);
-            -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
-        }
-        .user-info {
-            display: flex;
-            gap: 20px;
-            align-items: center;
-            flex-wrap: wrap;
-        }
-        .coin-badge {
-            background: #f0b90b;
-            color: #1e1e2a;
-            padding: 6px 14px;
-            border-radius: 40px;
-            font-weight: bold;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-        .nav-buttons {
-            display: flex;
-            gap: 12px;
-            flex-wrap: wrap;
-        }
-        .nav-btn {
-            background: rgba(255,255,255,0.1);
-            backdrop-filter: blur(4px);
-            padding: 8px 20px;
-            border-radius: 40px;
-            cursor: pointer;
-            font-weight: 500;
-            border: 1px solid rgba(255,255,255,0.2);
-        }
-        .nav-btn:hover { background: #ff5722; border-color: #ffaa44; }
-
-        .games-grid, .my-projects-grid {
+        .recent-projects {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: 24px;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 20px;
             margin-top: 20px;
-            max-height: calc(100vh - 200px);
-            overflow-y: auto;
         }
-        .game-card, .project-card {
-            background: rgba(30,35,55,0.8);
-            border-radius: 24px;
-            overflow: hidden;
+        .recent-card {
+            background: #2c2f36;
+            border-radius: 12px;
+            padding: 16px;
             cursor: pointer;
-            border: 1px solid rgba(255,255,255,0.15);
-            transition: 0.2s;
+            border: 1px solid #3a3e47;
         }
-        .game-card:hover, .project-card:hover {
-            transform: translateY(-5px);
+        .recent-card:hover {
             border-color: #ffaa44;
         }
-        .game-image {
-            height: 140px;
-            background: linear-gradient(135deg, #2a3a5a, #1a2a4a);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 48px;
+        .templates-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
         }
-        .game-info, .project-card { padding: 16px; }
-        .game-title { font-size: 20px; font-weight: bold; }
-        .game-author { font-size: 12px; color: #aaa; }
-        .play-btn { background: #ff5722; border: none; padding: 8px 16px; border-radius: 30px; font-weight: bold; cursor: pointer; margin-top: 8px; width: 100%; }
-        .server-join { margin: 20px 0; display: flex; gap: 12px; align-items: center; background: rgba(0,0,0,0.5); padding: 8px 16px; border-radius: 40px; flex-wrap: wrap; }
-        .server-join input { flex: 1; background: #1a1f2e; border: 1px solid #ffaa44; border-radius: 40px; padding: 8px 16px; color: white; }
-        .shop-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px; margin-top: 24px; max-height: calc(100vh - 200px); overflow-y: auto; }
-        .shop-item { background: rgba(30,35,55,0.9); border-radius: 20px; padding: 16px; text-align: center; backdrop-filter: blur(8px); }
-        .price { color: #ffaa44; font-weight: bold; font-size: 20px; }
-        .buy-btn { background: #2a6f3f; margin-top: 12px; }
-        .social-panels { display: flex; gap: 20px; margin-top: 20px; flex-wrap: wrap; }
-        .panel { background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); border-radius: 20px; padding: 16px; flex: 1; min-width: 250px; }
-        .friend-list, .chat-messages { max-height: 200px; overflow-y: auto; margin-bottom: 12px; }
-        .friend-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.2); }
-        .chat-input { display: flex; gap: 8px; }
-        .chat-input input { flex: 1; padding: 8px 12px; border-radius: 40px; border: none; background: rgba(255,255,255,0.2); color: white; }
-        .chat-input button { background: #ff5722; border: none; padding: 8px 16px; border-radius: 40px; cursor: pointer; }
+        .template-card {
+            background: #2c2f36;
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+            cursor: pointer;
+        }
+        .btn {
+            background: #ff5722;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 6px;
+            color: white;
+            cursor: pointer;
+            margin-top: 10px;
+        }
 
-        /* ========== НОВЫЙ ИНТЕРФЕЙС ПО ЧЕРТЕЖУ ========== */
+        /* ========== ROBOXL STUDIO ИНТЕРФЕЙС ========== */
         .studio-layout {
             display: flex;
             flex-direction: column;
             height: 100%;
             background: #1e1f24;
         }
-        /* Верхняя панель инструментов (Move, Rotate, Scale, Model, Animation, VFX, GUI, Light) */
-        .toolbar-main {
+
+        /* Лента инструментов (Ribbon) */
+        .ribbon {
             background: #2c2f36;
-            padding: 6px 12px;
-            display: flex;
-            gap: 8px;
             border-bottom: 1px solid #3a3e47;
-            flex-wrap: wrap;
         }
-        .tool-btn {
+        .ribbon-tabs {
+            display: flex;
+            padding: 0 12px;
+            gap: 8px;
+            background: #25282e;
+        }
+        .ribbon-tab {
+            padding: 6px 16px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: bold;
+            border-radius: 6px 6px 0 0;
+            background: #2c2f36;
+            color: #ccc;
+        }
+        .ribbon-tab.active {
+            background: #1e1f24;
+            color: white;
+        }
+        .ribbon-content {
+            padding: 8px 12px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: center;
+        }
+        .ribbon-group {
+            display: flex;
+            gap: 4px;
             background: #3a3e47;
+            border-radius: 6px;
+            padding: 4px 8px;
+        }
+        .ribbon-btn {
+            background: none;
             border: none;
             color: white;
-            padding: 6px 14px;
+            padding: 4px 12px;
             border-radius: 4px;
             cursor: pointer;
             font-size: 12px;
-            font-weight: 500;
         }
-        .tool-btn.active { background: #ff5722; }
-        .tool-btn:hover { background: #4a4e55; }
+        .ribbon-btn.active {
+            background: #ff5722;
+        }
 
-        /* Основная область (Explorer | Viewport | Properties) */
+        /* Антресоль (Mezzanine) */
+        .mezzanine {
+            background: #2c2f36;
+            padding: 4px 12px;
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 1px solid #3a3e47;
+        }
+        .mezzanine-left {
+            display: flex;
+            gap: 8px;
+        }
+        .mezzanine-right {
+            display: flex;
+            gap: 8px;
+        }
+
+        /* Основная область с панелями */
         .main-area {
             display: flex;
             flex: 1;
             overflow: hidden;
+            position: relative;
         }
-        /* Левая панель Explorer (с поиском, плюсом, деревом) */
-        .explorer-panel {
-            width: 280px;
+
+        /* Панели (dockable) – базовая реализация */
+        .dock-panel {
             background: #25282e;
             border-right: 1px solid #3a3e47;
             display: flex;
             flex-direction: column;
+            transition: width 0.2s;
+            position: relative;
         }
-        .explorer-header {
-            padding: 8px 12px;
+        .panel-header {
+            padding: 6px 12px;
+            background: #1e1f24;
             font-weight: bold;
             font-size: 12px;
-            text-transform: uppercase;
-            background: #1e1f24;
-            border-bottom: 1px solid #3a3e47;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            cursor: move;
         }
-        .explorer-toolbar {
-            padding: 6px 8px;
-            display: flex;
-            gap: 6px;
-            border-bottom: 1px solid #3a3e47;
-            background: #25282e;
-        }
-        .explorer-search {
+        .panel-content {
             flex: 1;
+            overflow-y: auto;
+            padding: 8px;
+        }
+        .panel-close {
+            background: none;
+            border: none;
+            color: #aaa;
+            cursor: pointer;
+        }
+
+        /* Explorer */
+        .explorer-search {
+            width: 100%;
             background: #1a1f2e;
             border: 1px solid #3a3e47;
             border-radius: 4px;
             padding: 4px 8px;
             color: white;
-            font-size: 12px;
-        }
-        .explorer-add-btn {
-            background: #3a3e47;
-            border: none;
-            color: white;
-            width: 28px;
-            height: 28px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
+            margin-bottom: 8px;
         }
         .explorer-tree {
-            flex: 1;
-            overflow-y: auto;
-            padding: 4px 0;
+            font-size: 12px;
         }
-        /* Строка объекта в Explorer */
         .explorer-item {
             padding: 4px 8px;
-            margin: 1px 0;
-            border-radius: 4px;
             cursor: pointer;
             display: flex;
             align-items: center;
             gap: 6px;
-            font-size: 12px;
-            position: relative;
-            background: transparent;
-            transition: background 0.05s ease;
         }
         .explorer-item:hover { background: #2a2a2a; }
-        .explorer-item.selected { background: #3e3e40; border-left: 2px solid #0078d4; }
-        .explorer-item .toggle-icon {
-            width: 16px;
-            text-align: center;
-            cursor: pointer;
-            font-size: 10px;
+        .explorer-item.selected { background: #0e639c; }
+        .explorer-children { margin-left: 20px; }
+
+        /* Properties */
+        .prop-group { margin-bottom: 12px; }
+        .prop-group label {
+            display: block;
+            font-size: 11px;
+            color: #aaa;
+            margin-bottom: 4px;
         }
-        .explorer-item .type-icon {
-            width: 16px;
-            text-align: center;
+        .prop-group input, .prop-group select {
+            width: 100%;
+            background: #1a1f2e;
+            border: 1px solid #3a3e47;
+            border-radius: 4px;
+            padding: 6px 8px;
+            color: white;
         }
-        .explorer-item .item-name {
-            flex: 1;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+
+        /* Toolbox */
+        .toolbox-categories {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
         }
-        .explorer-item .item-controls {
-            display: none;
-            gap: 4px;
-        }
-        .explorer-item:hover .item-controls { display: flex; }
-        .explorer-item .item-controls button {
-            background: none;
-            border: none;
-            color: #ccc;
+        .toolbox-cat {
+            background: #3a3e47;
+            padding: 4px 12px;
+            border-radius: 16px;
             cursor: pointer;
             font-size: 12px;
-            width: 20px;
-            border-radius: 2px;
         }
-        .explorer-item .item-controls button:hover { background: #3a3e47; }
-        .explorer-children {
-            margin-left: 20px;
+        .toolbox-cat.active { background: #ff5722; }
+        .asset-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            gap: 8px;
         }
-        /* Индикатор перетаскивания */
-        .explorer-item.drag-over {
-            background: #094771;
-        }
-        .drag-placeholder {
-            height: 2px;
-            background: #0078d4;
-            margin: 2px 0;
+        .asset-item {
+            background: #1a1f2e;
+            border-radius: 8px;
+            padding: 8px;
+            text-align: center;
+            cursor: pointer;
         }
 
         /* 3D Viewport */
-        .viewport-area {
+        .viewport {
             flex: 1;
             position: relative;
             background: #1a1d24;
         }
-        .editor-canvas {
+        .canvas-container {
             width: 100%;
             height: 100%;
         }
-
-        /* Правая панель Properties */
-        .properties-panel {
-            width: 320px;
-            background: #25282e;
-            border-left: 1px solid #3a3e47;
-            display: flex;
-            flex-direction: column;
-        }
-        .properties-header {
-            padding: 8px 12px;
-            font-weight: bold;
-            font-size: 12px;
-            text-transform: uppercase;
-            background: #1e1f24;
-            border-bottom: 1px solid #3a3e47;
-        }
-        .properties-content {
-            flex: 1;
-            overflow-y: auto;
-            padding: 12px;
-        }
-        .prop-group { margin-bottom: 12px; }
-        .prop-group label {
-            display: block;
-            margin-bottom: 4px;
-            font-size: 11px;
-            color: #aaa;
-        }
-        .prop-group input, .prop-group select, .prop-group textarea {
-            width: 100%;
-            background: #1a1f2e;
-            border: 1px solid #3a3e47;
-            border-radius: 4px;
-            padding: 6px 8px;
-            color: white;
-            font-size: 12px;
-        }
-
-        /* Нижняя панель (дополнительные окна: GUI, VFX, Animation) */
-        .bottom-panel {
-            background: #2c2f36;
-            border-top: 1px solid #3a3e47;
-            height: 220px;
-            display: flex;
-            flex-direction: column;
-        }
-        .bottom-tabs {
-            display: flex;
-            gap: 2px;
-            background: #1e1f24;
-            padding: 4px 8px;
-            overflow-x: auto;
-        }
-        .bottom-tab {
-            padding: 6px 16px;
-            cursor: pointer;
-            font-size: 12px;
-            border-radius: 4px 4px 0 0;
-            background: #2c2f36;
-            color: #ccc;
-            white-space: nowrap;
-        }
-        .bottom-tab.active {
-            background: #0e639c;
-            color: white;
-        }
-        .bottom-content {
-            flex: 1;
-            overflow-y: auto;
-            padding: 12px;
-        }
-        .timeline-canvas {
-            width: 100%;
-            height: 100px;
-            background: #1a1f2e;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        .block-palette {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-            margin-bottom: 12px;
-        }
-        .block-option {
-            width: 44px;
-            height: 44px;
-            border-radius: 8px;
-            cursor: pointer;
-            border: 2px solid transparent;
-        }
-        .block-option.selected { border-color: #ffaa44; }
-        .code-editor {
-            font-family: monospace;
-            background: #1a1f2e;
-            border: 1px solid #3a3e47;
-            border-radius: 4px;
-            padding: 8px;
-            color: #d4d4d4;
-            font-size: 12px;
-            width: 100%;
-            height: 120px;
-            resize: vertical;
-        }
-        .gui-preview {
-            background: #1a1f2e;
-            min-height: 100px;
-            padding: 8px;
-            position: relative;
-        }
-
-        /* Мобильное управление (как было) */
-        #mobileControls {
-            position: fixed;
-            bottom: 20px;
-            left: 0;
-            right: 0;
-            pointer-events: none;
-            z-index: 1000;
-            display: none;
-        }
-        .joystick-container {
-            position: absolute;
-            bottom: 0;
-            left: 20px;
-            width: 100px;
-            height: 100px;
-            background: rgba(0,0,0,0.4);
-            border-radius: 50px;
-            pointer-events: auto;
-            backdrop-filter: blur(4px);
-            border: 2px solid rgba(255,255,255,0.2);
-        }
-        .joystick-thumb {
-            position: absolute;
-            width: 40px;
-            height: 40px;
-            background: rgba(255,255,255,0.9);
-            border-radius: 20px;
-            top: 30px;
-            left: 30px;
-            transition: 0.02s linear;
-        }
-        .mobile-jump-btn {
-            position: absolute;
-            bottom: 20px;
-            right: 20px;
-            width: 60px;
-            height: 60px;
-            background: rgba(255,87,34,0.9);
-            border: none;
-            border-radius: 30px;
-            color: white;
-            font-size: 16px;
-            font-weight: bold;
-            pointer-events: auto;
-        }
-        .exit-editor-btn, .exit-game {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            background: #ff3333;
-            border: none;
-            padding: 4px 12px;
-            border-radius: 4px;
-            color: white;
-            cursor: pointer;
-            z-index: 61;
-            font-size: 12px;
-        }
-        .custom-game-ui {
+        .viewport-controls {
             position: absolute;
             bottom: 10px;
-            left: 10px;
+            right: 10px;
             background: rgba(0,0,0,0.6);
-            padding: 4px 12px;
-            border-radius: 20px;
-            z-index: 20;
-            display: flex;
-            gap: 10px;
-            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
         }
 
+        /* Output и Command Bar */
+        .bottom-bar {
+            background: #2c2f36;
+            border-top: 1px solid #3a3e47;
+            height: 150px;
+            display: flex;
+            flex-direction: column;
+        }
+        .output-header {
+            padding: 4px 12px;
+            background: #1e1f24;
+            font-size: 11px;
+            display: flex;
+            gap: 12px;
+        }
+        .output-content {
+            flex: 1;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 11px;
+            padding: 4px;
+        }
+        .command-bar {
+            display: flex;
+            border-top: 1px solid #3a3e47;
+        }
+        .command-input {
+            flex: 1;
+            background: #1a1f2e;
+            border: none;
+            padding: 6px 12px;
+            color: white;
+            font-family: monospace;
+        }
+
+        /* Asset Manager (модальное окно) */
+        .asset-manager-modal {
+            display: none;
+            position: fixed;
+            top: 10%;
+            left: 10%;
+            width: 80%;
+            height: 80%;
+            background: #2c2f36;
+            border: 1px solid #3a3e47;
+            border-radius: 8px;
+            z-index: 1000;
+            flex-direction: column;
+        }
+        .asset-manager-header {
+            padding: 8px;
+            background: #1e1f24;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        /* Мобильная адаптация */
         @media (max-width: 768px) {
-            .explorer-panel, .properties-panel { width: 240px; }
-            .bottom-panel { height: 180px; }
-            .tool-btn { padding: 4px 10px; font-size: 11px; }
+            .ribbon-content { display: none; }
+            .dock-panel { width: 200px; }
         }
     </style>
 </head>
 <body>
-<div id="loadingScreen"><div class="spinner"></div><div>Загрузка...</div></div>
+<div id="loadingScreen"><div class="spinner"></div><div>Загрузка BlockVerse Studio...</div></div>
 
-<script>
-    if (!sessionStorage.getItem('blockverse_session')) window.location.href = 'login.html';
-    window.addEventListener('load', () => {
-        setTimeout(() => { document.getElementById('loadingScreen').style.display = 'none'; }, 500);
-    });
-</script>
-
-<div id="mainMenuScreen" class="screen">
-    <div class="header">
-        <div class="logo">🎮 BlockVerse Studio</div>
-        <div class="user-info">
-            <div class="coin-badge">🪙 <span id="userCoins">0</span></div>
-            <div id="usernameDisplay"></div>
-            <div class="nav-buttons">
-                <div class="nav-btn" id="showGamesBtn">🎮 Игры</div>
-                <div class="nav-btn" id="showMyProjectsBtn">📁 Проекты</div>
-                <div class="nav-btn" id="showShopBtn">🛒 Магазин</div>
-                <div class="nav-btn" id="showSocialBtn">👥 Социальное</div>
-                <div class="nav-btn" id="showSettingsBtn">⚙️ Настройки</div>
-                <div class="nav-btn" id="createGameBtn">🛠️ Студия</div>
-                <div class="nav-btn" id="logoutBtn">🚪 Выйти</div>
-            </div>
-        </div>
+<!-- СТАРТОВАЯ СТРАНИЦА -->
+<div id="startPage" class="screen start-page">
+    <h1>Добро пожаловать в BlockVerse Studio</h1>
+    <div style="display: flex; gap: 20px; margin: 30px 0;">
+        <button id="newEmptyProjectBtn" class="btn">➕ Новый пустой проект</button>
+        <button id="openProjectBtn" class="btn">📂 Открыть проект</button>
     </div>
-    <div id="gamesPanel"><h2>🔥 Игровые серверы</h2><div class="server-join"><input id="serverIdInput" placeholder="ID сервера"><button id="connectToServerBtn">🔗 Подключиться</button></div><div id="gamesList" class="games-grid"></div></div>
-    <div id="myProjectsPanel" style="display:none;"><h2>📁 Мои проекты</h2><div id="myProjectsList" class="my-projects-grid"></div></div>
-    <div id="shopPanel" style="display:none;"><h2>✨ Магазин</h2><div id="shopItemsList" class="shop-grid"></div><div><button id="earnCoinsBtn">➕ 100 монет</button></div></div>
-    <div id="socialPanel" style="display:none;"><div class="social-panels"><div class="panel"><h3>Друзья</h3><div id="friendsList"></div><div class="chat-input"><input id="friendSearch" placeholder="Имя"><button id="addFriendBtn">Добавить</button></div></div><div class="panel"><h3>Чат</h3><div id="chatMessages"></div><div class="chat-input"><input id="chatInput" placeholder="Сообщение..."><button id="sendChatBtn">Отправить</button></div></div></div></div>
-    <div id="settingsPanel" style="display:none;"><h2>⚙️ Настройки</h2><label>Скорость: <input type="range" id="moveSpeed" min="2" max="6" step="0.5" value="4"></label><button id="reportBugBtn">Сообщить о проблеме</button><div id="reportsList"></div></div>
+    <h2>Недавние проекты</h2>
+    <div id="recentProjectsList" class="recent-projects">
+        <div class="recent-card">Проект 1</div>
+        <div class="recent-card">Проект 2</div>
+    </div>
+    <h2>Шаблоны</h2>
+    <div class="templates-grid">
+        <div class="template-card" data-template="empty">🌍 Пустой мир</div>
+        <div class="template-card" data-template="platformer">🏃 Платформер</div>
+        <div class="template-card" data-template="racing">🏎️ Гонки</div>
+        <div class="template-card" data-template="rpg">⚔️ RPG</div>
+    </div>
 </div>
 
-<!-- НОВЫЙ КОНСТРУКТОР ПО ЧЕРТЕЖУ -->
-<div id="editorScreen" class="screen hidden">
+<!-- ОСНОВНОЙ ИНТЕРФЕЙС СТУДИИ -->
+<div id="studioScreen" class="screen hidden">
     <div class="studio-layout">
-        <!-- Верхняя панель инструментов (Move, Rotate, Scale, Model, Animation, VFX, GUI, Light) -->
-        <div class="toolbar-main">
-            <button class="tool-btn" id="modeMoveBtn">📦 Move</button>
-            <button class="tool-btn" id="modeRotateBtn">🔄 Rotate</button>
-            <button class="tool-btn" id="modeScaleBtn">📏 Scale</button>
-            <button class="tool-btn" id="modelBtn">🎨 Model</button>
-            <button class="tool-btn" id="animationBtn">🎬 Animation</button>
-            <button class="tool-btn" id="vfxBtn">✨ VFX</button>
-            <button class="tool-btn" id="guiBtn">🖥️ GUI</button>
-            <button class="tool-btn" id="lightBtn">💡 Light</button>
+        <!-- Лента (Ribbon) -->
+        <div class="ribbon">
+            <div class="ribbon-tabs">
+                <div class="ribbon-tab active" data-ribbon="home">Home</div>
+                <div class="ribbon-tab" data-ribbon="model">Model</div>
+                <div class="ribbon-tab" data-ribbon="avatar">Avatar</div>
+                <div class="ribbon-tab" data-ribbon="ui">UI</div>
+                <div class="ribbon-tab" data-ribbon="script">Script</div>
+                <div class="ribbon-tab" data-ribbon="plugins">Plugins</div>
+            </div>
+            <div id="ribbonHome" class="ribbon-content">
+                <div class="ribbon-group">
+                    <button class="ribbon-btn" id="modeMoveBtn">Move</button>
+                    <button class="ribbon-btn" id="modeRotateBtn">Rotate</button>
+                    <button class="ribbon-btn" id="modeScaleBtn">Scale</button>
+                </div>
+                <div class="ribbon-group">
+                    <button class="ribbon-btn" id="addPartBtn">Part</button>
+                    <button class="ribbon-btn" id="addSphereBtn">Sphere</button>
+                    <button class="ribbon-btn" id="addCylinderBtn">Cylinder</button>
+                </div>
+                <div class="ribbon-group">
+                    <input type="color" id="colorPicker" value="#ffaa44">
+                    <select id="materialSelect">
+                        <option>Plastic</option><option>Metal</option><option>Wood</option>
+                    </select>
+                </div>
+            </div>
+            <div id="ribbonModel" class="ribbon-content hidden">
+                <div class="ribbon-group">
+                    <button class="ribbon-btn" id="alignBtn">Align</button>
+                    <button class="ribbon-btn" id="booleanUnionBtn">Union</button>
+                    <button class="ribbon-btn" id="booleanNegateBtn">Negate</button>
+                </div>
+            </div>
+            <div id="ribbonAvatar" class="ribbon-content hidden">
+                <div class="ribbon-group">
+                    <button class="ribbon-btn">Create Rig</button>
+                    <button class="ribbon-btn">Import Animation</button>
+                </div>
+            </div>
+            <div id="ribbonUI" class="ribbon-content hidden">
+                <div class="ribbon-group">
+                    <button class="ribbon-btn" id="addButtonBtn">Button</button>
+                    <button class="ribbon-btn" id="addFrameBtn">Frame</button>
+                </div>
+            </div>
+            <div id="ribbonScript" class="ribbon-content hidden">
+                <div class="ribbon-group">
+                    <button class="ribbon-btn" id="newScriptBtn">New Script</button>
+                    <button class="ribbon-btn" id="runScriptBtn">Run</button>
+                </div>
+            </div>
+            <div id="ribbonPlugins" class="ribbon-content hidden">
+                <div class="ribbon-group">
+                    <button class="ribbon-btn">Plugin 1</button>
+                    <button class="ribbon-btn">Plugin 2</button>
+                </div>
+            </div>
         </div>
 
+        <!-- Антресоль (Mezzanine) -->
+        <div class="mezzanine">
+            <div class="mezzanine-left">
+                <button id="playBtn" style="background:#4caf50;">▶ Play</button>
+                <button id="stopBtn" style="background:#f44336;">⏹ Stop</button>
+            </div>
+            <div class="mezzanine-right">
+                <button id="assistantBtn">🤖 Assistant</button>
+                <span id="userName">User</span>
+            </div>
+        </div>
+
+        <!-- Основная область с панелями (dockable) -->
         <div class="main-area">
-            <!-- EXPLORER (полноценный как в Roblox Studio) -->
-            <div class="explorer-panel" id="explorerPanel">
-                <div class="explorer-header">
-                    <span>📁 EXPLORER</span>
+            <!-- Левая панель: Toolbox -->
+            <div class="dock-panel" id="toolboxPanel" style="width: 260px;">
+                <div class="panel-header">
+                    <span>📦 Toolbox</span>
+                    <button class="panel-close">✖</button>
                 </div>
-                <div class="explorer-toolbar">
-                    <input type="text" id="explorerSearch" class="explorer-search" placeholder="🔍 Поиск...">
-                    <button id="addFolderBtn" class="explorer-add-btn">+</button>
+                <div class="panel-content">
+                    <div class="toolbox-categories">
+                        <div class="toolbox-cat active" data-toolbox="marketplace">Marketplace</div>
+                        <div class="toolbox-cat" data-toolbox="inventory">Inventory</div>
+                        <div class="toolbox-cat" data-toolbox="recent">Recent</div>
+                        <div class="toolbox-cat" data-toolbox="creations">Creations</div>
+                    </div>
+                    <div id="toolboxMarketplace" class="asset-grid">
+                        <div class="asset-item" data-asset="cube">🧊 Cube</div>
+                        <div class="asset-item" data-asset="sphere">⚪ Sphere</div>
+                        <div class="asset-item" data-asset="lamp">💡 Lamp</div>
+                    </div>
+                    <div id="toolboxInventory" class="asset-grid hidden"></div>
+                    <div id="toolboxRecent" class="asset-grid hidden"></div>
+                    <div id="toolboxCreations" class="asset-grid hidden"></div>
                 </div>
-                <div id="explorerTree" class="explorer-tree"></div>
             </div>
 
-            <!-- 3D Viewport -->
-            <div class="viewport-area">
-                <div id="editorCanvasContainer" class="editor-canvas"></div>
-                <button class="exit-editor-btn" id="exitEditorBtn">✖ Выйти</button>
-            </div>
-
-            <!-- PROPERTIES -->
-            <div class="properties-panel">
-                <div class="properties-header">⚙️ PROPERTIES</div>
-                <div id="propertiesContent" class="properties-content"></div>
-            </div>
-        </div>
-
-        <!-- Нижняя панель (дополнительные окна: GUI, VFX, Animation) -->
-        <div class="bottom-panel">
-            <div class="bottom-tabs">
-                <div class="bottom-tab active" data-tab="gui">GUI</div>
-                <div class="bottom-tab" data-tab="vfx">VFX</div>
-                <div class="bottom-tab" data-tab="animations">Animation</div>
-                <div class="bottom-tab" data-tab="scripts">Scripts</div>
-                <div class="bottom-tab" data-tab="npc">NPC</div>
-            </div>
-            <div class="bottom-content">
-                <!-- GUI Editor -->
-                <div id="guiTab" class="tab-content active">
-                    <div><button id="addButtonBtn">➕ Кнопка</button><button id="addPanelBtn">📦 Панель</button><button id="addTextBtn">📝 Текст</button></div>
-                    <div id="guiElementsList" style="max-height:100px; overflow-y:auto; background:#1a1f2e; margin:8px 0; padding:8px;"></div>
-                    <div id="guiPreview" class="gui-preview"></div>
+            <!-- Центральная область: 3D Viewport + снизу Output/Command -->
+            <div style="flex:1; display: flex; flex-direction: column;">
+                <div class="viewport" id="viewport">
+                    <div id="editorCanvasContainer" class="canvas-container"></div>
+                    <div class="viewport-controls">
+                        <button id="toggleGridBtn">🔲 Grid</button>
+                        <button id="toggleWireframeBtn">📐 Wireframe</button>
+                        <select id="coordSystem">
+                            <option value="global">Global</option>
+                            <option value="local">Local</option>
+                        </select>
+                    </div>
                 </div>
-                <!-- VFX Editor -->
-                <div id="vfxTab" class="tab-content hidden">
-                    <button id="addParticleBtn">➕ Добавить частицы</button>
-                    <div><button id="vfxFireBtn">🔥 Огонь</button><button id="vfxWaterBtn">💧 Вода</button><button id="vfxAirBtn">💨 Воздух</button><button id="vfxSmokeBtn">🌫️ Дым</button></div>
-                </div>
-                <!-- Animation Editor -->
-                <div id="animationsTab" class="tab-content hidden">
-                    <div><button id="newAnimationBtn">➕ Создать</button><select id="animationSelect"></select><button id="playAnimationBtn">▶</button><button id="stopAnimationBtn">⏹</button><button id="recordAnimationBtn">🎥 Записать</button></div>
-                    <canvas id="timelineCanvas" class="timeline-canvas" width="800" height="100"></canvas>
-                    <div><span id="currentTime">0.00</span><span id="animationDuration">1.00</span></div>
-                </div>
-                <!-- Scripts Editor -->
-                <div id="scriptsTab" class="tab-content hidden">
-                    <textarea id="blockScriptEditor" class="code-editor" placeholder="-- Lua скрипт"></textarea>
-                    <button id="applyScriptBtn">Применить</button>
-                </div>
-                <!-- NPC Editor -->
-                <div id="npcTab" class="tab-content hidden">
-                    <button id="createNpcBtn">➕ Создать NPC</button>
-                    <div id="npcList" style="max-height:100px; overflow-y:auto; margin-top:8px;"></div>
-                    <div id="npcProperties" style="background:#1a1f2e; padding:8px; margin-top:8px;">
-                        <label>Имя: <input id="npcName" style="width:100%"></label>
-                        <label>Поведение: <select id="npcBehavior"><option value="idle">Стоять</option><option value="patrol">Патруль</option><option value="follow">Следовать</option></select></label>
-                        <label>Скорость: <input id="npcSpeed" type="number" value="2"></label>
-                        <label>Диалог: <textarea id="npcDialog" rows="2"></textarea></label>
-                        <button id="saveNpcBtn">Сохранить</button>
+                <!-- Output + Command Bar -->
+                <div class="bottom-bar">
+                    <div class="output-header">
+                        <span>Output</span>
+                        <span style="margin-left:auto;">
+                            <button id="clearOutputBtn">Clear</button>
+                        </span>
+                    </div>
+                    <div id="outputContent" class="output-content"></div>
+                    <div class="command-bar">
+                        <span style="padding:6px 12px;">&gt;</span>
+                        <input type="text" id="commandInput" class="command-input" placeholder="Введите Lua-команду...">
                     </div>
                 </div>
             </div>
+
+            <!-- Правая панель: Explorer + Properties (вкладки) -->
+            <div class="dock-panel" id="rightPanel" style="width: 320px;">
+                <div class="panel-header">
+                    <span>Explorer / Properties</span>
+                    <button class="panel-close">✖</button>
+                </div>
+                <div style="display: flex; border-bottom: 1px solid #3a3e47;">
+                    <div id="explorerTabBtn" style="flex:1; text-align:center; padding:6px; cursor:pointer; background:#0e639c;">Explorer</div>
+                    <div id="propertiesTabBtn" style="flex:1; text-align:center; padding:6px; cursor:pointer;">Properties</div>
+                </div>
+                <div id="explorerPanel" class="panel-content" style="display:block;">
+                    <input type="text" id="explorerSearch" class="explorer-search" placeholder="🔍 Search...">
+                    <div id="explorerTree" class="explorer-tree"></div>
+                </div>
+                <div id="propertiesPanel" class="panel-content" style="display:none;">
+                    <div id="propertiesContent"></div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
 
-<div id="customGameScreen" class="screen hidden">
-    <div id="customGameContainer" style="width:100%; height:100%;"></div>
-    <div class="exit-game" id="exitGameBtn">✖ Выйти</div>
-    <div class="custom-game-ui"><span>❤️ <span id="healthValue">100</span></span><span>🎒 <span id="inventoryCount">0</span></span><span>💰 <span id="coinValue">0</span></span></div>
+<!-- Модальное окно Asset Manager -->
+<div id="assetManagerModal" class="asset-manager-modal">
+    <div class="asset-manager-header">
+        <span>Asset Manager</span>
+        <button id="closeAssetManager">✖</button>
+    </div>
+    <div style="padding: 12px;">
+        <input type="text" id="assetSearch" placeholder="Search assets..." style="width:100%; margin-bottom:12px;">
+        <div id="assetTable" style="max-height: calc(100% - 50px); overflow-y: auto;">
+            <!-- Таблица ассетов -->
+        </div>
+    </div>
 </div>
 
-<div id="mobileControls">
-    <div class="joystick-container" id="joystickContainer"><div class="joystick-base"></div><div class="joystick-thumb" id="joystickThumb"></div></div>
-    <button class="mobile-jump-btn" id="mobileJumpBtn">ПРЫЖОК</button>
+<!-- Настройки (модальное окно) -->
+<div id="settingsModal" style="display:none; position:fixed; top:20%; left:30%; width:40%; background:#2c2f36; border:1px solid #3a3e47; border-radius:8px; z-index:1001; padding:16px;">
+    <h3>Настройки</h3>
+    <label>Тема: <select id="themeSelect"><option value="dark">Тёмная</option><option value="light">Светлая</option></select></label>
+    <label>Язык: <select id="langSelect"><option value="ru">Русский</option><option value="en">English</option></select></label>
+    <button id="saveSettingsBtn">Сохранить</button>
+    <button id="closeSettingsBtn">Закрыть</button>
 </div>
 
 <script type="importmap">
-    { "imports": { "three": "https://unpkg.com/three@0.128.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.128.0/examples/jsm/" } }
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.128.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.128.0/examples/jsm/"
+        }
+    }
 </script>
-<script type="module" src="platform.js"></script>
-<script type="module" src="editor.js"></script>
+<script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { TransformControls } from 'three/addons/controls/TransformControls.js';
+
+    // ========== ИНИЦИАЛИЗАЦИЯ СЦЕНЫ ==========
+    let scene, camera, renderer, controls, transformControls;
+    let gridHelper, axesHelper;
+    let wireframeMode = false;
+    let currentTransformMode = 'translate';
+    let selectedObjects = [];
+    let editorObjects = [];
+    let objectIdCounter = 0;
+
+    function init3D() {
+        const container = document.getElementById('editorCanvasContainer');
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1a1d24);
+        scene.fog = new THREE.FogExp2(0x1a1d24, 0.008);
+        camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
+        camera.position.set(10, 8, 10);
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.shadowMap.enabled = true;
+        container.appendChild(renderer.domElement);
+        controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        transformControls = new TransformControls(camera, renderer.domElement);
+        transformControls.addEventListener('dragging-changed', (event) => { controls.enabled = !event.value; });
+        scene.add(transformControls);
+
+        // Свет
+        const ambient = new THREE.AmbientLight(0x404060);
+        scene.add(ambient);
+        const dirLight = new THREE.DirectionalLight(0xfff5d1, 1.2);
+        dirLight.position.set(5, 10, 7);
+        dirLight.castShadow = true;
+        scene.add(dirLight);
+        const fillLight = new THREE.PointLight(0x4466cc, 0.5);
+        fillLight.position.set(2, 3, 4);
+        scene.add(fillLight);
+
+        // Вспомогательные элементы
+        gridHelper = new THREE.GridHelper(100, 20, 0x88aaff, 0x335588);
+        scene.add(gridHelper);
+        axesHelper = new THREE.AxesHelper(5);
+        scene.add(axesHelper);
+
+        // Добавим тестовый куб
+        const geometry = new THREE.BoxGeometry(1, 1, 1);
+        const material = new THREE.MeshStandardMaterial({ color: 0xffaa44 });
+        const cube = new THREE.Mesh(geometry, material);
+        cube.position.y = 0.5;
+        cube.userData = { id: 'cube1', name: 'Cube' };
+        scene.add(cube);
+        editorObjects.push(cube);
+        objectIdCounter++;
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+        window.addEventListener('resize', onWindowResize, false);
+        function onWindowResize() {
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        }
+    }
+
+    // ========== EXPLORER (дерево объектов) ==========
+    function renderExplorer() {
+        const container = document.getElementById('explorerTree');
+        if (!container) return;
+        container.innerHTML = '';
+        editorObjects.forEach(obj => {
+            const div = document.createElement('div');
+            div.className = 'explorer-item';
+            div.textContent = obj.userData.name || obj.constructor.name;
+            div.onclick = () => {
+                selectedObjects = [obj];
+                transformControls.attach(obj);
+                updateProperties();
+                document.querySelectorAll('.explorer-item').forEach(el => el.classList.remove('selected'));
+                div.classList.add('selected');
+            };
+            container.appendChild(div);
+        });
+    }
+
+    function updateProperties() {
+        const container = document.getElementById('propertiesContent');
+        if (!container) return;
+        if (selectedObjects.length === 0) {
+            container.innerHTML = '<div style="color:#aaa;">Ничего не выбрано</div>';
+            return;
+        }
+        const obj = selectedObjects[0];
+        container.innerHTML = `
+            <div class="prop-group"><label>Name</label><input id="propName" value="${obj.userData.name || ''}"></div>
+            <div class="prop-group"><label>Position X</label><input id="propPosX" type="number" step="0.1" value="${obj.position.x}"></div>
+            <div class="prop-group"><label>Position Y</label><input id="propPosY" type="number" step="0.1" value="${obj.position.y}"></div>
+            <div class="prop-group"><label>Position Z</label><input id="propPosZ" type="number" step="0.1" value="${obj.position.z}"></div>
+            <div class="prop-group"><label>Color</label><input id="propColor" type="color" value="#ffaa44"></div>
+            <button id="applyPropsBtn">Apply</button>
+        `;
+        document.getElementById('propName').onchange = () => { obj.userData.name = document.getElementById('propName').value; renderExplorer(); };
+        document.getElementById('propPosX').onchange = () => { obj.position.x = parseFloat(document.getElementById('propPosX').value); };
+        document.getElementById('propPosY').onchange = () => { obj.position.y = parseFloat(document.getElementById('propPosY').value); };
+        document.getElementById('propPosZ').onchange = () => { obj.position.z = parseFloat(document.getElementById('propPosZ').value); };
+        document.getElementById('propColor').onchange = () => { obj.material.color.set(document.getElementById('propColor').value); };
+        document.getElementById('applyPropsBtn').onclick = () => {
+            obj.position.set(
+                parseFloat(document.getElementById('propPosX').value),
+                parseFloat(document.getElementById('propPosY').value),
+                parseFloat(document.getElementById('propPosZ').value)
+            );
+        };
+    }
+
+    // ========== UI ЛОГИКА ==========
+    function switchRibbon(tabId) {
+        document.querySelectorAll('.ribbon-content').forEach(el => el.classList.add('hidden'));
+        document.getElementById(`ribbon${tabId.charAt(0).toUpperCase() + tabId.slice(1)}`).classList.remove('hidden');
+        document.querySelectorAll('.ribbon-tab').forEach(tab => tab.classList.remove('active'));
+        document.querySelector(`.ribbon-tab[data-ribbon="${tabId}"]`).classList.add('active');
+    }
+
+    function switchToolbox(cat) {
+        document.querySelectorAll('[id^="toolbox"]').forEach(el => el.classList.add('hidden'));
+        document.getElementById(`toolbox${cat.charAt(0).toUpperCase() + cat.slice(1)}`).classList.remove('hidden');
+        document.querySelectorAll('.toolbox-cat').forEach(c => c.classList.remove('active'));
+        document.querySelector(`.toolbox-cat[data-toolbox="${cat}"]`).classList.add('active');
+    }
+
+    // Добавление деталей
+    function addPart(shape) {
+        let geometry;
+        if (shape === 'sphere') geometry = new THREE.SphereGeometry(0.5, 32, 32);
+        else if (shape === 'cylinder') geometry = new THREE.CylinderGeometry(0.5, 0.5, 1, 32);
+        else geometry = new THREE.BoxGeometry(1, 1, 1);
+        const material = new THREE.MeshStandardMaterial({ color: 0xffaa44 });
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.position.set(0, 1, 0);
+        mesh.userData = { name: `Part_${objectIdCounter++}` };
+        scene.add(mesh);
+        editorObjects.push(mesh);
+        renderExplorer();
+    }
+
+    // Загрузка проекта из шаблона
+    function loadTemplate(template) {
+        // Очистка сцены (кроме света)
+        editorObjects.forEach(obj => scene.remove(obj));
+        editorObjects = [];
+        if (template === 'platformer') {
+            // Добавить платформы
+            const ground = new THREE.Mesh(new THREE.BoxGeometry(30, 1, 30), new THREE.MeshStandardMaterial({ color: 0x6B8E23 }));
+            ground.position.y = -0.5;
+            scene.add(ground);
+            editorObjects.push(ground);
+            for (let i = -3; i <= 3; i++) {
+                const plat = new THREE.Mesh(new THREE.BoxGeometry(2, 0.5, 2), new THREE.MeshStandardMaterial({ color: 0xaa8866 }));
+                plat.position.set(i * 2.5, 0.5 + Math.abs(i) * 0.5, 0);
+                scene.add(plat);
+                editorObjects.push(plat);
+            }
+        } else if (template === 'racing') {
+            // круговая трасса
+            for (let i = 0; i < 12; i++) {
+                const angle = (i / 12) * Math.PI * 2;
+                const road = new THREE.Mesh(new THREE.BoxGeometry(2, 0.2, 2), new THREE.MeshStandardMaterial({ color: 0x555555 }));
+                road.position.set(Math.cos(angle) * 8, -0.3, Math.sin(angle) * 8);
+                scene.add(road);
+                editorObjects.push(road);
+            }
+        } else if (template === 'rpg') {
+            const ground = new THREE.Mesh(new THREE.BoxGeometry(40, 1, 40), new THREE.MeshStandardMaterial({ color: 0x4a7a4a }));
+            ground.position.y = -0.5;
+            scene.add(ground);
+            editorObjects.push(ground);
+            const house = new THREE.Mesh(new THREE.BoxGeometry(3, 2, 3), new THREE.MeshStandardMaterial({ color: 0xaa8866 }));
+            house.position.set(6, 0, 6);
+            scene.add(house);
+            editorObjects.push(house);
+        }
+        renderExplorer();
+    }
+
+    // Output
+    function addOutputMessage(msg, type = 'info') {
+        const output = document.getElementById('outputContent');
+        const div = document.createElement('div');
+        div.style.color = type === 'error' ? '#ff6666' : '#88ff88';
+        div.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+        output.appendChild(div);
+        output.scrollTop = output.scrollHeight;
+    }
+
+    // Командная строка
+    document.getElementById('commandInput')?.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            const cmd = e.target.value;
+            addOutputMessage(`> ${cmd}`);
+            try {
+                // Здесь можно выполнять Lua (пока заглушка)
+                addOutputMessage(`Результат: выполнение команды "${cmd}" (заглушка)`);
+            } catch (err) {
+                addOutputMessage(`Ошибка: ${err.message}`, 'error');
+            }
+            e.target.value = '';
+        }
+    });
+
+    // События
+    document.getElementById('newEmptyProjectBtn')?.addEventListener('click', () => {
+        document.getElementById('startPage').classList.add('hidden');
+        document.getElementById('studioScreen').classList.remove('hidden');
+        init3D();
+        renderExplorer();
+    });
+    document.querySelectorAll('.template-card').forEach(card => {
+        card.addEventListener('click', () => {
+            const template = card.dataset.template;
+            document.getElementById('startPage').classList.add('hidden');
+            document.getElementById('studioScreen').classList.remove('hidden');
+            init3D();
+            loadTemplate(template);
+        });
+    });
+    document.getElementById('addPartBtn')?.addEventListener('click', () => addPart('box'));
+    document.getElementById('addSphereBtn')?.addEventListener('click', () => addPart('sphere'));
+    document.getElementById('addCylinderBtn')?.addEventListener('click', () => addPart('cylinder'));
+    document.getElementById('modeMoveBtn')?.addEventListener('click', () => { transformControls.setMode('translate'); });
+    document.getElementById('modeRotateBtn')?.addEventListener('click', () => { transformControls.setMode('rotate'); });
+    document.getElementById('modeScaleBtn')?.addEventListener('click', () => { transformControls.setMode('scale'); });
+    document.getElementById('toggleGridBtn')?.addEventListener('click', () => { gridHelper.visible = !gridHelper.visible; });
+    document.getElementById('toggleWireframeBtn')?.addEventListener('click', () => {
+        wireframeMode = !wireframeMode;
+        editorObjects.forEach(obj => { if (obj.material) obj.material.wireframe = wireframeMode; });
+    });
+    document.getElementById('clearOutputBtn')?.addEventListener('click', () => { document.getElementById('outputContent').innerHTML = ''; });
+    document.getElementById('explorerTabBtn')?.addEventListener('click', () => {
+        document.getElementById('explorerPanel').style.display = 'block';
+        document.getElementById('propertiesPanel').style.display = 'none';
+        document.getElementById('explorerTabBtn').style.background = '#0e639c';
+        document.getElementById('propertiesTabBtn').style.background = '';
+    });
+    document.getElementById('propertiesTabBtn')?.addEventListener('click', () => {
+        document.getElementById('explorerPanel').style.display = 'none';
+        document.getElementById('propertiesPanel').style.display = 'block';
+        document.getElementById('propertiesTabBtn').style.background = '#0e639c';
+        document.getElementById('explorerTabBtn').style.background = '';
+    });
+    document.querySelectorAll('.ribbon-tab').forEach(tab => {
+        tab.addEventListener('click', () => switchRibbon(tab.dataset.ribbon));
+    });
+    document.querySelectorAll('.toolbox-cat').forEach(cat => {
+        cat.addEventListener('click', () => switchToolbox(cat.dataset.toolbox));
+    });
+    document.querySelectorAll('.asset-item').forEach(asset => {
+        asset.addEventListener('click', () => {
+            const type = asset.dataset.asset;
+            if (type === 'cube') addPart('box');
+            if (type === 'sphere') addPart('sphere');
+            if (type === 'lamp') addPart('cylinder');
+        });
+    });
+    document.getElementById('playBtn')?.addEventListener('click', () => addOutputMessage('Игровой режим запущен (симуляция)'));
+    document.getElementById('stopBtn')?.addEventListener('click', () => addOutputMessage('Игровой режим остановлен'));
+    document.getElementById('assistantBtn')?.addEventListener('click', () => alert('AI-помощник в разработке'));
+    document.getElementById('newScriptBtn')?.addEventListener('click', () => addOutputMessage('Создан новый скрипт'));
+    document.getElementById('runScriptBtn')?.addEventListener('click', () => addOutputMessage('Скрипт выполнен'));
+    document.getElementById('addButtonBtn')?.addEventListener('click', () => addOutputMessage('Добавлена UI-кнопка'));
+    document.getElementById('addFrameBtn')?.addEventListener('click', () => addOutputMessage('Добавлен UI-фрейм'));
+    document.getElementById('alignBtn')?.addEventListener('click', () => addOutputMessage('Выравнивание объектов (заглушка)'));
+    document.getElementById('booleanUnionBtn')?.addEventListener('click', () => addOutputMessage('Объединение мешей (заглушка)'));
+
+    // Закрытие панелей (dockable)
+    document.querySelectorAll('.panel-close').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const panel = e.target.closest('.dock-panel');
+            panel.style.display = 'none';
+        });
+    });
+
+    // Asset Manager
+    document.getElementById('assetManagerModal').style.display = 'none';
+    // Можно добавить кнопку в меню, но пока скрыто
+
+    // Настройки
+    document.getElementById('settingsModal').style.display = 'none';
+    // Кнопка настроек (добавим в mezzanine)
+    const settingsBtn = document.createElement('button');
+    settingsBtn.textContent = '⚙️';
+    settingsBtn.onclick = () => { document.getElementById('settingsModal').style.display = 'block'; };
+    document.querySelector('.mezzanine-right').appendChild(settingsBtn);
+    document.getElementById('closeSettingsBtn').onclick = () => { document.getElementById('settingsModal').style.display = 'none'; };
+    document.getElementById('saveSettingsBtn').onclick = () => {
+        const theme = document.getElementById('themeSelect').value;
+        if (theme === 'light') document.body.style.background = '#f0f0f0';
+        else document.body.style.background = '#1e1f24';
+        document.getElementById('settingsModal').style.display = 'none';
+        addOutputMessage('Настройки сохранены');
+    };
+
+    // Загрузка сессии пользователя (заглушка)
+    addOutputMessage('BlockVerse Studio готов к работе');
+</script>
 </body>
-                    </html>
+    </html>
